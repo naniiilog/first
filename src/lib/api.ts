@@ -1,6 +1,13 @@
+import { Platform } from 'react-native';
 import type { ChatMessage, LocalRoom, Member, Settings } from './types';
 
-export const DEFAULT_SERVER_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8787';
+/**
+ * 서버 주소. 웹 앱은 서버와 같은 주소에서 열리므로(Cloudflare에 함께 배포) 그 주소를 그대로 써요.
+ * 휴대폰 앱(Expo Go)은 EXPO_PUBLIC_API_URL 또는 설정 화면의 주소를 써요.
+ */
+const webOrigin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '';
+export const DEFAULT_SERVER_URL =
+  process.env.EXPO_PUBLIC_API_URL || (webOrigin && !webOrigin.startsWith('http://localhost:8081') ? webOrigin : 'http://localhost:8787');
 export const DEFAULT_APP_TOKEN = process.env.EXPO_PUBLIC_APP_TOKEN ?? '';
 
 const base = (s: Settings) => (s.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');

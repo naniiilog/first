@@ -3,3 +3,5 @@ node_modules/
 .wrangler/
 *.db
 *.db-*
+web-dist/
+src/web-assets.gen.js
