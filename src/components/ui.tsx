@@ -12,7 +12,9 @@ export function Avatar({ bot, size = 40, dim }: { bot: Look; size?: number; dim?
         width: size,
         height: size,
         borderRadius: radius,
-        backgroundColor: bot.image ? '#DDD' : bot.color + '40',
+        backgroundColor: bot.image ? '#EEF1F7' : bot.color + '40',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(20,26,51,0.12)',
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
@@ -20,7 +22,7 @@ export function Avatar({ bot, size = 40, dim }: { bot: Look; size?: number; dim?
       }}
     >
       {bot.image ? (
-        <Image source={{ uri: bot.image }} style={{ width: size, height: size }} />
+        <Image source={typeof bot.image === 'string' ? { uri: bot.image } : bot.image} style={{ width: size, height: size }} />
       ) : (
         <Text style={{ fontSize: size * 0.52 }}>{bot.emoji}</Text>
       )}

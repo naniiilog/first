@@ -151,8 +151,8 @@ export default function RoomScreen() {
           {members.map((m) => (
             <MemberChip key={m.id} member={m} now={now} onPress={() => toggleMember(m)} />
           ))}
-          <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>
-            <Text style={{ color: '#191919', fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
+          <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
+            <Text style={{ color: t.accentPurple, fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
           </Pressable>
         </ScrollView>
       </View>
@@ -179,9 +179,9 @@ export default function RoomScreen() {
       />
 
       {/* 자동대화 스위치: 켜짐/꺼짐을 글자로 분명하게 보여줘요 */}
-      <Pressable onPress={toggleFreeTalk} style={[styles.autoBar, { backgroundColor: freeTalk ? '#FFF7B8' : t.card, borderColor: t.border }]}>
-        <View style={[styles.track, { backgroundColor: freeTalk ? '#3A1D1D' : '#C9CDD2' }]}>
-          <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: freeTalk ? t.accent : '#FFFFFF' }]} />
+      <Pressable onPress={toggleFreeTalk} style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
+        <View style={[styles.track, { backgroundColor: freeTalk ? t.accent : t.switchOff }]}>
+          <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: '#FFFFFF' }]} />
         </View>
         <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>
           자동대화 {freeTalk ? '켜짐' : '꺼짐'}
@@ -217,12 +217,13 @@ export default function RoomScreen() {
 }
 
 function MemberChip({ member, now, onPress }: { member: Member; now: number; onPress: () => void }) {
+  const t = useTheme();
   const recentlySeen = member.lastSeen !== null && now - member.lastSeen < 60_000;
   const status = !member.active ? '💤' : recentlySeen ? '🟢' : member.joined ? '⚪' : '✉️';
   return (
-    <Pressable onPress={onPress} style={[styles.chip, { backgroundColor: member.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)' }]}>
+    <Pressable onPress={onPress} style={[styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff }]}>
       <Avatar bot={lookOf(member.kind, member.avatar)} size={22} dim={!member.active} />
-      <Text style={{ color: member.active ? '#191919' : '#5A6570', fontWeight: '600', fontSize: 12 }}>{member.name}</Text>
+      <Text style={{ color: member.active ? t.text : t.subtext, fontWeight: '600', fontSize: 12 }}>{member.name}</Text>
       <Text style={{ fontSize: 10 }}>{status}</Text>
     </Pressable>
   );

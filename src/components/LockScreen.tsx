@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
@@ -41,13 +41,13 @@ export function LockScreen({ mode, onUnlocked, offline }: { mode: 'setup' | 'log
     }
   };
 
-  const input = [styles.input, { color: t.text, backgroundColor: t.card }];
+  const input = [styles.input, { color: t.text, backgroundColor: t.card, borderColor: t.border }];
   return (
-    <KeyboardAvoidingView style={[styles.wrap, { backgroundColor: t.accent }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.wrap, { backgroundColor: t.chatBg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ alignItems: 'center', gap: 8, marginBottom: 28 }}>
-        <Text style={{ fontSize: 56 }}>🤖</Text>
-        <Text style={[styles.title, { color: t.accentText }]}>BotRoom</Text>
-        <Text style={{ color: t.accentText, opacity: 0.75, textAlign: 'center' }}>
+        <Image source={require('../../assets/icon.png')} style={{ width: 96, height: 96, borderRadius: 24 }} />
+        <Text style={[styles.title, { color: t.text }]}>BotRoom</Text>
+        <Text style={{ color: t.subtext, textAlign: 'center', lineHeight: 21 }}>
           {mode === 'setup' ? '처음이에요! 나만 쓸 수 있게\n앱 비밀번호를 정해 주세요.' : '앱 비밀번호를 입력해 주세요.'}
         </Text>
       </View>
@@ -77,12 +77,12 @@ export function LockScreen({ mode, onUnlocked, offline }: { mode: 'setup' | 'log
             style={input}
           />
         )}
-        {error ? <Text style={{ color: '#B00020', fontWeight: '600', textAlign: 'center' }}>⚠️ {error}</Text> : null}
-        <Pressable onPress={submit} disabled={busy || !pw} style={[styles.button, { opacity: busy || !pw ? 0.5 : 1 }]}>
+        {error ? <Text style={{ color: t.danger, fontWeight: '600', textAlign: 'center' }}>⚠️ {error}</Text> : null}
+        <Pressable onPress={submit} disabled={busy || !pw} style={[styles.button, { backgroundColor: t.accent, opacity: busy || !pw ? 0.5 : 1 }]}>
           <Text style={styles.buttonText}>{busy ? '확인 중…' : mode === 'setup' ? '비밀번호 정하기' : '열기'}</Text>
         </Pressable>
         {mode === 'setup' && (
-          <Text style={{ color: t.accentText, opacity: 0.7, fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
+          <Text style={{ color: t.subtext, fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
             잊어버리면 되찾을 수 없으니 꼭 기억해 두세요.{'\n'}에이전트는 초대 링크로 들어와서 비밀번호가 필요 없어요.
           </Text>
         )}
@@ -94,7 +94,7 @@ export function LockScreen({ mode, onUnlocked, offline }: { mode: 'setup' | 'log
 const styles = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   title: { fontSize: 28, fontWeight: '800' },
-  input: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17 },
-  button: { backgroundColor: '#3A1D1D', borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
-  buttonText: { color: '#FEE500', fontSize: 17, fontWeight: '800' },
+  input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17 },
+  button: { borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
+  buttonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
 });
