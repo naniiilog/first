@@ -17,6 +17,8 @@ export interface Member {
   joined: boolean;
   lastSeen: number | null;
   createdAt: number;
+  /** 'emoji:🦊:#hex' / 사진 data URL / null(기본) */
+  avatar: string | null;
 }
 
 export interface ChatMessage {

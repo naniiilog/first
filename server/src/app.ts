@@ -15,7 +15,7 @@ import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.
  *   POST   /api/rooms/:id/messages            { text, authorName }
  *   POST   /api/rooms/:id/members             { kind, name }      → { member, inviteUrl }
  *   GET    /api/rooms/:id/members/:mid/invite                     → { inviteUrl }
- *   PATCH  /api/rooms/:id/members/:mid        { name?, active? }
+ *   PATCH  /api/rooms/:id/members/:mid        { name?, active?, avatar? }
  *   DELETE /api/rooms/:id/members/:mid
  *
  * AI 에이전트용 MCP 입구 — 초대 링크 자체가 열쇠예요
@@ -59,12 +59,25 @@ function checkRate(key: string, perMinute: number) {
 
 async function body(req: Request): Promise<any> {
   const raw = await req.text();
-  if (raw.length > 16_000) throw new HttpError(413, '요청이 너무 커요.');
+  if (raw.length > MAX_BODY_CHARS) throw new HttpError(413, '요청이 너무 커요.');
   try {
     return raw ? JSON.parse(raw) : {};
   } catch {
     throw new HttpError(400, 'JSON 형식이 아니에요.');
   }
+}
+
+/** 프로필 사진(작게 줄인 data URL)도 받을 수 있게 넉넉히 */
+const MAX_BODY_CHARS = 120_000;
+const MAX_AVATAR_CHARS = 100_000;
+
+/** 프로필 값 검사: null(기본), 'emoji:<이모지>:#rrggbb', 또는 작은 data:image 사진 */
+function cleanAvatar(v: unknown): string | null | undefined {
+  if (v === null) return null;
+  if (typeof v !== 'string') return undefined;
+  if (/^emoji:[^:]{1,16}:#[0-9a-fA-F]{6}$/.test(v)) return v;
+  if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= MAX_AVATAR_CHARS) return v;
+  throw new HttpError(400, '프로필 이미지가 너무 크거나 형식이 맞지 않아요.');
 }
 
 const cleanName = (v: unknown, max = 30) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -125,7 +138,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
     if (sub === 'messages') {
       if (req.method === 'GET') {
         const after = url.searchParams.get('after');
-        const rows = await rooms.messages(room.id, after ? Number(after) : null, after ? 200 : 100);
+        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') ?? (after ? 200 : 100)) || 100));
+        const rows = await rooms.messages(room.id, after ? Number(after) : null, limit);
         return json(200, { messages: rows.map(publicMessage) });
       }
       if (req.method === 'POST') {
@@ -154,6 +168,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
         await rooms.updateMember(m, {
           name: cleanName(b.name) || undefined,
           active: typeof b.active === 'boolean' ? b.active : undefined,
+          avatar: cleanAvatar(b.avatar),
         });
         return json(200, { ok: true });
       }

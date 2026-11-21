@@ -43,6 +43,9 @@ export const api = {
   messages: (s: Settings, r: LocalRoom, after: number | null) =>
     call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages${after !== null ? `?after=${after}` : ''}`, { ownerToken: r.ownerToken }),
 
+  lastMessage: async (s: Settings, r: LocalRoom) =>
+    (await call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages?limit=1`, { ownerToken: r.ownerToken })).messages[0] ?? null,
+
   send: (s: Settings, r: LocalRoom, text: string) =>
     call<{ id: number }>(s, `/api/rooms/${r.id}/messages`, { method: 'POST', body: { text, authorName: s.userName }, ownerToken: r.ownerToken }),
 
@@ -56,7 +59,7 @@ export const api = {
   inviteUrl: (s: Settings, r: LocalRoom, memberId: string) =>
     call<{ inviteUrl: string }>(s, `/api/rooms/${r.id}/members/${memberId}/invite`, { ownerToken: r.ownerToken }),
 
-  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean }) =>
+  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   removeMember: (s: Settings, r: LocalRoom, memberId: string) =>

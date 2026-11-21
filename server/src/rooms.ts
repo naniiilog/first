@@ -21,6 +21,8 @@ export interface MemberRow {
   active: number;
   created_at: number;
   last_seen: number | null;
+  /** 프로필: 'emoji:🦊:#hex' 또는 작은 사진(data:image/...) 또는 null(기본) */
+  avatar: string | null;
 }
 
 export interface MessageRow {
@@ -45,6 +47,7 @@ export const publicMember = (m: MemberRow) => ({
   name: m.name,
   active: m.active === 1,
   joined: m.last_seen !== null,
+  avatar: m.avatar ?? null,
   lastSeen: m.last_seen,
   createdAt: m.created_at,
 });
@@ -113,34 +116,36 @@ export class Rooms {
       active: 1,
       created_at: Date.now(),
       last_seen: null,
+      avatar: null,
     };
     await this.db.run(
       'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       m.id, m.room_id, m.kind, m.name, m.invite_token, m.active, m.created_at,
     );
-    await this.post(roomId, SYSTEM_ID, '안내', `${name}을(를) 초대했어요. 초대 링크로 들어오면 대화할 수 있어요.`);
+    await this.post(roomId, SYSTEM_ID, '안내', `${name} 님을 초대했어요.`);
     return m;
   }
 
-  async updateMember(m: MemberRow, patch: { name?: string; active?: boolean }) {
+  async updateMember(m: MemberRow, patch: { name?: string; active?: boolean; avatar?: string | null }) {
     if (patch.name !== undefined) await this.db.run('UPDATE members SET name = ? WHERE id = ?', patch.name, m.id);
+    if (patch.avatar !== undefined) await this.db.run('UPDATE members SET avatar = ? WHERE id = ?', patch.avatar, m.id);
     if (patch.active !== undefined && (patch.active ? 1 : 0) !== m.active) {
       await this.db.run('UPDATE members SET active = ? WHERE id = ?', patch.active ? 1 : 0, m.id);
       const name = patch.name ?? m.name;
-      await this.post(m.room_id, SYSTEM_ID, '안내', patch.active ? `${name}이(가) 대화에 다시 참가할 수 있어요.` : `${name}의 대화 참가를 멈췄어요.`);
+      await this.post(m.room_id, SYSTEM_ID, '안내', patch.active ? `${name} 님이 다시 대화에 참가해요.` : `${name} 님의 대화 참가를 멈췄어요.`);
     }
   }
 
   async removeMember(m: MemberRow) {
     await this.db.run('DELETE FROM members WHERE id = ?', m.id);
-    await this.post(m.room_id, SYSTEM_ID, '안내', `${m.name}이(가) 방에서 나갔어요.`);
+    await this.post(m.room_id, SYSTEM_ID, '안내', `${m.name} 님이 나갔어요.`);
   }
 
   touch(m: MemberRow) {
     const first = m.last_seen === null;
     m.last_seen = Date.now();
     return this.db.run('UPDATE members SET last_seen = ? WHERE id = ?', m.last_seen, m.id).then(async () => {
-      if (first) await this.post(m.room_id, SYSTEM_ID, '안내', `${m.name}이(가) 들어왔어요.`);
+      if (first) await this.post(m.room_id, SYSTEM_ID, '안내', `${m.name} 님이 들어왔어요.`);
     });
   }
 

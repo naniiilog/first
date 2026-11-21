@@ -3,9 +3,11 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { AiPicker } from '../../../components/AiPicker';
+import { AvatarEditor } from '../../../components/AvatarEditor';
 import { Avatar, Button, Section } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { aiOf, KICKOFF_PROMPT, type AiKind } from '../../../lib/ais';
+import { lookOf } from '../../../lib/avatar';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
 import type { Member } from '../../../lib/types';
@@ -24,6 +26,7 @@ export default function MembersScreen() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [card, setCard] = useState<InviteCard | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   if (!room) return null;
@@ -93,15 +96,22 @@ export default function MembersScreen() {
           members.map((m) => {
             const ai = aiOf(m.kind);
             return (
-              <View key={m.id} style={[styles.row, { backgroundColor: t.card, borderColor: t.border }]}>
-                <Avatar bot={ai} size={38} dim={!m.active} />
+              <View key={m.id} style={{ gap: 8 }}>
+              <View style={[styles.row, { backgroundColor: t.card, borderColor: t.border }]}>
+                <Pressable onPress={() => setEditing(editing === m.id ? null : m.id)}>
+                  <Avatar bot={lookOf(m.kind, m.avatar)} size={46} dim={!m.active} />
+                  <Text style={[styles.editBadge, { backgroundColor: t.card, borderColor: t.border }]}>✏️</Text>
+                </Pressable>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{m.name}</Text>
                   <Text style={{ color: t.subtext, fontSize: 12 }}>
                     {ai.name} · {m.joined ? '들어옴' : '아직 안 들어옴'} · {m.active ? '참가 중' : '쉬는 중'}
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 14, marginTop: 4 }}>
-                    <Text onPress={() => showLink(m)} style={{ color: t.accent, fontWeight: '600', fontSize: 13 }}>
+                    <Text onPress={() => setEditing(editing === m.id ? null : m.id)} style={{ color: t.link, fontWeight: '600', fontSize: 13 }}>
+                      프로필
+                    </Text>
+                    <Text onPress={() => showLink(m)} style={{ color: t.link, fontWeight: '600', fontSize: 13 }}>
                       초대 링크
                     </Text>
                     <Text onPress={() => run(() => api.removeMember(settings, room, m.id))} style={{ color: t.danger, fontWeight: '600', fontSize: 13 }}>
@@ -114,6 +124,18 @@ export default function MembersScreen() {
                   onValueChange={(active) => run(() => api.updateMember(settings, room, m.id, { active }))}
                   trackColor={{ true: ai.color }}
                 />
+              </View>
+              {editing === m.id && (
+                <AvatarEditor
+                  kind={m.kind}
+                  avatar={m.avatar}
+                  onClose={() => setEditing(null)}
+                  onSave={async (avatar) => {
+                    await api.updateMember(settings, room, m.id, { avatar });
+                    await refreshMembers();
+                  }}
+                />
+              )}
               </View>
             );
           })
@@ -166,7 +188,8 @@ function InviteLinkCard({ card, onClose }: { card: InviteCard; onClose: () => vo
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  editBadge: { position: 'absolute', right: -6, bottom: -6, fontSize: 10, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 8, borderWidth: 1, overflow: 'hidden' },
   inviteRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 14, borderWidth: 2, flexWrap: 'wrap' },
   nameInput: { borderBottomWidth: 1, paddingVertical: 6, fontSize: 16, minWidth: 140 },
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },

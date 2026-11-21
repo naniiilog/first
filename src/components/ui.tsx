@@ -1,23 +1,29 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import type { Look } from '../lib/avatar';
 import { useTheme } from '../lib/theme';
 
-export function Avatar({ bot, size = 40, dim }: { bot: { emoji: string; color: string }; size?: number; dim?: boolean }) {
+/** 카톡처럼 둥근 네모 프로필. 사진이 있으면 사진, 없으면 색 배경에 이모지. */
+export function Avatar({ bot, size = 40, dim }: { bot: Look; size?: number; dim?: boolean }) {
+  const radius = size * 0.38;
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
-        backgroundColor: bot.color + '33',
-        borderWidth: 2,
-        borderColor: bot.color,
+        borderRadius: radius,
+        backgroundColor: bot.image ? '#DDD' : bot.color + '40',
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
         opacity: dim ? 0.35 : 1,
       }}
     >
-      <Text style={{ fontSize: size * 0.5 }}>{bot.emoji}</Text>
+      {bot.image ? (
+        <Image source={{ uri: bot.image }} style={{ width: size, height: size }} />
+      ) : (
+        <Text style={{ fontSize: size * 0.52 }}>{bot.emoji}</Text>
+      )}
     </View>
   );
 }

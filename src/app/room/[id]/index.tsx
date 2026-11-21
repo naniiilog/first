@@ -4,10 +4,30 @@ import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../../../components/ui';
 import { api } from '../../../lib/api';
-import { aiOf } from '../../../lib/ais';
+import { lookOf } from '../../../lib/avatar';
 import { useLiveRoom, useStore } from '../../../lib/store';
-import { useTheme } from '../../../lib/theme';
+import { useTheme, type Theme } from '../../../lib/theme';
+import { clock, fullDate, sameDay, sameMinute } from '../../../lib/time';
 import { OWNER_ID, SYSTEM_ID, type ChatMessage, type Member } from '../../../lib/types';
+
+/** 카톡처럼: 같은 사람이 같은 분에 연달아 보내면 프로필은 첫 줄에만, 시간은 마지막 줄에만 */
+interface Row {
+  msg: ChatMessage;
+  dateLine: boolean;
+  showProfile: boolean;
+  showTime: boolean;
+}
+
+function toRows(messages: ChatMessage[]): Row[] {
+  return messages.map((msg, i) => {
+    const prev = messages[i - 1];
+    const next = messages[i + 1];
+    const dateLine = !prev || !sameDay(prev.createdAt, msg.createdAt);
+    const grouped = (a?: ChatMessage, b?: ChatMessage) =>
+      !!a && !!b && a.authorId === b.authorId && a.authorId !== SYSTEM_ID && sameMinute(a.createdAt, b.createdAt) && sameDay(a.createdAt, b.createdAt);
+    return { msg, dateLine, showProfile: dateLine || !grouped(prev, msg), showTime: !grouped(msg, next) };
+  });
+}
 
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,7 +38,7 @@ export default function RoomScreen() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const listRef = useRef<FlatList<ChatMessage>>(null);
+  const listRef = useRef<FlatList<Row>>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -27,13 +47,14 @@ export default function RoomScreen() {
 
   if (!room) {
     return (
-      <View style={styles.center}>
-        <Text style={{ color: t.subtext }}>채팅방을 찾을 수 없어요.</Text>
+      <View style={[styles.center, { backgroundColor: t.chatBg }]}>
+        <Text style={{ color: t.chatTime }}>채팅방을 찾을 수 없어요.</Text>
       </View>
     );
   }
 
   const openMembers = () => router.push({ pathname: '/room/[id]/members', params: { id: room.id } });
+  const fail = (e: unknown) => setSendError(e instanceof Error ? e.message : String(e));
 
   const send = async () => {
     const body = text.trim();
@@ -45,18 +66,18 @@ export default function RoomScreen() {
       setText('');
       await refreshMessages();
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : String(e));
+      fail(e);
     } finally {
       setSending(false);
     }
   };
 
-  const toggle = async (m: Member) => {
+  const toggleMember = async (m: Member) => {
     try {
       await api.updateMember(settings, room, m.id, { active: !m.active });
       await Promise.all([refreshMembers(), refreshMessages()]);
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
   };
 
@@ -65,7 +86,7 @@ export default function RoomScreen() {
       await api.setFreeTalk(settings, room, !freeTalk);
       await Promise.all([refreshMembers(), refreshMessages()]);
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
   };
 
@@ -85,86 +106,92 @@ export default function RoomScreen() {
       return;
     }
     Alert.alert(room.name, undefined, [
-      { text: '멤버 관리 / 초대 링크', onPress: openMembers },
-      { text: '채팅방 삭제', style: 'destructive', onPress: deleteRoom },
+      { text: '멤버 · 초대 · 프로필', onPress: openMembers },
+      { text: '채팅방 나가기(삭제)', style: 'destructive', onPress: deleteRoom },
       { text: '취소', style: 'cancel' },
     ]);
   };
 
+  const rows = toRows(messages);
+  const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
+  const canSend = !!text.trim() && !sending;
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: t.chatBg }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <Stack.Screen
         options={{
-          title: room.name,
+          title: '',
+          headerStyle: { backgroundColor: t.chatBg },
+          headerShadowVisible: false,
+          headerLeft: undefined,
+          headerTitle: () => (
+            <Text style={{ fontSize: 17, fontWeight: '700', color: t.text }} numberOfLines={1}>
+              {room.name} <Text style={{ color: t.chatTime, fontWeight: '500' }}>{members.length + 1}</Text>
+            </Text>
+          ),
           headerRight: () => (
             <Pressable onPress={openMenu} hitSlop={12}>
-              <Text style={{ color: t.accent, fontSize: 22, fontWeight: '700' }}>⋯</Text>
+              <Text style={{ color: t.text, fontSize: 22 }}>☰</Text>
             </Pressable>
           ),
         }}
       />
 
-      <View style={[styles.memberBar, { backgroundColor: t.card, borderColor: t.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}>
+      <View style={styles.memberBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 10 }}>
           {members.map((m) => (
-            <MemberChip key={m.id} member={m} onPress={() => toggle(m)} />
+            <MemberChip key={m.id} member={m} onPress={() => toggleMember(m)} />
           ))}
-          <Pressable onPress={openMembers} style={[styles.chip, { borderColor: t.border, borderStyle: 'dashed' }]}>
-            <Text style={{ color: t.accent, fontWeight: '700', paddingLeft: 6 }}>+ 초대</Text>
+          <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>
+            <Text style={{ color: '#191919', fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
           </Pressable>
         </ScrollView>
       </View>
 
       {(gone || error || sendError) && (
-        <Text style={[styles.errorBar, { color: t.danger, backgroundColor: t.danger + '14' }]}>
+        <Text style={[styles.errorBar, { color: '#fff', backgroundColor: 'rgba(229,72,77,0.85)' }]}>
           ⚠️ {gone ? '서버에서 이 방을 찾을 수 없어요. 삭제됐거나 다른 서버 주소일 수 있어요.' : sendError ?? error}
         </Text>
       )}
 
       <FlatList
         ref={listRef}
-        data={messages}
-        keyExtractor={(m) => String(m.id)}
-        contentContainerStyle={{ padding: 12, gap: 12, flexGrow: 1 }}
+        data={rows}
+        keyExtractor={(r) => String(r.msg.id)}
+        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8, flexGrow: 1 }}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={{ color: t.subtext, textAlign: 'center', lineHeight: 22 }}>
-              위의 <Text style={{ fontWeight: '700' }}>+ 초대</Text>에서 에이전트 초대 링크를 만들어 보세요.{'\n'}
-              에이전트가 들어오면 여기서 같이 대화해요.{'\n'}
-              <Text style={{ fontWeight: '700' }}>자유대화</Text>를 켜면 에이전트들이 멈추지 않고 계속 수다를 떨어요.{'\n'}
-              위쪽 에이전트를 누르면 그 에이전트만 참가를 껐다 켤 수 있어요.
+            <Text style={[styles.systemPill, { color: t.systemText, backgroundColor: t.systemPill, lineHeight: 20, textAlign: 'center' }]}>
+              위의 ＋ 초대에서 에이전트 초대 링크를 만들어 보세요.{'\n'}에이전트를 누르면 대화 참가를 껐다 켤 수 있어요.{'\n'}자유대화를 켜면 멈추지 않고 계속 수다를 떨어요.
             </Text>
           </View>
         }
-        renderItem={({ item }) => <MessageBubble message={item} members={members} />}
+        renderItem={({ item }) => <MessageRow row={item} member={memberById[item.msg.authorId]} t={t} onProfile={openMembers} />}
       />
 
-      <View style={[styles.inputBar, { backgroundColor: t.card, borderColor: t.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
-        <Pressable
-          onPress={toggleFreeTalk}
-          style={[styles.freeBtn, { borderColor: freeTalk ? t.accent : t.border, backgroundColor: freeTalk ? t.accent : 'transparent' }]}
-        >
-          <Text style={{ color: freeTalk ? t.accentText : t.subtext, fontWeight: '700', fontSize: 12, textAlign: 'center' }}>
+      <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <Pressable onPress={toggleFreeTalk} style={[styles.freeBtn, { backgroundColor: freeTalk ? t.accent : t.input }]}>
+          <Text style={{ color: freeTalk ? t.accentText : t.subtext, fontWeight: '800', fontSize: 11, textAlign: 'center' }}>
             {freeTalk ? '자유대화\nON' : '자유대화\nOFF'}
           </Text>
         </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="메시지 보내기"
+          placeholder="메시지 입력"
           placeholderTextColor={t.subtext}
           multiline
           maxLength={1000}
-          style={[styles.input, { color: t.text, backgroundColor: t.bg, borderColor: t.border }]}
+          style={[styles.input, { color: t.text, backgroundColor: t.input }]}
           onSubmitEditing={Platform.OS === 'web' ? send : undefined}
           blurOnSubmit={Platform.OS === 'web'}
         />
-        <Pressable
-          onPress={send}
-          disabled={!text.trim() || sending}
-          style={[styles.sendBtn, { backgroundColor: t.accent, opacity: text.trim() && !sending ? 1 : 0.4 }]}
-        >
-          <Text style={{ color: t.accentText, fontWeight: '700' }}>전송</Text>
+        <Pressable onPress={send} disabled={!canSend} style={[styles.sendBtn, { backgroundColor: canSend ? t.accent : t.input }]}>
+          <Text style={{ color: canSend ? t.accentText : t.subtext, fontWeight: '800', fontSize: 18 }}>↑</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -172,64 +199,97 @@ export default function RoomScreen() {
 }
 
 function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
-  const t = useTheme();
-  const ai = aiOf(member.kind);
   const recentlySeen = member.lastSeen !== null && Date.now() - member.lastSeen < 60_000;
+  const status = !member.active ? '💤' : recentlySeen ? '🟢' : member.joined ? '⚪' : '✉️';
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.chip, { borderColor: member.active ? ai.color : t.border, backgroundColor: member.active ? ai.color + '1A' : 'transparent' }]}
-    >
-      <Avatar bot={ai} size={24} dim={!member.active} />
-      <Text style={{ color: member.active ? t.text : t.subtext, fontWeight: '600', fontSize: 13 }}>{member.name}</Text>
-      <Text style={{ fontSize: 11 }}>{!member.active ? '💤' : recentlySeen ? '🟢' : member.joined ? '⚪' : '✉️'}</Text>
+    <Pressable onPress={onPress} style={[styles.chip, { backgroundColor: member.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)' }]}>
+      <Avatar bot={lookOf(member.kind, member.avatar)} size={22} dim={!member.active} />
+      <Text style={{ color: member.active ? '#191919' : '#5A6570', fontWeight: '600', fontSize: 12 }}>{member.name}</Text>
+      <Text style={{ fontSize: 10 }}>{status}</Text>
     </Pressable>
   );
 }
 
-function MessageBubble({ message, members }: { message: ChatMessage; members: Member[] }) {
-  const t = useTheme();
-  if (message.authorId === SYSTEM_ID) {
-    return <Text style={{ color: t.subtext, fontSize: 12, textAlign: 'center', paddingHorizontal: 24 }}>{message.text}</Text>;
-  }
-  if (message.authorId === OWNER_ID) {
+function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; t: Theme; onProfile: () => void }) {
+  const { msg } = row;
+  const dateLine = row.dateLine ? (
+    <View style={{ alignItems: 'center', marginVertical: 10 }}>
+      <Text style={[styles.systemPill, { color: t.systemText, backgroundColor: t.systemPill }]}>📅 {fullDate(msg.createdAt)}</Text>
+    </View>
+  ) : null;
+
+  if (msg.authorId === SYSTEM_ID) {
     return (
-      <View style={{ alignItems: 'flex-end' }}>
-        <View style={[styles.bubble, { backgroundColor: t.myBubble, borderTopRightRadius: 4 }]}>
-          <Text style={{ color: t.myBubbleText, fontSize: 15, lineHeight: 21 }}>{message.text}</Text>
+      <>
+        {dateLine}
+        <View style={{ alignItems: 'center', marginVertical: 6 }}>
+          <Text style={[styles.systemPill, { color: t.systemText, backgroundColor: t.systemPill }]}>{msg.text}</Text>
         </View>
-        <Text style={{ color: t.subtext, fontSize: 11, marginTop: 2 }}>{message.authorName}</Text>
-      </View>
+      </>
     );
   }
-  const member = members.find((m) => m.id === message.authorId);
-  const ai = aiOf(member?.kind ?? 'other');
+
+  const time = row.showTime ? <Text style={[styles.time, { color: t.chatTime }]}>{clock(msg.createdAt)}</Text> : null;
+
+  if (msg.authorId === OWNER_ID) {
+    return (
+      <>
+        {dateLine}
+        <View style={[styles.mineRow, { marginTop: row.showProfile ? 8 : 3 }]}>
+          {time}
+          <View style={[styles.bubble, { backgroundColor: t.myBubble }, row.showProfile && { borderTopRightRadius: 4 }]}>
+            <Text style={[styles.bubbleText, { color: t.myBubbleText }]} selectable>
+              {msg.text}
+            </Text>
+          </View>
+        </View>
+      </>
+    );
+  }
+
+  const look = lookOf(member?.kind ?? 'other', member?.avatar);
   return (
-    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-      <Avatar bot={ai} size={34} />
-      <View style={{ flex: 1, alignItems: 'flex-start' }}>
-        <Text style={{ color: ai.color, fontSize: 13, fontWeight: '700', marginBottom: 3 }}>
-          {member?.name ?? message.authorName}
-          {member && member.name !== ai.name ? <Text style={{ color: t.subtext, fontWeight: '400' }}> · {ai.name}</Text> : null}
-        </Text>
-        <View style={[styles.bubble, { backgroundColor: t.botBubble, borderColor: t.border, borderWidth: StyleSheet.hairlineWidth, borderTopLeftRadius: 4 }]}>
-          <Text style={{ color: t.text, fontSize: 15, lineHeight: 21 }} selectable>
-            {message.text}
-          </Text>
+    <>
+      {dateLine}
+      <View style={[styles.otherRow, { marginTop: row.showProfile ? 10 : 3 }]}>
+        <View style={{ width: 42 }}>
+          {row.showProfile ? (
+            <Pressable onPress={onProfile}>
+              <Avatar bot={look} size={40} />
+            </Pressable>
+          ) : null}
+        </View>
+        <View style={{ flex: 1 }}>
+          {row.showProfile ? <Text style={[styles.name, { color: t.chatName }]}>{member?.name ?? msg.authorName}</Text> : null}
+          <View style={styles.otherBubbleLine}>
+            <View style={[styles.bubble, { backgroundColor: t.botBubble }, row.showProfile && { borderTopLeftRadius: 4 }]}>
+              <Text style={[styles.bubbleText, { color: t.botBubbleText }]} selectable>
+                {msg.text}
+              </Text>
+            </View>
+            {time}
+          </View>
         </View>
       </View>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  memberBar: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4, paddingRight: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1.5 },
+  memberBar: { paddingVertical: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 3, paddingRight: 8, paddingVertical: 3, borderRadius: 999 },
   errorBar: { paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
-  bubble: { maxWidth: '88%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  input: { flex: 1, minHeight: 42, maxHeight: 120, borderWidth: 1, borderRadius: 21, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontSize: 15 },
-  freeBtn: { width: 58, height: 42, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  sendBtn: { height: 42, paddingHorizontal: 16, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  systemPill: { fontSize: 12, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, overflow: 'hidden', maxWidth: 320 },
+  mineRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 5 },
+  otherRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  otherBubbleLine: { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+  name: { fontSize: 12, marginBottom: 4, marginLeft: 2 },
+  bubble: { maxWidth: '72%', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 14 },
+  bubbleText: { fontSize: 15, lineHeight: 21 },
+  time: { fontSize: 10, marginBottom: 1 },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingHorizontal: 8, paddingTop: 8 },
+  freeBtn: { width: 54, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, minHeight: 38, maxHeight: 120, borderRadius: 19, paddingHorizontal: 14, paddingTop: 9, paddingBottom: 9, fontSize: 15 },
+  sendBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 });
