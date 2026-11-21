@@ -1,7 +1,10 @@
 import type { Db } from './db.js';
 import { ensureSchema } from './db.js';
 import { Auth, MAX_PASSWORD, MIN_PASSWORD } from './auth.js';
+import { handleAgentHttp } from './agentHttp.js';
+import { imageFrom, isError } from './agent.js';
 import { handleMcp } from './mcp.js';
+import { findSecret, secretMessage } from './safety.js';
 import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
 
 /**
@@ -25,6 +28,9 @@ import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.
  *
  * AI 에이전트용 MCP 입구 — 초대 링크 자체가 열쇠예요
  *   POST   /mcp/:inviteToken
+ *
+ * 커넥터가 없는 에이전트용 HTTP 입구(연결 문구) — 헤더 X-Dabot-Key: <초대토큰> 또는 /a/<초대토큰>/...
+ *   GET /a/info · GET /a/messages?since= · GET /a/wait?since=&timeout= · POST /a/send · POST /a/image · GET /a/image/:id
  */
 
 export type Env = Record<string, unknown>;
@@ -36,8 +42,8 @@ const CORS = {
   'Access-Control-Expose-Headers': '*',
 };
 
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS } });
+const json = (status: number, body: unknown, extra: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...extra } });
 
 const withCors = (res: Response) => {
   const out = new Response(res.body, res);
@@ -46,20 +52,30 @@ const withCors = (res: Response) => {
 };
 
 class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(
+    readonly status: number,
+    message: string,
+    /** 429일 때 몇 초 뒤에 다시 시도하면 되는지 */
+    readonly retryAfter?: number,
+    readonly code?: string,
+  ) {
     super(message);
   }
 }
 
 // 같은 서버 인스턴스 안에서만 세는 간단한 분당 제한(장난 방지용).
+// 넘으면 429와 함께 몇 초 기다리면 되는지(Retry-After)를 알려줘요.
 const hits = new Map<string, number[]>();
 function checkRate(key: string, perMinute: number) {
   const now = Date.now();
   const recent = (hits.get(key) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= perMinute) {
+    const retryAfter = Math.max(1, Math.ceil((recent[0] + 60_000 - now) / 1000));
+    throw new HttpError(429, `요청이 너무 많아요. ${retryAfter}초 뒤에 다시 해 주세요.`, retryAfter, 'rate_limited');
+  }
   recent.push(now);
   hits.set(key, recent);
   if (hits.size > 5000) hits.clear();
-  if (recent.length > perMinute) throw new HttpError(429, '요청이 너무 많아요. 잠시 쉬었다가 해 주세요.');
 }
 
 async function body(req: Request): Promise<any> {
@@ -72,8 +88,8 @@ async function body(req: Request): Promise<any> {
   }
 }
 
-/** 프로필 사진(작게 줄인 data URL)도 받을 수 있게 넉넉히 */
-const MAX_BODY_CHARS = 120_000;
+/** 프로필 사진·채팅 사진(data URL)도 받을 수 있게 넉넉히 */
+const MAX_BODY_CHARS = 1_000_000;
 const MAX_AVATAR_CHARS = 100_000;
 
 /** 프로필 값 검사: null(기본), 'emoji:<이모지>:#rrggbb', 또는 작은 data:image 사진 */
@@ -83,6 +99,16 @@ function cleanAvatar(v: unknown): string | null | undefined {
   if (/^emoji:[^:]{1,16}:#[0-9a-fA-F]{6}$/.test(v)) return v;
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= MAX_AVATAR_CHARS) return v;
   throw new HttpError(400, '프로필 이미지가 너무 크거나 형식이 맞지 않아요.');
+}
+
+/** 채팅 사진: data:image/(png|jpeg|webp);base64,... (MAX_IMAGE_BYTES 이하) */
+function cleanChatImage(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  const m = typeof v === 'string' ? v.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/) : null;
+  if (!m) throw new HttpError(400, '사진 형식이 맞지 않아요.');
+  const img = imageFrom(m[2], m[1]);
+  if (isError(img)) throw new HttpError(400, img.message);
+  return img;
 }
 
 function cleanPassword(v: unknown): string {
@@ -108,6 +134,13 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
     if (parts[0] === 'mcp' && parts[1]) {
       checkRate(`mcp:${parts[1]}`, Number(env.MCP_RATE_PER_MINUTE ?? 60));
       return withCors(await handleMcp(req, rooms, parts[1]));
+    }
+
+    // ── 연결 문구용 입구(MCP 커넥터가 없는 에이전트) ──
+    if (parts[0] === 'a') {
+      const key = req.headers.get('x-dabot-key') ?? '';
+      const r = await handleAgentHttp(req, url, parts, key, rooms, (k, n) => checkRate(k, n));
+      return withCors(r);
     }
 
     if (parts[0] !== 'api') throw new HttpError(404, 'Not found');
@@ -202,8 +235,13 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       if (req.method === 'POST') {
         const b = await body(req);
         const text = typeof b.text === 'string' ? b.text.trim() : '';
-        if (!text || text.length > MAX_TEXT) throw new HttpError(400, `메시지는 1~${MAX_TEXT}자로 써주세요.`);
-        const id = await rooms.post(room.id, OWNER_ID, cleanName(b.authorName) || '방장', text);
+        const image = cleanChatImage(b.image);
+        if ((!text && !image) || text.length > MAX_TEXT) throw new HttpError(400, `메시지는 1~${MAX_TEXT}자로 써주세요.`);
+        const secret = findSecret(text);
+        if (secret) throw new HttpError(400, secretMessage(secret), undefined, 'secret');
+        let replyTo = typeof b.replyTo === 'number' ? b.replyTo : null;
+        if (replyTo !== null && !(await rooms.message(room.id, replyTo))) replyTo = null;
+        const id = await rooms.post(room.id, OWNER_ID, cleanName(b.authorName) || '방장', text, { replyTo, image });
         return json(200, { id });
       }
     }
@@ -237,7 +275,13 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
 
     throw new HttpError(404, 'Not found');
   } catch (err) {
-    if (err instanceof HttpError) return json(err.status, { error: err.message });
+    if (err instanceof HttpError) {
+      return json(
+        err.status,
+        { ok: false, error: err.message, ...(err.code ? { code: err.code } : {}), ...(err.retryAfter ? { retry_after: err.retryAfter } : {}) },
+        err.retryAfter ? { 'Retry-After': String(err.retryAfter) } : {},
+      );
+    }
     console.error(err);
     return json(500, { error: '서버 오류가 났어요.' });
   }

@@ -28,6 +28,12 @@ export interface ChatMessage {
   authorName: string;
   text: string;
   createdAt: number;
+  /** 답장한 원래 메시지 번호 */
+  replyTo?: number | null;
+  /** 사진(data URL) */
+  image?: string | null;
+  /** 아직 서버에 가는 중인 내 메시지 */
+  pending?: boolean;
 }
 
 export interface Settings {

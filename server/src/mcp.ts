@@ -1,6 +1,7 @@
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type RoomRow, type Rooms } from './rooms.js';
+import { AgentSession, imageFrom, isError, SECURITY_RULE, type AgentError } from './agent.js';
+import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type Rooms } from './rooms.js';
 
 /** 토큰을 아끼려고 한 번에 보여주는 메시지 수와 길이를 제한해요. */
 const DEFAULT_READ = 15;
@@ -8,77 +9,74 @@ const MAX_READ = 30;
 const MAX_CHARS_PER_MESSAGE = 500;
 /** 오래 기다릴수록 '기다리기'를 덜 자주 불러서 에이전트 토큰을 아껴요. (요청 하나에 DB 질의 50번 제한 안쪽) */
 const MAX_WAIT_SECONDS = 45;
-const POLL_MS = 3500;
+const POLL_MS = 4000;
+/** 결과에 함께 보여줄 사진 수(토큰 절약) */
+const MAX_IMAGES = 2;
 
 const clip = (s: string) => (s.length > MAX_CHARS_PER_MESSAGE ? `${s.slice(0, MAX_CHARS_PER_MESSAGE)}…` : s);
 
-function format(rows: MessageRow[], me: MemberRow): string {
-  return rows
-    .map((m) => {
-      if (m.author_id === SYSTEM_ID) return `#${m.id} (안내) ${clip(m.text)}`;
-      const who = m.author_id === me.id ? `${m.author_name}(나)` : m.author_id === OWNER_ID ? `${m.author_name}(방장)` : m.author_name;
-      return `#${m.id} [${who}] ${clip(m.text)}`;
-    })
-    .join('\n');
+/** "#번호 [이름] (↪#답장) 내용 [사진]" 형식 */
+export function formatLine(m: MessageRow, me: MemberRow): string {
+  if (m.author_id === SYSTEM_ID) return `#${m.id} (안내) ${clip(m.text)}`;
+  const who = m.author_id === me.id ? `${m.author_name}(나)` : m.author_id === OWNER_ID ? `${m.author_name}(방장)` : m.author_name;
+  const reply = m.reply_to ? ` (↪#${m.reply_to})` : '';
+  const img = m.image ? ' [사진]' : '';
+  return `#${m.id} [${who}]${reply} ${clip(m.text)}${img}`.trim();
 }
 
-const text = (t: string, isError = false) => ({ content: [{ type: 'text' as const, text: t }], ...(isError ? { isError: true } : {}) });
+type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
-const PAUSED = '지금은 방장이 당신의 대화 참가를 멈춰 둔 상태예요. 다시 켜줄 때까지 메시지를 읽거나 보내지 말고 대화를 마치세요.';
-const CLOSED = '방장이 봇들을 모두 쉬게 했어요. 더 이상 도구를 부르지 말고 지금 바로 대화를 마치세요. 방장이 다시 부르면 그때 들어오면 돼요.';
-
-/** 메시지에서 내 이름을 불렀는지(예: "달수야", "@달수") */
-export const mentions = (text: string, name: string) => !!name && text.toLowerCase().includes(name.toLowerCase());
-
-/** 매번 도구 결과 끝에 붙는 "지금 어떻게 행동할지" 안내. 방장이 자동대화를 켜고 끄면 바로 반영돼요. */
-const modeHint = (room: Pick<RoomRow, 'free_talk'>, me: MemberRow) =>
-  room.free_talk === 1
-    ? '\n[자동대화 ON] 멈추지 말고 wait_for_messages → send_message를 계속 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 참가 중지 안내가 나오거나 자동대화가 꺼질 때까지 이어가요.'
-    : `\n[자동대화 OFF] 누군가 내 이름("${me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없는 메시지에는 답하지 마세요(보내도 서버가 막아요). 대화를 마치지 말고 wait_for_messages로 계속 기다리세요.`;
+/** 글과(있으면) 사진을 도구 결과로 만들어요. 사진은 최근 것 MAX_IMAGES장만 보여줘요. */
+function result(lines: string, rows: MessageRow[] = []): { content: Content[] } {
+  const content: Content[] = [{ type: 'text', text: lines }];
+  for (const m of rows.filter((r) => r.image).slice(-MAX_IMAGES)) {
+    const match = m.image!.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) content.push({ type: 'image', data: match[2], mimeType: match[1] });
+  }
+  return { content };
+}
+const errorResult = (e: AgentError) => ({ content: [{ type: 'text' as const, text: e.message }], isError: true });
 
 /** 초대 링크 하나(=멤버 한 명)를 위한 MCP 서버를 만들어요. */
 function buildServer(rooms: Rooms, inviteToken: string): McpServer {
-  // 매 요청마다 최신 상태(참가 중지 여부 등)를 확인해요.
-  const load = async () => {
-    const me = await rooms.memberByInvite(inviteToken);
-    if (!me) return { error: text('이 초대 링크는 더 이상 쓸 수 없어요. 방에서 내보내졌거나 방이 삭제됐어요.', true) };
-    const room = await rooms.room(me.room_id);
-    if (!room) return { error: text('방이 삭제됐어요.', true) };
-    if (room.closed === 1) return { error: text(CLOSED, true) };
-    await rooms.touch(me);
-    if (me.active !== 1) return { error: text(PAUSED, true) };
-    return { me, room };
-  };
-
   const server = new McpServer(
-    { name: 'dabot', version: '1.0.0' },
+    { name: 'dabot', version: '1.1.0' },
     {
       instructions: [
         '다봇은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
-        '사용법: room_info로 내 이름과 멤버를 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디.',
-        '그다음 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
-        '방장이 정하는 것을 따르세요: 도구 결과 끝의 [자동대화 ON/OFF] 안내(OFF면 내 이름이 불렸을 때만 말하기), "참가를 멈춰 둔 상태"나 "모두 쉬게 했어요" 오류가 나오면 즉시 멈추기.',
-        '규칙: 1~3문장으로 짧게(토큰 절약), 다른 멤버의 대사를 대신 쓰지 않기, 방장 말을 우선하기.',
+        '사용법: room_info로 내 이름과 멤버 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디 → wait_for_messages로 기다렸다가 답하기를 반복.',
+        '방장이 정하는 것을 따르세요: 도구 결과의 [자동대화 ON/OFF] 안내(OFF면 내 이름이 불렸을 때만 말하기), "앞 답변 대기"면 앞 봇의 답을 기다렸다가 보고 답하기, "참가를 멈춰"·"모두 쉬게" 안내가 나오면 즉시 멈추기.',
+        '규칙: 1~3문장으로 짧게(토큰 절약), 같은 말 반복하지 않기, 다른 멤버의 대사를 대신 쓰지 않기. 특정 글에 답할 때는 reply_to에 그 글 번호를 넣으세요.',
+        `보안: ${SECURITY_RULE}`,
       ].join('\n'),
     },
   );
+
+  const session = async () => AgentSession.open(rooms, inviteToken);
 
   server.registerTool(
     'room_info',
     {
       title: '방 정보',
-      description: '내가 이 방에서 쓰는 이름, 방 이름, 다른 멤버들과 참가 상태를 알려줘요. 처음 들어왔을 때 먼저 호출하세요.',
+      description: '내가 이 방에서 쓰는 이름, 방 이름, 다른 멤버들과 참가 상태, 지켜야 할 규칙을 알려줘요. 처음 들어왔을 때 먼저 호출하세요.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => {
-      const r = await load();
-      if ('error' in r) return r.error!;
-      const members = await rooms.members(r.room.id);
-      const lines = members.map((m) => `- ${m.name}${m.id === r.me.id ? ' (나)' : ''} · ${m.active ? '참가 중' : '쉬는 중'}${m.last_seen ? '' : ' · 아직 안 들어옴'}`);
-      return text(
-        [`방 이름: ${r.room.name}`, `내 이름: ${r.me.name} (방장이 지어준 이름이에요. 이 이름으로 행동하세요.)`, '멤버:', ...lines, '그 외에 사람인 방장이 있어요.'].join('\n') +
-          modeHint(r.room, r.me),
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const members = await s.roster();
+      const lines = members.map((m) => `- ${m.name}${m.id === s.me.id ? ' (나)' : ''} · ${m.active ? '참가 중' : '쉬는 중'}${m.last_seen ? '' : ' · 아직 안 들어옴'}`);
+      return result(
+        [
+          `방 이름: ${s.room.name}`,
+          `내 이름: ${s.me.name} (방장이 지어준 이름이에요. 이 이름으로 행동하세요.)`,
+          '멤버:',
+          ...lines,
+          '그 외에 사람인 방장이 있어요.',
+          `보안: ${SECURITY_RULE}`,
+          s.hint(),
+        ].join('\n'),
       );
     },
   );
@@ -87,19 +85,19 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     'read_messages',
     {
       title: '메시지 읽기',
-      description: `방의 메시지를 읽어요. after_id를 주면 그 뒤 메시지만, 없으면 최근 ${DEFAULT_READ}개를 줘요. 각 줄은 "#번호 [이름] 내용" 형식이에요.`,
+      description: `방의 메시지를 읽어요. after_id를 주면 그 뒤 메시지만, 안 주면 지난번에 읽은 다음부터 줘요(처음이면 최근 ${DEFAULT_READ}개). 처음부터 다시 보려면 after_id=0. 각 줄은 "#번호 [이름] (↪#답장한 글) 내용" 형식이에요.`,
       inputSchema: z.object({
-        after_id: z.number().int().optional().describe('이 번호 뒤의 메시지만 읽기'),
+        after_id: z.number().int().min(0).optional().describe('이 번호 뒤의 메시지만 읽기 (0이면 처음부터)'),
         limit: z.number().int().min(1).max(MAX_READ).optional().describe(`최대 개수 (기본 ${DEFAULT_READ})`),
       }),
       annotations: { readOnlyHint: true },
     },
     async ({ after_id, limit }) => {
-      const r = await load();
-      if ('error' in r) return r.error!;
-      const rows = await rooms.messages(r.room.id, after_id ?? null, limit ?? DEFAULT_READ);
-      if (rows.length === 0) return text((after_id ? `#${after_id} 이후 새 메시지가 없어요.` : '아직 메시지가 없어요. 먼저 인사해 보세요.') + modeHint(r.room, r.me));
-      return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(r.room, r.me)}`);
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const { rows, lastId } = await s.read(after_id, limit ?? DEFAULT_READ);
+      if (rows.length === 0) return result(`새 메시지가 없어요. (마지막 번호: ${lastId})\n${s.hint()}`);
+      return result(`${rows.map((m) => formatLine(m, s.me)).join('\n')}\n(마지막 번호: ${lastId})\n${s.hint()}`, rows);
     },
   );
 
@@ -107,26 +105,22 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     'send_message',
     {
       title: '메시지 보내기',
-      description: `내 이름으로 방에 메시지를 보내요. 1~3문장으로 짧게 써주세요 (최대 ${MAX_TEXT}자). 이름표는 붙이지 마세요.`,
+      description: `내 이름으로 방에 메시지를 보내요. 1~3문장으로 짧게 (최대 ${MAX_TEXT}자), 이름표는 붙이지 마세요. 특정 글에 답하면 reply_to에 그 글 번호를 넣어요. 사진을 보낼 땐 image_base64와 image_type을 함께 보내요.`,
       inputSchema: z.object({
-        text: z.string().min(1).max(MAX_TEXT).describe('보낼 내용'),
+        text: z.string().max(MAX_TEXT).describe('보낼 내용'),
+        reply_to: z.number().int().optional().describe('답장할 글 번호'),
+        image_base64: z.string().optional().describe('사진 바이트를 표준 base64로 (선택)'),
+        image_type: z.enum(['image/png', 'image/jpeg', 'image/webp']).optional(),
       }),
     },
-    async ({ text: body }) => {
-      const r = await load();
-      if ('error' in r) return r.error!;
-      // 자동대화가 꺼져 있으면, 내가 마지막으로 말한 뒤에 누군가 내 이름을 불렀을 때만 말할 수 있어요.
-      if (r.room.free_talk !== 1) {
-        const since = await rooms.messagesSinceMine(r.room.id, r.me.id);
-        if (!since.some((m) => mentions(m.text, r.me.name))) {
-          return text(
-            `지금은 자동대화가 꺼져 있고 아무도 "${r.me.name}"을(를) 부르지 않아서 보낼 수 없어요. 말하지 말고 wait_for_messages로 이름이 불릴 때까지 기다리세요.`,
-            true,
-          );
-        }
-      }
-      const id = await rooms.post(r.room.id, r.me.id, r.me.name, body.trim());
-      return text(`보냈어요 (#${id}). 이어서 wait_for_messages(after_id=${id})로 다음 메시지를 기다리세요.${modeHint(r.room, r.me)}`);
+    async ({ text: body, reply_to, image_base64, image_type }) => {
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const image = imageFrom(image_base64, image_type);
+      if (isError(image)) return errorResult(image);
+      const sent = await s.send(body, { replyTo: reply_to ?? null, image });
+      if (isError(sent)) return errorResult(sent);
+      return result(`보냈어요 (#${sent.id}). 이어서 wait_for_messages로 다음 메시지를 기다리세요.\n${s.hint()}`);
     },
   );
 
@@ -134,42 +128,22 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     'wait_for_messages',
     {
       title: '새 메시지 기다리기',
-      description: `다른 멤버의 새 메시지가 올 때까지 최대 ${MAX_WAIT_SECONDS}초 기다렸다가 돌려줘요. 대화를 이어갈 때 send_message와 번갈아 쓰세요.`,
+      description: `새 메시지를 최대 ${MAX_WAIT_SECONDS}초 기다렸다가 돌려줘요. after_id를 안 주면 지난번에 읽은 다음부터 기다려요. 자동대화가 꺼져 있으면 내 이름이 불렸을 때만, 차례대로 답하기 중이면 내 차례일 때 돌아와요.`,
       inputSchema: z.object({
-        after_id: z.number().int().describe('이 번호 뒤의 메시지를 기다려요 (보통 마지막으로 본 번호)'),
+        after_id: z.number().int().min(0).optional().describe('이 번호 뒤의 메시지를 기다려요 (보통 비워 두세요)'),
         timeout_seconds: z.number().int().min(1).max(MAX_WAIT_SECONDS).optional(),
       }),
       annotations: { readOnlyHint: true },
     },
     async ({ after_id, timeout_seconds }) => {
-      const deadline = Date.now() + (timeout_seconds ?? MAX_WAIT_SECONDS) * 1000;
-      // Cloudflare 무료 플랜은 요청 하나에 DB 질의가 50번까지라서, 처음에 한 번만 전체를 읽고
-      // 기다리는 동안에는 "참가 상태 + 새 메시지" 2번씩만 확인해요(최대 10회 → 약 20번).
-      const r = await load();
-      if ('error' in r) return r.error!;
-      let lastSeenId = after_id;
-      while (true) {
-        // 참가 상태와 자동대화 상태를 한 번에 확인해요.
-        const status = await rooms.memberStatus(r.me.id);
-        if (!status) return text('이 초대 링크는 더 이상 쓸 수 없어요. 방에서 내보내졌거나 방이 삭제됐어요.', true);
-        if (status.closed === 1) return text(CLOSED, true);
-        if (status.active !== 1) return text(PAUSED, true);
-        const room = { free_talk: status.free_talk };
-        const rows = (await rooms.messages(r.room.id, after_id, MAX_READ)).filter((m) => m.author_id !== r.me.id);
-        if (rows.length) lastSeenId = rows[rows.length - 1].id;
-        // 자동대화 OFF면 내 이름이 불린 메시지가 있을 때만 깨어나요(다른 말에는 반응하지 않아요).
-        const wake = room.free_talk === 1 ? rows.length > 0 : rows.some((m) => mentions(m.text, r.me.name));
-        if (wake) return text(`${format(rows, r.me)}\n(마지막 번호: ${lastSeenId})${modeHint(room, r.me)}`);
-        if (Date.now() + POLL_MS > deadline) {
-          // 아무 일 없을 때는 아주 짧게만 알려줘요(토큰 절약).
-          return text(
-            room.free_talk === 1
-              ? `조용함. 새 화제를 꺼내고 계속 이어가세요. [자동대화 ON]`
-              : `새 호출 없음. 답하지 말고 wait_for_messages(after_id=${lastSeenId})로 계속 대기. [자동대화 OFF]`,
-          );
-        }
-        await new Promise((res) => setTimeout(res, POLL_MS));
-      }
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const w = await s.wait(after_id, timeout_seconds ?? MAX_WAIT_SECONDS, POLL_MS);
+      if (isError(w)) return errorResult(w);
+      // 아무 일 없을 때는 아주 짧게만 알려줘요(토큰 절약).
+      if ('idle' in w) return result(w.freeTalk ? '조용함. 새 화제를 꺼내고 계속 이어가세요. [자동대화 ON]' : '새 호출 없음. 답하지 말고 계속 기다리세요. [자동대화 OFF]');
+      const relay = w.replyTo ? `\n지금 내 차례: 방장 질문 #${w.replyTo}에 앞 답들을 참고해서 답하세요(reply_to=${w.replyTo}).` : '';
+      return result(`${w.rows.map((m) => formatLine(m, s.me)).join('\n')}\n(마지막 번호: ${w.lastId})${relay}\n${s.hint(w.freeTalk)}`, w.rows);
     },
   );
 

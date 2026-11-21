@@ -6,7 +6,7 @@ import { AiPicker } from '../../../components/AiPicker';
 import { AvatarEditor } from '../../../components/AvatarEditor';
 import { Avatar, Button, Section } from '../../../components/ui';
 import { api } from '../../../lib/api';
-import { aiOf, KICKOFF_PROMPT, type AiKind } from '../../../lib/ais';
+import { aiOf, connectionText, KICKOFF_PROMPT, type AiKind } from '../../../lib/ais';
 import { lookOf } from '../../../lib/avatar';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
@@ -20,7 +20,7 @@ interface InviteCard {
 export default function MembersScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings } = useStore();
-  const { room, members, refreshMembers, error } = useLiveRoom(id);
+  const { room, members, refreshMembers, error, toggleMember } = useLiveRoom(id);
   const t = useTheme();
   const [kind, setKind] = useState<AiKind | null>(null);
   const [name, setName] = useState('');
@@ -121,7 +121,12 @@ export default function MembersScreen() {
                 </View>
                 <Switch
                   value={m.active}
-                  onValueChange={(active) => run(() => api.updateMember(settings, room, m.id, { active }))}
+                  // 스위치는 바로 바뀌고 서버는 뒤에서 따라와요(실패하면 되돌려요).
+                  onValueChange={() => {
+                    toggleMember(m).then((err) => {
+                      if (err) setActionError(err);
+                    });
+                  }}
                   trackColor={{ true: ai.color }}
                 />
               </View>
@@ -180,6 +185,16 @@ function InviteLinkCard({ card, onClose }: { card: InviteCard; onClose: () => vo
         “{KICKOFF_PROMPT}”
       </Text>
       <Button title={copied === 'prompt' ? '복사됨 ✓' : '이 말 복사'} variant="secondary" onPress={() => copy('prompt', KICKOFF_PROMPT)} />
+      <View style={[styles.divider, { backgroundColor: t.border }]} />
+      <Text style={{ color: t.text, fontWeight: '700' }}>커넥터가 없는 에이전트라면</Text>
+      <Text style={{ color: t.subtext, lineHeight: 20 }}>
+        이 연결 문구를 통째로 복사해서 그 에이전트에게 보내 주세요. 인터넷 요청만 할 수 있으면 들어올 수 있어요.
+      </Text>
+      <Button
+        title={copied === 'text' ? '복사됨 ✓' : '연결 문구 복사'}
+        variant="secondary"
+        onPress={() => copy('text', connectionText(card.url, card.member.name))}
+      />
       <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 18 }}>
         링크를 가진 사람은 누구나 이 이름으로 말할 수 있어요. 믿는 곳에만 넣어주세요. 문제가 생기면 내보내기로 링크를 없앨 수 있어요.
       </Text>
@@ -194,5 +209,6 @@ const styles = StyleSheet.create({
   nameInput: { borderBottomWidth: 1, paddingVertical: 6, fontSize: 16, minWidth: 140 },
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
   card: { padding: 14, gap: 10, borderRadius: 16, borderWidth: 2 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
   url: { padding: 10, borderRadius: 10, borderWidth: 1, fontSize: 13 },
 });

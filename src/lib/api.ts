@@ -63,8 +63,12 @@ export const api = {
   lastMessage: async (s: Settings, r: LocalRoom) =>
     (await call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages?limit=1`, { ownerToken: r.ownerToken })).messages[0] ?? null,
 
-  send: (s: Settings, r: LocalRoom, text: string) =>
-    call<{ id: number }>(s, `/api/rooms/${r.id}/messages`, { method: 'POST', body: { text, authorName: s.userName }, ownerToken: r.ownerToken }),
+  send: (s: Settings, r: LocalRoom, text: string, opts: { replyTo?: number | null; image?: string | null } = {}) =>
+    call<{ id: number }>(s, `/api/rooms/${r.id}/messages`, {
+      method: 'POST',
+      body: { text, authorName: s.userName, replyTo: opts.replyTo ?? null, image: opts.image ?? null },
+      ownerToken: r.ownerToken,
+    }),
 
   invite: (s: Settings, r: LocalRoom, kind: string, name: string, defaultName: string) =>
     call<{ member: Member; inviteUrl: string }>(s, `/api/rooms/${r.id}/members`, {

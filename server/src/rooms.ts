@@ -25,6 +25,8 @@ export interface MemberRow {
   last_seen: number | null;
   /** 프로필: 'emoji:🦊:#hex' 또는 작은 사진(data:image/...) 또는 null(기본) */
   avatar: string | null;
+  /** 이 에이전트가 마지막으로 읽은 메시지 번호(서버가 대신 기억해요) */
+  read_cursor: number;
 }
 
 export interface MessageRow {
@@ -34,6 +36,10 @@ export interface MessageRow {
   author_name: string;
   text: string;
   created_at: number;
+  /** 답장한 원래 메시지 번호 */
+  reply_to: number | null;
+  /** 사진(data:image/...;base64,...) */
+  image: string | null;
 }
 
 /** 추측하기 어려운 무작위 문자열(초대 링크·방장 토큰에 써요) */
@@ -60,6 +66,8 @@ export const publicMessage = (m: MessageRow) => ({
   authorName: m.author_name,
   text: m.text,
   createdAt: m.created_at,
+  replyTo: m.reply_to ?? null,
+  image: m.image ?? null,
 });
 
 export class Rooms {
@@ -151,6 +159,7 @@ export class Rooms {
       created_at: Date.now(),
       last_seen: null,
       avatar: null,
+      read_cursor: 0,
     };
     await this.db.run(
       'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -183,13 +192,37 @@ export class Rooms {
     });
   }
 
-  async post(roomId: string, authorId: string, authorName: string, text: string) {
+  async post(roomId: string, authorId: string, authorName: string, text: string, opts: { replyTo?: number | null; image?: string | null } = {}) {
     const createdAt = Date.now();
     const r = await this.db.run(
-      'INSERT INTO messages (room_id, author_id, author_name, text, created_at) VALUES (?, ?, ?, ?, ?)',
-      roomId, authorId, authorName, text.slice(0, MAX_TEXT), createdAt,
+      'INSERT INTO messages (room_id, author_id, author_name, text, created_at, reply_to, image) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      roomId, authorId, authorName, text.slice(0, MAX_TEXT), createdAt, opts.replyTo ?? null, opts.image ?? null,
     );
     return r.lastId;
+  }
+
+  /** 서버가 기억하는 '마지막으로 읽은 번호'를 앞으로만 옮겨요. */
+  setCursor(memberId: string, id: number) {
+    return this.db.run('UPDATE members SET read_cursor = MAX(read_cursor, ?) WHERE id = ?', id, memberId);
+  }
+
+  /** 내가 마지막으로 보낸 메시지(같은 말 반복 막기용) */
+  lastMessageBy(roomId: string, authorId: string) {
+    return this.db.first<MessageRow>('SELECT * FROM messages WHERE room_id = ? AND author_id = ? ORDER BY id DESC LIMIT 1', roomId, authorId);
+  }
+
+  message(roomId: string, id: number) {
+    return this.db.first<MessageRow>('SELECT * FROM messages WHERE room_id = ? AND id = ?', roomId, id);
+  }
+
+  /** 차례대로 답하기용: 방장의 가장 최근 질문과 그 뒤 메시지들(번호·작성자·시간·글만) */
+  relayRows(roomId: string) {
+    return this.db.all<Pick<MessageRow, 'id' | 'author_id' | 'created_at' | 'text'>>(
+      `SELECT id, author_id, created_at, text FROM messages
+        WHERE room_id = ? AND id >= COALESCE((SELECT MAX(id) FROM messages WHERE room_id = ? AND author_id = ?), 0)
+        ORDER BY id LIMIT 200`,
+      roomId, roomId, OWNER_ID,
+    );
   }
 
   /** afterId 다음 메시지들(오래된 순). afterId가 없으면 최근 limit개. */

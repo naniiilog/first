@@ -1,31 +1,10 @@
-import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { aiOf } from '../lib/ais';
 import { AVATAR_COLORS, AVATAR_EMOJIS, emojiAvatar, lookOf } from '../lib/avatar';
+import { pickPhoto } from '../lib/photo';
 import { useTheme } from '../lib/theme';
 import { Avatar, Button } from './ui';
-
-/** 사진을 작은 정사각형 JPEG(data URL)로 줄여요. 서버에 저장할 수 있는 크기로. */
-async function pickPhoto(): Promise<string | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) throw new Error('사진 접근 권한이 필요해요. 설정에서 허용해 주세요.');
-  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
-  if (res.canceled || !res.assets?.[0]) return null;
-  const asset = res.assets[0];
-  const side = Math.min(asset.width || 160, asset.height || 160);
-  const ctx = ImageManipulator.manipulate(asset.uri);
-  // 편집 화면이 없는 환경(웹)에서도 가운데를 정사각형으로 잘라요.
-  if (asset.width && asset.height && asset.width !== asset.height) {
-    ctx.crop({ originX: (asset.width - side) / 2, originY: (asset.height - side) / 2, width: side, height: side });
-  }
-  ctx.resize({ width: 160, height: 160 });
-  const image = await ctx.renderAsync();
-  const saved = await image.saveAsync({ base64: true, compress: 0.7, format: SaveFormat.JPEG });
-  if (!saved.base64) throw new Error('사진을 처리하지 못했어요.');
-  return `data:image/jpeg;base64,${saved.base64}`;
-}
 
 export function AvatarEditor({
   kind,
@@ -56,7 +35,7 @@ export function AvatarEditor({
   const photo = async () => {
     setError(null);
     try {
-      const url = await pickPhoto();
+      const url = await pickPhoto({ square: 160 });
       if (url) setDraft(url);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

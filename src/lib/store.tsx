@@ -72,11 +72,17 @@ export function useLiveRoom(roomId: string | undefined) {
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const lastId = useRef<number | null>(null);
+  /** 버튼을 누른 직후 잠깐은 서버의 옛 상태로 화면을 덮어쓰지 않아요(버튼 반응을 바로 보여주려고). */
+  const holdUntil = useRef(0);
+  const hold = () => {
+    holdUntil.current = Date.now() + 4000;
+  };
 
   const refreshMembers = useCallback(async () => {
     if (!room) return;
     try {
       const res = await api.getRoom(settings, room);
+      if (Date.now() < holdUntil.current) return;
       setMembers(res.members);
       setFreeTalk(res.room.freeTalk);
       setClosed(res.room.closed);
@@ -122,5 +128,101 @@ export function useLiveRoom(roomId: string | undefined) {
     };
   }, [room, refreshMessages, refreshMembers]);
 
-  return { room, messages, members, freeTalk, closed, error, gone, refreshMessages, refreshMembers };
+  /**
+   * 화면을 먼저 바꾸고 서버에 알려요. 서버가 실패하면 원래대로 되돌리고 오류를 돌려줘요.
+   * (버튼을 눌렀을 때 서버 응답을 기다리느라 늦게 반응하던 문제를 고쳐요)
+   */
+  const optimistic = useCallback(
+    async (apply: () => () => void, request: () => Promise<unknown>) => {
+      hold();
+      const undo = apply();
+      try {
+        await request();
+        holdUntil.current = 0;
+        refreshMembers();
+        refreshMessages();
+        return null;
+      } catch (e) {
+        holdUntil.current = 0;
+        undo();
+        return e instanceof Error ? e.message : String(e);
+      }
+    },
+    [refreshMembers, refreshMessages],
+  );
+
+  const toggleMember = (m: Member) =>
+    optimistic(
+      () => {
+        setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, active: !m.active } : x)));
+        return () => setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, active: m.active } : x)));
+      },
+      () => api.updateMember(settings, room!, m.id, { active: !m.active }),
+    );
+
+  const toggleFreeTalk = () => {
+    const before = freeTalk;
+    return optimistic(
+      () => {
+        setFreeTalk(!before);
+        return () => setFreeTalk(before);
+      },
+      () => api.setFreeTalk(settings, room!, !before),
+    );
+  };
+
+  const setRoomClosed = (next: boolean) => {
+    const before = closed;
+    return optimistic(
+      () => {
+        setClosed(next);
+        return () => setClosed(before);
+      },
+      () => api.setClosed(settings, room!, next),
+    );
+  };
+
+  /** 보낸 메시지를 바로 화면에 보여주고(임시 번호), 서버 번호가 오면 바꿔요. */
+  const sendMessage = async (text: string, opts: { replyTo?: number | null; image?: string | null } = {}) => {
+    if (!room) return null;
+    const tempId = -Date.now();
+    const temp: ChatMessage = {
+      id: tempId,
+      authorId: 'owner',
+      authorName: settings.userName,
+      text,
+      createdAt: Date.now(),
+      replyTo: opts.replyTo ?? null,
+      image: opts.image ?? null,
+      pending: true,
+    };
+    setMessages((prev) => [...prev, temp]);
+    try {
+      const res = await api.send(settings, room, text, opts);
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === res.id)) return prev.filter((m) => m.id !== tempId);
+        return prev.map((m) => (m.id === tempId ? { ...m, id: res.id, pending: false } : m));
+      });
+      return null;
+    } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+
+  return {
+    room,
+    messages,
+    members,
+    freeTalk,
+    closed,
+    error,
+    gone,
+    refreshMessages,
+    refreshMembers,
+    toggleMember,
+    toggleFreeTalk,
+    setRoomClosed,
+    sendMessage,
+  };
 }

@@ -1,12 +1,14 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderIcon } from '../../../components/HeaderIcon';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { lookOf } from '../../../lib/avatar';
+import { pickPhoto } from '../../../lib/photo';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme, type Theme } from '../../../lib/theme';
 import { fullDate, sameDay, sameMinute, stamp } from '../../../lib/time';
@@ -33,14 +35,20 @@ function toRows(messages: ChatMessage[]): Row[] {
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings, forgetRoom } = useStore();
-  const { room, messages, members, freeTalk, closed, error, gone, refreshMessages, refreshMembers } = useLiveRoom(id);
+  const live = useLiveRoom(id);
+  const { room, messages, members, freeTalk, closed, error, gone } = live;
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<Row>>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** 답장할 메시지 */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /** 보낼 사진(미리보기) */
+  const [photo, setPhoto] = useState<string | null>(null);
+  /** 크게 보는 사진 */
+  const [viewing, setViewing] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -56,39 +64,37 @@ export default function RoomScreen() {
   }
 
   const openMembers = () => router.push({ pathname: '/room/[id]/members', params: { id: room.id } });
-  const fail = (e: unknown) => setSendError(e instanceof Error ? e.message : String(e));
-
-  const send = async () => {
-    const body = text.trim();
-    if (!body || sending) return;
-    setSending(true);
+  /** 버튼 동작은 화면을 먼저 바꾸고(바로 반응), 실패하면 되돌린 뒤 이유를 보여줘요. */
+  const run = (p: Promise<string | null>) => {
     setSendError(null);
-    try {
-      await api.send(settings, room, body);
-      setText('');
-      await refreshMessages();
-    } catch (e) {
-      fail(e);
-    } finally {
-      setSending(false);
-    }
+    p.then((err) => err && setSendError(err));
   };
 
-  const toggleMember = async (m: Member) => {
-    try {
-      await api.updateMember(settings, room, m.id, { active: !m.active });
-      await Promise.all([refreshMembers(), refreshMessages()]);
-    } catch (e) {
-      fail(e);
-    }
+  const send = () => {
+    const body = text.trim();
+    if (!body && !photo) return;
+    // 입력창은 바로 비우고, 메시지도 바로 화면에 보여줘요.
+    setText('');
+    setPhoto(null);
+    const target = replyTo;
+    setReplyTo(null);
+    run(
+      live.sendMessage(body, { replyTo: target?.id ?? null, image: photo }).then((err) => {
+        if (err) {
+          setText(body);
+          setReplyTo(target);
+        }
+        return err;
+      }),
+    );
   };
 
-  const toggleFreeTalk = async () => {
+  const attachPhoto = async () => {
     try {
-      await api.setFreeTalk(settings, room, !freeTalk);
-      await Promise.all([refreshMembers(), refreshMessages()]);
+      const url = await pickPhoto({ maxSide: 1024 });
+      if (url) setPhoto(url);
     } catch (e) {
-      fail(e);
+      setSendError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -102,21 +108,13 @@ export default function RoomScreen() {
     router.back();
   };
 
-  /** 봇 모두 쉬게 하기 / 다시 부르기 (대화 내용과 초대 링크는 그대로) */
-  const setRoomClosed = async (next: boolean) => {
-    try {
-      await api.setClosed(settings, room, next);
-      await Promise.all([refreshMembers(), refreshMessages()]);
-    } catch (e) {
-      fail(e);
-    }
-  };
-
   const openMenu = () => setMenuOpen(true);
 
   const rows = toRows(messages);
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
-  const canSend = !!text.trim() && !sending;
+  const messageById = new Map(messages.map((m) => [m.id, m]));
+  const nameOf = (m: ChatMessage) => (m.authorId === OWNER_ID ? settings.userName : (memberById[m.authorId]?.name ?? m.authorName));
+  const canSend = !!text.trim() || !!photo;
 
   return (
     <KeyboardAvoidingView
@@ -146,7 +144,7 @@ export default function RoomScreen() {
       <View style={styles.memberBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 10 }}>
           {members.map((m) => (
-            <MemberChip key={m.id} member={m} onPress={() => toggleMember(m)} />
+            <MemberChip key={m.id} member={m} onPress={() => run(live.toggleMember(m))} />
           ))}
           <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
             <Text style={{ color: t.accentPurple, fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
@@ -172,7 +170,18 @@ export default function RoomScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => <MessageRow row={item} member={memberById[item.msg.authorId]} t={t} onProfile={openMembers} />}
+        renderItem={({ item }) => (
+          <MessageRow
+            row={item}
+            member={memberById[item.msg.authorId]}
+            quoted={item.msg.replyTo ? messageById.get(item.msg.replyTo) : undefined}
+            quotedName={nameOf}
+            t={t}
+            onProfile={openMembers}
+            onReply={() => setReplyTo(item.msg)}
+            onImage={setViewing}
+          />
+        )}
       />
 
       {closed ? (
@@ -183,13 +192,13 @@ export default function RoomScreen() {
           <Text style={{ color: t.subtext, fontSize: 12, flex: 1 }} numberOfLines={1}>
             · 대화 내용은 그대로예요
           </Text>
-          <Pressable onPress={() => setRoomClosed(false)} style={[styles.reopen, { backgroundColor: t.accent }]}>
+          <Pressable onPress={() => run(live.setRoomClosed(false))} style={[styles.reopen, { backgroundColor: t.accent }]}>
             <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>다시 부르기</Text>
           </Pressable>
         </View>
       ) : (
         /* 자동대화 스위치: 켜짐/꺼짐을 글자로 분명하게 보여줘요 */
-        <Pressable onPress={toggleFreeTalk} style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
+        <Pressable onPress={() => run(live.toggleFreeTalk())} style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
           <View style={[styles.track, { backgroundColor: freeTalk ? t.accent : t.switchOff }]}>
             <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: '#FFFFFF' }]} />
           </View>
@@ -208,14 +217,43 @@ export default function RoomScreen() {
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
           closed
-            ? { icon: 'sunny-outline', label: '봇 다시 부르기', onPress: () => setRoomClosed(false) }
-            : { icon: 'moon-outline', label: '봇 모두 쉬게 하기', onPress: () => setRoomClosed(true) },
+            ? { icon: 'sunny-outline', label: '봇 다시 부르기', onPress: () => run(live.setRoomClosed(false)) }
+            : { icon: 'moon-outline', label: '봇 모두 쉬게 하기', onPress: () => run(live.setRoomClosed(true)) },
           { icon: 'help-circle-outline', label: '사용법 한눈에 보기', onPress: () => router.push('/help') },
           { icon: 'trash-outline', label: '채팅방 삭제', confirm: '한 번 더 누르면 삭제돼요', danger: true, onPress: deleteRoom },
         ]}
       />
 
+      {(replyTo || photo) && (
+        <View style={[styles.composeExtra, { backgroundColor: t.card, borderColor: t.border }]}>
+          {replyTo ? (
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: t.accent, fontWeight: '700', fontSize: 12 }}>↪ {nameOf(replyTo)}에게 답장</Text>
+              <Text style={{ color: t.subtext, fontSize: 12 }} numberOfLines={1}>
+                {replyTo.image && !replyTo.text ? '[사진]' : replyTo.text}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
+          {photo ? <Image source={{ uri: photo }} style={styles.thumb} /> : null}
+          <Pressable
+            onPress={() => {
+              setReplyTo(null);
+              setPhoto(null);
+            }}
+            hitSlop={10}
+            accessibilityLabel="답장·사진 취소"
+          >
+            <Ionicons name="close-circle" size={22} color={t.subtext} />
+          </Pressable>
+        </View>
+      )}
+
       <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: Math.max(insets.bottom, 6) }]}>
+        <Pressable onPress={attachPhoto} accessibilityLabel="사진 보내기" style={styles.attachBtn} hitSlop={6}>
+          <Ionicons name="image-outline" size={26} color={t.subtext} />
+        </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -236,6 +274,13 @@ export default function RoomScreen() {
           <Text style={{ color: canSend ? t.accentText : t.subtext, fontWeight: '800', fontSize: 16 }}>전송</Text>
         </Pressable>
       </View>
+
+      {/* 사진 크게 보기 */}
+      <Modal visible={!!viewing} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
+        <Pressable style={styles.viewer} onPress={() => setViewing(null)}>
+          {viewing ? <Image source={{ uri: viewing }} style={{ width: '100%', height: '80%' }} resizeMode="contain" /> : null}
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -256,7 +301,83 @@ function MemberChip({ member, onPress }: { member: Member; onPress: () => void }
   );
 }
 
-function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; t: Theme; onProfile: () => void }) {
+/** 답장한 원래 글을 말풍선 위에 작게 보여줘요. */
+function Quote({ m, name, mine, t }: { m?: ChatMessage; name: (m: ChatMessage) => string; mine: boolean; t: Theme }) {
+  if (!m) return null;
+  return (
+    <View style={[styles.quote, { borderLeftColor: mine ? 'rgba(255,255,255,0.7)' : t.accentPurple }]}>
+      <Text style={{ color: mine ? 'rgba(255,255,255,0.9)' : t.accentPurple, fontSize: 11, fontWeight: '700' }}>↪ {name(m)}</Text>
+      <Text style={{ color: mine ? 'rgba(255,255,255,0.85)' : t.subtext, fontSize: 12 }} numberOfLines={2}>
+        {m.image && !m.text ? '[사진]' : m.text}
+      </Text>
+    </View>
+  );
+}
+
+function Bubble({
+  msg,
+  mine,
+  first,
+  quoted,
+  quotedName,
+  t,
+  onReply,
+  onImage,
+}: {
+  msg: ChatMessage;
+  mine: boolean;
+  first: boolean;
+  quoted?: ChatMessage;
+  quotedName: (m: ChatMessage) => string;
+  t: Theme;
+  onReply: () => void;
+  onImage: (uri: string) => void;
+}) {
+  return (
+    <Pressable
+      onLongPress={onReply}
+      delayLongPress={350}
+      accessibilityHint="길게 누르면 답장해요"
+      style={[
+        styles.bubble,
+        { backgroundColor: mine ? t.myBubble : t.botBubble, opacity: msg.pending ? 0.6 : 1 },
+        first && (mine ? { borderTopRightRadius: 4 } : { borderTopLeftRadius: 4 }),
+      ]}
+    >
+      <Quote m={quoted} name={quotedName} mine={mine} t={t} />
+      {msg.image ? (
+        <Pressable onPress={() => onImage(msg.image!)} onLongPress={onReply} delayLongPress={350}>
+          <Image source={{ uri: msg.image }} style={styles.photo} resizeMode="cover" />
+        </Pressable>
+      ) : null}
+      {msg.text ? (
+        <Text style={[styles.bubbleText, { color: mine ? t.myBubbleText : t.botBubbleText }]} selectable={Platform.OS !== 'web'}>
+          {msg.text}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function MessageRow({
+  row,
+  member,
+  quoted,
+  quotedName,
+  t,
+  onProfile,
+  onReply,
+  onImage,
+}: {
+  row: Row;
+  member?: Member;
+  quoted?: ChatMessage;
+  quotedName: (m: ChatMessage) => string;
+  t: Theme;
+  onProfile: () => void;
+  onReply: () => void;
+  onImage: (uri: string) => void;
+}) {
   const { msg } = row;
   const dateLine = row.dateLine ? (
     <View style={{ alignItems: 'center', marginVertical: 10 }}>
@@ -275,7 +396,12 @@ function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; 
     );
   }
 
-  const time = row.showTime ? <Text style={[styles.time, { color: t.chatTime }]}>{stamp(msg.createdAt)}</Text> : null;
+  const time = row.showTime ? (
+    <Text style={[styles.time, { color: t.chatTime }]}>{msg.pending ? '보내는 중…' : stamp(msg.createdAt)}</Text>
+  ) : null;
+  const bubble = (mine: boolean) => (
+    <Bubble msg={msg} mine={mine} first={row.showProfile} quoted={quoted} quotedName={quotedName} t={t} onReply={onReply} onImage={onImage} />
+  );
 
   if (msg.authorId === OWNER_ID) {
     return (
@@ -283,11 +409,7 @@ function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; 
         {dateLine}
         <View style={[styles.mineRow, { marginTop: row.showProfile ? 8 : 3 }]}>
           {time}
-          <View style={[styles.bubble, { backgroundColor: t.myBubble }, row.showProfile && { borderTopRightRadius: 4 }]}>
-            <Text style={[styles.bubbleText, { color: t.myBubbleText }]} selectable>
-              {msg.text}
-            </Text>
-          </View>
+          {bubble(true)}
         </View>
       </>
     );
@@ -308,11 +430,7 @@ function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; 
         <View style={{ flex: 1 }}>
           {row.showProfile ? <Text style={[styles.name, { color: t.chatName }]}>{member?.name ?? msg.authorName}</Text> : null}
           <View style={styles.otherBubbleLine}>
-            <View style={[styles.bubble, { backgroundColor: t.botBubble }, row.showProfile && { borderTopLeftRadius: 4 }]}>
-              <Text style={[styles.bubbleText, { color: t.botBubbleText }]} selectable>
-                {msg.text}
-              </Text>
-            </View>
+            {bubble(false)}
             {time}
           </View>
         </View>
@@ -322,6 +440,12 @@ function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; 
 }
 
 const styles = StyleSheet.create({
+  quote: { borderLeftWidth: 3, paddingLeft: 8, marginBottom: 6 },
+  photo: { width: 200, height: 200, borderRadius: 10, marginBottom: 4 },
+  composeExtra: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  thumb: { width: 44, height: 44, borderRadius: 8 },
+  attachBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   memberBar: { paddingVertical: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 3, paddingRight: 8, paddingVertical: 3, borderRadius: 999 },

@@ -45,14 +45,28 @@ const SCHEMA = [
   )`,
 ];
 
+/** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
+const SCHEMA_VERSION = '6';
+
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
   schemaReady ??= (async () => {
+    const current = await db
+      .first<{ value: string }>("SELECT value FROM app_settings WHERE key = 'schema_version'")
+      .catch(() => null);
+    if (current?.value === SCHEMA_VERSION) return;
     for (const sql of SCHEMA) await db.run(sql);
     // 나중에 추가된 칸: 이미 있으면 오류가 나므로 무시해요.
     await db.run('ALTER TABLE rooms ADD COLUMN free_talk INTEGER NOT NULL DEFAULT 0').catch(() => {});
     await db.run('ALTER TABLE members ADD COLUMN avatar TEXT').catch(() => {});
     await db.run('ALTER TABLE rooms ADD COLUMN closed INTEGER NOT NULL DEFAULT 0').catch(() => {});
+    await db.run('ALTER TABLE messages ADD COLUMN reply_to INTEGER').catch(() => {});
+    await db.run('ALTER TABLE messages ADD COLUMN image TEXT').catch(() => {});
+    await db.run('ALTER TABLE members ADD COLUMN read_cursor INTEGER NOT NULL DEFAULT 0').catch(() => {});
+    await db.run(
+      "INSERT INTO app_settings (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      SCHEMA_VERSION,
+    );
   })().catch((err) => {
     schemaReady = null;
     throw err;
