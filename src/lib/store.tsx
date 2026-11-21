@@ -11,6 +11,8 @@ interface Store {
   forgetRoom: (id: string) => void;
   setRoomName: (id: string, name: string) => void;
   saveSettings: (s: Settings) => void;
+  /** 앱 비밀번호를 이 기기에 저장(빈 문자열이면 잠그기) */
+  setPassword: (password: string) => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -46,7 +48,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     forgetRoom: (id) => setRooms((prev) => prev.filter((r) => r.id !== id)),
     setRoomName: (id, name) => setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, name } : r))),
-    saveSettings: (s) => setSettings({ ...s, userName: s.userName.trim() || '나', serverUrl: s.serverUrl.trim(), appToken: s.appToken.trim() }),
+    saveSettings: (s) => setSettings({ ...s, userName: s.userName.trim() || '나', serverUrl: s.serverUrl.trim() }),
+    setPassword: (password) => setSettings((s) => ({ ...s, appToken: password })),
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -101,24 +104,21 @@ export function useLiveRoom(roomId: string | undefined) {
     }
   }, [room, settings]);
 
-  useEffect(() => {
-    lastId.current = null;
-    setMessages([]);
-    setMembers([]);
-    setGone(false);
-  }, [roomId]);
-
+  // 방 화면은 방마다 따로 열리므로(화면 하나 = 방 하나) 여기서 상태를 초기화할 필요는 없어요.
   useEffect(() => {
     if (!room) return;
-    refreshMessages();
-    refreshMembers();
+    const first = setTimeout(() => {
+      refreshMessages();
+      refreshMembers();
+    }, 0);
     const m = setInterval(refreshMessages, 2000);
     const b = setInterval(refreshMembers, 5000);
     return () => {
+      clearTimeout(first);
       clearInterval(m);
       clearInterval(b);
     };
-  }, [room?.id, refreshMessages, refreshMembers]);
+  }, [room, refreshMessages, refreshMembers]);
 
   return { room, messages, members, freeTalk, error, gone, refreshMessages, refreshMembers };
 }

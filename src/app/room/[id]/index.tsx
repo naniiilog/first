@@ -38,6 +38,12 @@ export default function RoomScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<Row>>(null);
+  // '방금 접속함(🟢)' 표시에 쓰는 현재 시각. 15초마다 갱신해요.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -133,7 +139,7 @@ export default function RoomScreen() {
             </Text>
           ),
           headerRight: () => (
-            <Pressable onPress={openMenu} hitSlop={12}>
+            <Pressable onPress={openMenu} hitSlop={12} style={{ paddingHorizontal: 8, marginRight: 10 }}>
               <Text style={{ color: t.text, fontSize: 22 }}>☰</Text>
             </Pressable>
           ),
@@ -143,7 +149,7 @@ export default function RoomScreen() {
       <View style={styles.memberBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 10 }}>
           {members.map((m) => (
-            <MemberChip key={m.id} member={m} onPress={() => toggleMember(m)} />
+            <MemberChip key={m.id} member={m} now={now} onPress={() => toggleMember(m)} />
           ))}
           <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>
             <Text style={{ color: '#191919', fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
@@ -165,19 +171,27 @@ export default function RoomScreen() {
         ListEmptyComponent={
           <View style={styles.center}>
             <Text style={[styles.systemPill, { color: t.systemText, backgroundColor: t.systemPill, lineHeight: 20, textAlign: 'center' }]}>
-              위의 ＋ 초대에서 에이전트 초대 링크를 만들어 보세요.{'\n'}에이전트를 누르면 대화 참가를 껐다 켤 수 있어요.{'\n'}자유대화를 켜면 멈추지 않고 계속 수다를 떨어요.
+              위의 ＋ 초대에서 에이전트 초대 링크를 만들어 보세요.{'\n'}에이전트를 누르면 대화 참가를 껐다 켤 수 있어요.{'\n'}아래 자동대화를 켜면 멈추지 않고 계속 수다를 떨어요.
             </Text>
           </View>
         }
         renderItem={({ item }) => <MessageRow row={item} member={memberById[item.msg.authorId]} t={t} onProfile={openMembers} />}
       />
 
-      <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: Math.max(insets.bottom, 8) }]}>
-        <Pressable onPress={toggleFreeTalk} style={[styles.freeBtn, { backgroundColor: freeTalk ? t.accent : t.input }]}>
-          <Text style={{ color: freeTalk ? t.accentText : t.subtext, fontWeight: '800', fontSize: 11, textAlign: 'center' }}>
-            {freeTalk ? '자유대화\nON' : '자유대화\nOFF'}
-          </Text>
-        </Pressable>
+      {/* 자동대화 스위치: 켜짐/꺼짐을 글자로 분명하게 보여줘요 */}
+      <Pressable onPress={toggleFreeTalk} style={[styles.autoBar, { backgroundColor: freeTalk ? '#FFF7B8' : t.card, borderColor: t.border }]}>
+        <View style={[styles.track, { backgroundColor: freeTalk ? '#3A1D1D' : '#C9CDD2' }]}>
+          <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: freeTalk ? t.accent : '#FFFFFF' }]} />
+        </View>
+        <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>
+          자동대화 {freeTalk ? '켜짐' : '꺼짐'}
+        </Text>
+        <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>
+          {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 부르거나 말 걸 때만 답해요'}
+        </Text>
+      </Pressable>
+
+      <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -188,21 +202,22 @@ export default function RoomScreen() {
           autoComplete="off"
           spellCheck={false}
           multiline
+          numberOfLines={1}
           maxLength={1000}
           style={[styles.input, { color: t.text, backgroundColor: t.input }]}
           onSubmitEditing={Platform.OS === 'web' ? send : undefined}
           blurOnSubmit={Platform.OS === 'web'}
         />
         <Pressable onPress={send} disabled={!canSend} style={[styles.sendBtn, { backgroundColor: canSend ? t.accent : t.input }]}>
-          <Text style={{ color: canSend ? t.accentText : t.subtext, fontWeight: '800', fontSize: 18 }}>↑</Text>
+          <Text style={{ color: canSend ? t.accentText : t.subtext, fontWeight: '800', fontSize: 16 }}>전송</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
-  const recentlySeen = member.lastSeen !== null && Date.now() - member.lastSeen < 60_000;
+function MemberChip({ member, now, onPress }: { member: Member; now: number; onPress: () => void }) {
+  const recentlySeen = member.lastSeen !== null && now - member.lastSeen < 60_000;
   const status = !member.active ? '💤' : recentlySeen ? '🟢' : member.joined ? '⚪' : '✉️';
   return (
     <Pressable onPress={onPress} style={[styles.chip, { backgroundColor: member.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)' }]}>
@@ -291,8 +306,10 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '64%', flexShrink: 1, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 14 },
   bubbleText: { fontSize: 15, lineHeight: 21 },
   time: { fontSize: 10, marginBottom: 1, flexShrink: 0 },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingHorizontal: 8, paddingTop: 8 },
-  freeBtn: { width: 54, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  input: { flex: 1, minHeight: 38, maxHeight: 120, borderRadius: 19, paddingHorizontal: 14, paddingTop: 9, paddingBottom: 9, fontSize: 15 },
-  sendBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  autoBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  track: { width: 40, height: 24, borderRadius: 12, padding: 3, justifyContent: 'center' },
+  knob: { width: 18, height: 18, borderRadius: 9 },
+  inputBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingTop: 6 },
+  input: { flex: 1, height: 44, maxHeight: 44, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16 },
+  sendBtn: { height: 44, minWidth: 64, paddingHorizontal: 16, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

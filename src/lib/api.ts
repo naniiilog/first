@@ -32,7 +32,13 @@ async function call<T>(s: Settings, path: string, init: { method?: string; body?
   return data as T;
 }
 
+export type AuthStatus = { passwordSet: boolean; ok: boolean };
+
 export const api = {
+  authStatus: (s: Settings) => call<AuthStatus>(s, '/api/auth'),
+  setupPassword: (s: Settings, password: string) => call(s, '/api/auth/setup', { method: 'POST', body: { password } }),
+  changePassword: (s: Settings, password: string) => call(s, '/api/auth/change', { method: 'POST', body: { password } }),
+
   createRoom: (s: Settings, name: string) =>
     call<{ room: { id: string; name: string }; ownerToken: string }>(s, '/api/rooms', { method: 'POST', body: { name } }),
 

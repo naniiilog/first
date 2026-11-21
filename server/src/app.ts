@@ -1,5 +1,6 @@
 import type { Db } from './db.js';
 import { ensureSchema } from './db.js';
+import { Auth, MAX_PASSWORD, MIN_PASSWORD } from './auth.js';
 import { handleMcp } from './mcp.js';
 import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
 
@@ -7,6 +8,10 @@ import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.
  * BotRoom 서버 (Node와 Cloudflare Worker가 같이 써요)
  *
  * 방장(휴대폰 앱)용 API — Authorization: Bearer <ownerToken>
+ *   (모든 /api 요청에 x-app-token: <앱 비밀번호>)
+ *   GET    /api/auth                                             → { passwordSet, ok }
+ *   POST   /api/auth/setup                    { password }        처음 한 번 비밀번호 정하기
+ *   POST   /api/auth/change                   { password }        비밀번호 바꾸기
  *   POST   /api/rooms                         { name }            → { room, ownerToken }
  *   GET    /api/rooms/:id                                         → { room, members }
  *   PATCH  /api/rooms/:id                     { name?, freeTalk? }
@@ -80,6 +85,13 @@ function cleanAvatar(v: unknown): string | null | undefined {
   throw new HttpError(400, '프로필 이미지가 너무 크거나 형식이 맞지 않아요.');
 }
 
+function cleanPassword(v: unknown): string {
+  if (typeof v !== 'string' || v.length < MIN_PASSWORD || v.length > MAX_PASSWORD) {
+    throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD}~${MAX_PASSWORD}자로 정해 주세요.`);
+  }
+  return v;
+}
+
 const cleanName = (v: unknown, max = 30) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 export async function handle(req: Request, env: Env, db: Db, clientIp: string): Promise<Response> {
@@ -98,12 +110,51 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       return withCors(await handleMcp(req, rooms, parts[1]));
     }
 
-    if (parts[0] !== 'api' || parts[1] !== 'rooms') throw new HttpError(404, 'Not found');
+    if (parts[0] !== 'api') throw new HttpError(404, 'Not found');
+
+    // ── 앱 비밀번호 ──
+    const auth = new Auth(db, typeof env.APP_TOKEN === 'string' ? env.APP_TOKEN.trim() : '');
+    const given = req.headers.get('x-app-token');
+    if (parts[1] === 'auth') {
+      // 비밀번호 확인: { passwordSet, ok }
+      if (!parts[2] && req.method === 'GET') {
+        const passwordSet = await auth.isSet();
+        const ok = passwordSet && (await auth.check(given));
+        if (passwordSet && given && !ok) checkRate(`authfail:${clientIp}`, 10);
+        return json(200, { passwordSet, ok });
+      }
+      // 처음 한 번 비밀번호 정하기
+      if (parts[2] === 'setup' && req.method === 'POST') {
+        checkRate(`setup:${clientIp}`, 10);
+        if (await auth.isSet()) throw new HttpError(409, '이미 비밀번호가 정해져 있어요.');
+        const password = cleanPassword((await body(req)).password);
+        await auth.set(password);
+        return json(200, { ok: true });
+      }
+      // 비밀번호 바꾸기 (지금 비밀번호가 맞아야 해요)
+      if (parts[2] === 'change' && req.method === 'POST') {
+        if (!(await auth.check(given))) {
+          checkRate(`authfail:${clientIp}`, 10);
+          throw new HttpError(401, '지금 비밀번호가 맞지 않아요.');
+        }
+        if (typeof env.APP_TOKEN === 'string' && env.APP_TOKEN.trim()) throw new HttpError(400, '서버 설정(APP_TOKEN)으로 정한 비밀번호는 앱에서 바꿀 수 없어요.');
+        await auth.set(cleanPassword((await body(req)).password));
+        return json(200, { ok: true });
+      }
+      throw new HttpError(404, 'Not found');
+    }
+
+    // 여기부터는 비밀번호가 맞아야 써요.
+    if (!(await auth.isSet())) throw new HttpError(401, '앱 비밀번호를 먼저 정해 주세요.');
+    if (!(await auth.check(given))) {
+      checkRate(`authfail:${clientIp}`, 10);
+      throw new HttpError(401, '앱 비밀번호가 맞지 않아요.');
+    }
+
+    if (parts[1] !== 'rooms') throw new HttpError(404, 'Not found');
 
     // ── 방 만들기 ──
     if (parts.length === 2 && req.method === 'POST') {
-      const appToken = typeof env.APP_TOKEN === 'string' ? env.APP_TOKEN.trim() : '';
-      if (appToken && req.headers.get('x-app-token') !== appToken) throw new HttpError(401, '앱 토큰이 맞지 않아요.');
       // 방 개수 제한은 없어요. 아주 빠른 반복(스크립트 장난)만 막아요.
       checkRate(`create:${clientIp}`, Number(env.CREATE_RATE_PER_MINUTE ?? 120));
       const b = await body(req);

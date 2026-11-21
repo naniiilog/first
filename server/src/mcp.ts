@@ -25,11 +25,11 @@ const text = (t: string, isError = false) => ({ content: [{ type: 'text' as cons
 
 const PAUSED = '지금은 방장이 당신의 대화 참가를 멈춰 둔 상태예요. 다시 켜줄 때까지 메시지를 읽거나 보내지 말고 대화를 마치세요.';
 
-/** 매번 도구 결과 끝에 붙는 "지금 어떻게 행동할지" 안내. 방장이 자유대화를 켜고 끄면 바로 반영돼요. */
+/** 매번 도구 결과 끝에 붙는 "지금 어떻게 행동할지" 안내. 방장이 자동대화를 켜고 끄면 바로 반영돼요. */
 const modeHint = (room: RoomRow) =>
   room.free_talk === 1
-    ? '\n[자유대화 ON] 멈추지 말고 wait_for_messages → send_message를 계속 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 참가 중지 안내가 나오거나 자유대화가 꺼질 때까지 이어가요.'
-    : '\n[자유대화 OFF] 방장의 말이나 나를 부른 말에만 짧게 답하세요. 기다려도 새 메시지가 없으면 대화를 마쳐도 돼요.';
+    ? '\n[자동대화 ON] 멈추지 말고 wait_for_messages → send_message를 계속 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 참가 중지 안내가 나오거나 자동대화가 꺼질 때까지 이어가요.'
+    : '\n[자동대화 OFF] 방장의 말이나 나를 부른 말에만 짧게 답하세요. 기다려도 새 메시지가 없으면 대화를 마쳐도 돼요.';
 
 /** 초대 링크 하나(=멤버 한 명)를 위한 MCP 서버를 만들어요. */
 function buildServer(rooms: Rooms, inviteToken: string): McpServer {
@@ -51,7 +51,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         'BotRoom은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
         '사용법: room_info로 내 이름과 멤버를 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디.',
         '그다음 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
-        '언제 멈출지는 방장이 정해요: 도구 결과 끝의 [자유대화 ON/OFF] 안내를 따르고, "참가를 멈춰 둔 상태" 오류가 나오면 즉시 멈추세요.',
+        '언제 멈출지는 방장이 정해요: 도구 결과 끝의 [자동대화 ON/OFF] 안내를 따르고, "참가를 멈춰 둔 상태" 오류가 나오면 즉시 멈추세요.',
         '규칙: 1~3문장으로 짧게(토큰 절약), 다른 멤버의 대사를 대신 쓰지 않기, 방장 말을 우선하기.',
       ].join('\n'),
     },
@@ -137,7 +137,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         if (status.active !== 1) return text(PAUSED, true);
         const rows = (await rooms.messages(r.room.id, after_id, MAX_READ)).filter((m) => m.author_id !== r.me.id);
         if (rows.length > 0 || Date.now() + POLL_MS > deadline) {
-          const room = (await rooms.room(r.room.id)) ?? r.room; // 자유대화 상태를 최신으로
+          const room = (await rooms.room(r.room.id)) ?? r.room; // 자동대화 상태를 최신으로
           if (rows.length > 0) return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(room)}`);
           return text(
             room.free_talk === 1
