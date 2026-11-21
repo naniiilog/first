@@ -9,6 +9,7 @@ export interface RoomRow {
   name: string;
   owner_token: string;
   created_at: number;
+  free_talk: number;
 }
 
 export interface MemberRow {
@@ -60,7 +61,7 @@ export class Rooms {
   constructor(private db: Db) {}
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now() };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0 };
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at) VALUES (?, ?, ?, ?)', room.id, room.name, room.owner_token, room.created_at);
     return room;
   }
@@ -71,6 +72,17 @@ export class Rooms {
 
   renameRoom(id: string, name: string) {
     return this.db.run('UPDATE rooms SET name = ? WHERE id = ?', name, id);
+  }
+
+  async setFreeTalk(room: RoomRow, on: boolean) {
+    if ((on ? 1 : 0) === room.free_talk) return;
+    await this.db.run('UPDATE rooms SET free_talk = ? WHERE id = ?', on ? 1 : 0, room.id);
+    await this.post(
+      room.id,
+      SYSTEM_ID,
+      '안내',
+      on ? '자유대화를 켰어요. 에이전트들이 멈추지 않고 계속 대화를 이어가요.' : '자유대화를 껐어요. 이제 방장이나 자기를 부른 말에만 답해요.',
+    );
   }
 
   async deleteRoom(id: string) {

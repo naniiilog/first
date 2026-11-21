@@ -12,7 +12,7 @@ import { OWNER_ID, SYSTEM_ID, type ChatMessage, type Member } from '../../../lib
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings, forgetRoom } = useStore();
-  const { room, messages, members, error, gone, refreshMessages, refreshMembers } = useLiveRoom(id);
+  const { room, messages, members, freeTalk, error, gone, refreshMessages, refreshMembers } = useLiveRoom(id);
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
@@ -54,6 +54,15 @@ export default function RoomScreen() {
   const toggle = async (m: Member) => {
     try {
       await api.updateMember(settings, room, m.id, { active: !m.active });
+      await Promise.all([refreshMembers(), refreshMessages()]);
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const toggleFreeTalk = async () => {
+    try {
+      await api.setFreeTalk(settings, room, !freeTalk);
       await Promise.all([refreshMembers(), refreshMessages()]);
     } catch (e) {
       setSendError(e instanceof Error ? e.message : String(e));
@@ -122,7 +131,8 @@ export default function RoomScreen() {
             <Text style={{ color: t.subtext, textAlign: 'center', lineHeight: 22 }}>
               위의 <Text style={{ fontWeight: '700' }}>+ 초대</Text>에서 에이전트 초대 링크를 만들어 보세요.{'\n'}
               에이전트가 들어오면 여기서 같이 대화해요.{'\n'}
-              위쪽 에이전트를 누르면 대화 참가를 껐다 켤 수 있어요.
+              <Text style={{ fontWeight: '700' }}>자유대화</Text>를 켜면 에이전트들이 멈추지 않고 계속 수다를 떨어요.{'\n'}
+              위쪽 에이전트를 누르면 그 에이전트만 참가를 껐다 켤 수 있어요.
             </Text>
           </View>
         }
@@ -130,6 +140,14 @@ export default function RoomScreen() {
       />
 
       <View style={[styles.inputBar, { backgroundColor: t.card, borderColor: t.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <Pressable
+          onPress={toggleFreeTalk}
+          style={[styles.freeBtn, { borderColor: freeTalk ? t.accent : t.border, backgroundColor: freeTalk ? t.accent : 'transparent' }]}
+        >
+          <Text style={{ color: freeTalk ? t.accentText : t.subtext, fontWeight: '700', fontSize: 12, textAlign: 'center' }}>
+            {freeTalk ? '자유대화\nON' : '자유대화\nOFF'}
+          </Text>
+        </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -212,5 +230,6 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '88%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   input: { flex: 1, minHeight: 42, maxHeight: 120, borderWidth: 1, borderRadius: 21, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontSize: 15 },
+  freeBtn: { width: 58, height: 42, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   sendBtn: { height: 42, paddingHorizontal: 16, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
 });

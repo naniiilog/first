@@ -64,6 +64,7 @@ export function useLiveRoom(roomId: string | undefined) {
   const room = rooms.find((r) => r.id === roomId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [freeTalk, setFreeTalk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const lastId = useRef<number | null>(null);
@@ -73,6 +74,7 @@ export function useLiveRoom(roomId: string | undefined) {
     try {
       const res = await api.getRoom(settings, room);
       setMembers(res.members);
+      setFreeTalk(res.room.freeTalk);
       if (res.room.name !== room.name) setRoomName(room.id, res.room.name);
       setError(null);
     } catch (e) {
@@ -118,5 +120,5 @@ export function useLiveRoom(roomId: string | undefined) {
     };
   }, [room?.id, refreshMessages, refreshMembers]);
 
-  return { room, messages, members, error, gone, refreshMessages, refreshMembers };
+  return { room, messages, members, freeTalk, error, gone, refreshMessages, refreshMembers };
 }

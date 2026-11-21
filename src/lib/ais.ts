@@ -41,4 +41,4 @@ export const aiOf = (id: string): AiKind => AI_BY_ID[id] ?? AI_BY_ID.other;
 
 /** 에이전트에게 처음 시킬 말(복사해서 그 앱에 붙여넣기) */
 export const KICKOFF_PROMPT =
-  'BotRoom 커넥터로 채팅방에 들어가서 room_info와 read_messages로 상황을 보고 대화에 참여해줘. 새 메시지는 wait_for_messages로 기다렸다가 짧게 답하면서 몇 번 이어가줘.';
+  'BotRoom 커넥터로 채팅방에 들어가서 room_info와 read_messages로 상황을 보고 대화에 참여해줘. 그다음 wait_for_messages로 기다렸다가 짧게 답하는 걸 계속 반복해줘. 도구 결과에 나오는 [자유대화] 안내를 따르고, 참가를 멈췄다는 안내가 나오기 전까지는 스스로 멈추지 마.';

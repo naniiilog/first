@@ -1,6 +1,6 @@
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type Rooms } from './rooms.js';
+import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type RoomRow, type Rooms } from './rooms.js';
 
 /** 토큰을 아끼려고 한 번에 보여주는 메시지 수와 길이를 제한해요. */
 const DEFAULT_READ = 15;
@@ -25,6 +25,12 @@ const text = (t: string, isError = false) => ({ content: [{ type: 'text' as cons
 
 const PAUSED = '지금은 방장이 당신의 대화 참가를 멈춰 둔 상태예요. 다시 켜줄 때까지 메시지를 읽거나 보내지 말고 대화를 마치세요.';
 
+/** 매번 도구 결과 끝에 붙는 "지금 어떻게 행동할지" 안내. 방장이 자유대화를 켜고 끄면 바로 반영돼요. */
+const modeHint = (room: RoomRow) =>
+  room.free_talk === 1
+    ? '\n[자유대화 ON] 멈추지 말고 wait_for_messages → send_message를 계속 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 참가 중지 안내가 나오거나 자유대화가 꺼질 때까지 이어가요.'
+    : '\n[자유대화 OFF] 방장의 말이나 나를 부른 말에만 짧게 답하세요. 기다려도 새 메시지가 없으면 대화를 마쳐도 돼요.';
+
 /** 초대 링크 하나(=멤버 한 명)를 위한 MCP 서버를 만들어요. */
 function buildServer(rooms: Rooms, inviteToken: string): McpServer {
   // 매 요청마다 최신 상태(참가 중지 여부 등)를 확인해요.
@@ -44,9 +50,9 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       instructions: [
         'BotRoom은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
         '사용법: room_info로 내 이름과 멤버를 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디.',
-        '대화를 이어가고 싶으면 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
-        '규칙: 1~3문장으로 짧게, 다른 멤버의 대사를 대신 쓰지 않기, 방장 말을 우선하기.',
-        '토큰 절약: 한 번 들어오면 내 메시지는 최대 10개 정도만 보내고, 방장이 그만하라고 하거나 "참가를 멈춤" 오류가 나오면 즉시 멈추세요.',
+        '그다음 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
+        '언제 멈출지는 방장이 정해요: 도구 결과 끝의 [자유대화 ON/OFF] 안내를 따르고, "참가를 멈춰 둔 상태" 오류가 나오면 즉시 멈추세요.',
+        '규칙: 1~3문장으로 짧게(토큰 절약), 다른 멤버의 대사를 대신 쓰지 않기, 방장 말을 우선하기.',
       ].join('\n'),
     },
   );
@@ -65,7 +71,8 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const members = await rooms.members(r.room.id);
       const lines = members.map((m) => `- ${m.name}${m.id === r.me.id ? ' (나)' : ''} · ${m.active ? '참가 중' : '쉬는 중'}${m.last_seen ? '' : ' · 아직 안 들어옴'}`);
       return text(
-        [`방 이름: ${r.room.name}`, `내 이름: ${r.me.name} (방장이 지어준 이름이에요. 이 이름으로 행동하세요.)`, '멤버:', ...lines, '그 외에 사람인 방장이 있어요.'].join('\n'),
+        [`방 이름: ${r.room.name}`, `내 이름: ${r.me.name} (방장이 지어준 이름이에요. 이 이름으로 행동하세요.)`, '멤버:', ...lines, '그 외에 사람인 방장이 있어요.'].join('\n') +
+          modeHint(r.room),
       );
     },
   );
@@ -85,8 +92,8 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const r = await load();
       if ('error' in r) return r.error!;
       const rows = await rooms.messages(r.room.id, after_id ?? null, limit ?? DEFAULT_READ);
-      if (rows.length === 0) return text(after_id ? `#${after_id} 이후 새 메시지가 없어요.` : '아직 메시지가 없어요. 먼저 인사해 보세요.');
-      return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})`);
+      if (rows.length === 0) return text((after_id ? `#${after_id} 이후 새 메시지가 없어요.` : '아직 메시지가 없어요. 먼저 인사해 보세요.') + modeHint(r.room));
+      return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(r.room)}`);
     },
   );
 
@@ -103,7 +110,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const r = await load();
       if ('error' in r) return r.error!;
       const id = await rooms.post(r.room.id, r.me.id, r.me.name, body.trim());
-      return text(`보냈어요 (#${id}). 대화를 이어가려면 wait_for_messages(after_id=${id})를 호출하세요.`);
+      return text(`보냈어요 (#${id}). 이어서 wait_for_messages(after_id=${id})로 다음 메시지를 기다리세요.${modeHint(r.room)}`);
     },
   );
 
@@ -124,9 +131,13 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         const r = await load();
         if ('error' in r) return r.error!;
         const rows = (await rooms.messages(r.room.id, after_id, MAX_READ)).filter((m) => m.author_id !== r.me.id);
-        if (rows.length > 0) return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})`);
+        if (rows.length > 0) return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(r.room)}`);
         if (Date.now() + POLL_MS > deadline) {
-          return text('새 메시지가 없어요. 계속 기다릴지, 새 화제를 꺼낼지, 대화를 마칠지 정하세요.');
+          return text(
+            r.room.free_talk === 1
+              ? `한동안 조용해요. 새 화제나 질문을 하나 꺼내서 send_message로 보내고 계속 이어가세요.${modeHint(r.room)}`
+              : `새 메시지가 없어요.${modeHint(r.room)}`,
+          );
         }
         await new Promise((res) => setTimeout(res, POLL_MS));
       }
