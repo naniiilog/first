@@ -2,6 +2,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HeaderIcon } from '../../../components/HeaderIcon';
 import { Avatar } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { lookOf } from '../../../lib/avatar';
@@ -133,9 +134,9 @@ export default function RoomScreen() {
             </Text>
           ),
           headerRight: () => (
-            <Pressable onPress={openMenu} hitSlop={12} style={{ paddingHorizontal: 8, marginRight: 10 }}>
-              <Text style={{ color: t.text, fontSize: 22 }}>☰</Text>
-            </Pressable>
+            <View style={{ paddingRight: 8 }}>
+              <HeaderIcon name="menu" label="메뉴" onPress={openMenu} />
+            </View>
           ),
         }}
       />
@@ -181,7 +182,7 @@ export default function RoomScreen() {
           자동대화 {freeTalk ? '켜짐' : '꺼짐'}
         </Text>
         <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>
-          {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 부르거나 말 걸 때만 답해요'}
+          {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 이름을 부를 때만 답해요'}
         </Text>
       </Pressable>
 

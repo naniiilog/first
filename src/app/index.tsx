@@ -1,6 +1,7 @@
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { HeaderIcon } from '../components/HeaderIcon';
 import { Avatar, Button } from '../components/ui';
 import { api } from '../lib/api';
 import { lookOf } from '../lib/avatar';
@@ -72,13 +73,9 @@ export default function RoomsScreen() {
           headerStyle: { backgroundColor: t.bg },
           headerTitleStyle: { fontSize: 22, fontWeight: '800' },
           headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 20, paddingRight: 12 }}>
-              <Pressable onPress={() => router.push('/room/new')} hitSlop={10}>
-                <Text style={{ fontSize: 22, color: t.text }}>＋</Text>
-              </Pressable>
-              <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
-                <Text style={{ fontSize: 20, color: t.text }}>⚙︎</Text>
-              </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 8 }}>
+              <HeaderIcon name="add" label="새 채팅방" onPress={() => router.push('/room/new')} />
+              <HeaderIcon name="settings-outline" label="설정" onPress={() => router.push('/settings')} />
             </View>
           ),
         }}

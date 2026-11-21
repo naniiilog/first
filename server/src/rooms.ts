@@ -84,7 +84,7 @@ export class Rooms {
       room.id,
       SYSTEM_ID,
       '안내',
-      on ? '자동대화를 켰어요. 에이전트들이 멈추지 않고 계속 대화를 이어가요.' : '자동대화를 껐어요. 이제 방장이나 자기를 부른 말에만 답해요.',
+      on ? '자동대화를 켰어요. 에이전트들이 멈추지 않고 계속 대화를 이어가요.' : '자동대화를 껐어요. 이제 이름을 불러야 답해요.',
     );
   }
 
@@ -102,9 +102,22 @@ export class Rooms {
     return this.db.first<MemberRow>('SELECT * FROM members WHERE room_id = ? AND id = ?', roomId, memberId);
   }
 
-  /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태만 읽어요. 없으면 null(내보내짐). */
+  /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number }>('SELECT active FROM members WHERE id = ?', memberId);
+    return this.db.first<{ active: number; free_talk: number }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+      memberId,
+    );
+  }
+
+  /** 내가 마지막으로 말한 뒤에 다른 사람이 보낸 메시지들(안내 제외) */
+  messagesSinceMine(roomId: string, memberId: string) {
+    return this.db.all<MessageRow>(
+      `SELECT * FROM messages WHERE room_id = ? AND author_id NOT IN (?, ?)
+         AND id > (SELECT COALESCE(MAX(id), 0) FROM messages WHERE room_id = ? AND author_id = ?)
+       ORDER BY id DESC LIMIT 200`,
+      roomId, memberId, SYSTEM_ID, roomId, memberId,
+    );
   }
 
   memberByInvite(token: string) {

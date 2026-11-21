@@ -25,11 +25,14 @@ const text = (t: string, isError = false) => ({ content: [{ type: 'text' as cons
 
 const PAUSED = '지금은 방장이 당신의 대화 참가를 멈춰 둔 상태예요. 다시 켜줄 때까지 메시지를 읽거나 보내지 말고 대화를 마치세요.';
 
+/** 메시지에서 내 이름을 불렀는지(예: "달수야", "@달수") */
+export const mentions = (text: string, name: string) => !!name && text.toLowerCase().includes(name.toLowerCase());
+
 /** 매번 도구 결과 끝에 붙는 "지금 어떻게 행동할지" 안내. 방장이 자동대화를 켜고 끄면 바로 반영돼요. */
-const modeHint = (room: RoomRow) =>
+const modeHint = (room: Pick<RoomRow, 'free_talk'>, me: MemberRow) =>
   room.free_talk === 1
     ? '\n[자동대화 ON] 멈추지 말고 wait_for_messages → send_message를 계속 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 참가 중지 안내가 나오거나 자동대화가 꺼질 때까지 이어가요.'
-    : '\n[자동대화 OFF] 방장의 말이나 나를 부른 말에만 짧게 답하세요. 기다려도 새 메시지가 없으면 대화를 마쳐도 돼요.';
+    : `\n[자동대화 OFF] 누군가 내 이름("${me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없는 메시지에는 답하지 마세요(보내도 서버가 막아요). 대화를 마치지 말고 wait_for_messages로 계속 기다리세요.`;
 
 /** 초대 링크 하나(=멤버 한 명)를 위한 MCP 서버를 만들어요. */
 function buildServer(rooms: Rooms, inviteToken: string): McpServer {
@@ -51,7 +54,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         '다봇은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
         '사용법: room_info로 내 이름과 멤버를 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디.',
         '그다음 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
-        '언제 멈출지는 방장이 정해요: 도구 결과 끝의 [자동대화 ON/OFF] 안내를 따르고, "참가를 멈춰 둔 상태" 오류가 나오면 즉시 멈추세요.',
+        '방장이 정하는 두 가지를 따르세요: 도구 결과 끝의 [자동대화 ON/OFF] 안내(OFF면 내 이름이 불렸을 때만 말하기), 그리고 "참가를 멈춰 둔 상태" 오류가 나오면 즉시 멈추기.',
         '규칙: 1~3문장으로 짧게(토큰 절약), 다른 멤버의 대사를 대신 쓰지 않기, 방장 말을 우선하기.',
       ].join('\n'),
     },
@@ -72,7 +75,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const lines = members.map((m) => `- ${m.name}${m.id === r.me.id ? ' (나)' : ''} · ${m.active ? '참가 중' : '쉬는 중'}${m.last_seen ? '' : ' · 아직 안 들어옴'}`);
       return text(
         [`방 이름: ${r.room.name}`, `내 이름: ${r.me.name} (방장이 지어준 이름이에요. 이 이름으로 행동하세요.)`, '멤버:', ...lines, '그 외에 사람인 방장이 있어요.'].join('\n') +
-          modeHint(r.room),
+          modeHint(r.room, r.me),
       );
     },
   );
@@ -92,8 +95,8 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const r = await load();
       if ('error' in r) return r.error!;
       const rows = await rooms.messages(r.room.id, after_id ?? null, limit ?? DEFAULT_READ);
-      if (rows.length === 0) return text((after_id ? `#${after_id} 이후 새 메시지가 없어요.` : '아직 메시지가 없어요. 먼저 인사해 보세요.') + modeHint(r.room));
-      return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(r.room)}`);
+      if (rows.length === 0) return text((after_id ? `#${after_id} 이후 새 메시지가 없어요.` : '아직 메시지가 없어요. 먼저 인사해 보세요.') + modeHint(r.room, r.me));
+      return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(r.room, r.me)}`);
     },
   );
 
@@ -109,8 +112,18 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     async ({ text: body }) => {
       const r = await load();
       if ('error' in r) return r.error!;
+      // 자동대화가 꺼져 있으면, 내가 마지막으로 말한 뒤에 누군가 내 이름을 불렀을 때만 말할 수 있어요.
+      if (r.room.free_talk !== 1) {
+        const since = await rooms.messagesSinceMine(r.room.id, r.me.id);
+        if (!since.some((m) => mentions(m.text, r.me.name))) {
+          return text(
+            `지금은 자동대화가 꺼져 있고 아무도 "${r.me.name}"을(를) 부르지 않아서 보낼 수 없어요. 말하지 말고 wait_for_messages로 이름이 불릴 때까지 기다리세요.`,
+            true,
+          );
+        }
+      }
       const id = await rooms.post(r.room.id, r.me.id, r.me.name, body.trim());
-      return text(`보냈어요 (#${id}). 이어서 wait_for_messages(after_id=${id})로 다음 메시지를 기다리세요.${modeHint(r.room)}`);
+      return text(`보냈어요 (#${id}). 이어서 wait_for_messages(after_id=${id})로 다음 메시지를 기다리세요.${modeHint(r.room, r.me)}`);
     },
   );
 
@@ -131,18 +144,23 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       // 기다리는 동안에는 "참가 상태 + 새 메시지" 2번씩만 확인해요(최대 10회 → 약 20번).
       const r = await load();
       if ('error' in r) return r.error!;
+      let lastSeenId = after_id;
       while (true) {
+        // 참가 상태와 자동대화 상태를 한 번에 확인해요.
         const status = await rooms.memberStatus(r.me.id);
         if (!status) return text('이 초대 링크는 더 이상 쓸 수 없어요. 방에서 내보내졌거나 방이 삭제됐어요.', true);
         if (status.active !== 1) return text(PAUSED, true);
+        const room = { free_talk: status.free_talk };
         const rows = (await rooms.messages(r.room.id, after_id, MAX_READ)).filter((m) => m.author_id !== r.me.id);
-        if (rows.length > 0 || Date.now() + POLL_MS > deadline) {
-          const room = (await rooms.room(r.room.id)) ?? r.room; // 자동대화 상태를 최신으로
-          if (rows.length > 0) return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(room)}`);
+        if (rows.length) lastSeenId = rows[rows.length - 1].id;
+        // 자동대화 OFF면 내 이름이 불린 메시지가 있을 때만 깨어나요(다른 말에는 반응하지 않아요).
+        const wake = room.free_talk === 1 ? rows.length > 0 : rows.some((m) => mentions(m.text, r.me.name));
+        if (wake) return text(`${format(rows, r.me)}\n(마지막 번호: ${lastSeenId})${modeHint(room, r.me)}`);
+        if (Date.now() + POLL_MS > deadline) {
           return text(
             room.free_talk === 1
-              ? `한동안 조용해요. 새 화제나 질문을 하나 꺼내서 send_message로 보내고 계속 이어가세요.${modeHint(room)}`
-              : `새 메시지가 없어요.${modeHint(room)}`,
+              ? `한동안 조용해요. 새 화제나 질문을 하나 꺼내서 send_message로 보내고 계속 이어가세요.${modeHint(room, r.me)}`
+              : `아직 아무도 "${r.me.name}"을(를) 부르지 않았어요. 답하지 말고 wait_for_messages(after_id=${lastSeenId})로 계속 기다리세요.${modeHint(room, r.me)}`,
           );
         }
         await new Promise((res) => setTimeout(res, POLL_MS));
