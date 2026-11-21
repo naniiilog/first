@@ -7,10 +7,10 @@ import { api } from '../../../lib/api';
 import { lookOf } from '../../../lib/avatar';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme, type Theme } from '../../../lib/theme';
-import { clock, fullDate, sameDay, sameMinute } from '../../../lib/time';
+import { fullDate, sameDay, sameMinute, stamp } from '../../../lib/time';
 import { OWNER_ID, SYSTEM_ID, type ChatMessage, type Member } from '../../../lib/types';
 
-/** 카톡처럼: 같은 사람이 같은 분에 연달아 보내면 프로필은 첫 줄에만, 시간은 마지막 줄에만 */
+/** 카톡처럼 같은 사람이 같은 분에 연달아 보내면 프로필은 첫 줄에만. 시간(초 단위)은 메시지마다 보여줘요. */
 interface Row {
   msg: ChatMessage;
   dateLine: boolean;
@@ -21,11 +21,10 @@ interface Row {
 function toRows(messages: ChatMessage[]): Row[] {
   return messages.map((msg, i) => {
     const prev = messages[i - 1];
-    const next = messages[i + 1];
     const dateLine = !prev || !sameDay(prev.createdAt, msg.createdAt);
     const grouped = (a?: ChatMessage, b?: ChatMessage) =>
       !!a && !!b && a.authorId === b.authorId && a.authorId !== SYSTEM_ID && sameMinute(a.createdAt, b.createdAt) && sameDay(a.createdAt, b.createdAt);
-    return { msg, dateLine, showProfile: dateLine || !grouped(prev, msg), showTime: !grouped(msg, next) };
+    return { msg, dateLine, showProfile: dateLine || !grouped(prev, msg), showTime: true };
   });
 }
 
@@ -229,7 +228,7 @@ function MessageRow({ row, member, t, onProfile }: { row: Row; member?: Member; 
     );
   }
 
-  const time = row.showTime ? <Text style={[styles.time, { color: t.chatTime }]}>{clock(msg.createdAt)}</Text> : null;
+  const time = row.showTime ? <Text style={[styles.time, { color: t.chatTime }]}>{stamp(msg.createdAt)}</Text> : null;
 
   if (msg.authorId === OWNER_ID) {
     return (
@@ -285,9 +284,9 @@ const styles = StyleSheet.create({
   otherRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   otherBubbleLine: { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
   name: { fontSize: 12, marginBottom: 4, marginLeft: 2 },
-  bubble: { maxWidth: '72%', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 14 },
+  bubble: { maxWidth: '64%', flexShrink: 1, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 14 },
   bubbleText: { fontSize: 15, lineHeight: 21 },
-  time: { fontSize: 10, marginBottom: 1 },
+  time: { fontSize: 10, marginBottom: 1, flexShrink: 0 },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingHorizontal: 8, paddingTop: 8 },
   freeBtn: { width: 54, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, minHeight: 38, maxHeight: 120, borderRadius: 19, paddingHorizontal: 14, paddingTop: 9, paddingBottom: 9, fontSize: 15 },

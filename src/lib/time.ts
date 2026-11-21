@@ -1,5 +1,11 @@
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** 2026/11/21 17:24:05 (메시지 옆 시간) */
+export function stamp(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /** 오후 3:07 */
 export function clock(ts: number): string {
   const d = new Date(ts);
