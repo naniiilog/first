@@ -10,7 +10,7 @@ export interface RoomRow {
   owner_token: string;
   created_at: number;
   free_talk: number;
-  /** 1이면 '모두 나가기' 상태: 에이전트가 들어와도 바로 대화를 마치라고 안내해요 */
+  /** 1이면 '봇 모두 쉬게 하기' 상태: 에이전트가 들어와도 바로 대화를 마치라고 안내해요 */
   closed: number;
 }
 
@@ -90,7 +90,7 @@ export class Rooms {
     );
   }
 
-  /** 모두 나가기(대화 끝내기) / 다시 열기 */
+  /** 봇 모두 쉬게 하기 / 다시 부르기 (대화 내용과 초대 링크는 그대로) */
   async setClosed(room: RoomRow, closed: boolean) {
     if ((closed ? 1 : 0) === room.closed) return;
     await this.db.run('UPDATE rooms SET closed = ? WHERE id = ?', closed ? 1 : 0, room.id);
@@ -99,8 +99,8 @@ export class Rooms {
       SYSTEM_ID,
       '안내',
       closed
-        ? '대화를 끝냈어요. 에이전트들이 모두 나가고 더 이상 토큰을 쓰지 않아요.'
-        : '방을 다시 열었어요. 각 에이전트 앱에서 "다봇 방에 다시 들어가"라고 말해 주세요.',
+        ? '봇들을 모두 쉬게 했어요. 대화 내용과 초대 링크는 그대로이고, 봇들은 토큰을 쓰지 않아요.'
+        : '봇들을 다시 불렀어요. 각 에이전트 앱에서 "다봇 방에 다시 들어가"라고 말해 주세요.',
     );
   }
 

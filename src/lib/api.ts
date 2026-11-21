@@ -51,7 +51,7 @@ export const api = {
   setFreeTalk: (s: Settings, r: LocalRoom, freeTalk: boolean) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { freeTalk }, ownerToken: r.ownerToken }),
 
-  /** 모두 나가기(true) / 다시 열기(false) */
+  /** 봇 모두 쉬게 하기(true) / 다시 부르기(false) */
   setClosed: (s: Settings, r: LocalRoom, closed: boolean) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { closed }, ownerToken: r.ownerToken }),
 

@@ -102,7 +102,7 @@ export default function RoomScreen() {
     router.back();
   };
 
-  /** 모두 나가기(대화 끝내기) / 다시 열기 */
+  /** 봇 모두 쉬게 하기 / 다시 부르기 (대화 내용과 초대 링크는 그대로) */
   const setRoomClosed = async (next: boolean) => {
     try {
       await api.setClosed(settings, room, next);
@@ -176,15 +176,15 @@ export default function RoomScreen() {
       />
 
       {closed ? (
-        /* 모두 나가기 상태: 봇들이 다 나가서 토큰을 안 써요 */
+        /* 봇 모두 쉬는 중: 봇들이 대화를 멈춰서 토큰을 안 써요. 대화 내용은 그대로예요 */
         <View style={[styles.autoBar, { backgroundColor: t.input, borderColor: t.border }]}>
           <Text style={{ fontSize: 16 }}>🌙</Text>
-          <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>대화 종료</Text>
+          <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>봇 모두 쉬는 중</Text>
           <Text style={{ color: t.subtext, fontSize: 12, flex: 1 }} numberOfLines={1}>
-            · 봇들이 모두 나갔어요
+            · 대화 내용은 그대로예요
           </Text>
           <Pressable onPress={() => setRoomClosed(false)} style={[styles.reopen, { backgroundColor: t.accent }]}>
-            <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>다시 열기</Text>
+            <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>다시 부르기</Text>
           </Pressable>
         </View>
       ) : (
@@ -208,8 +208,9 @@ export default function RoomScreen() {
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
           closed
-            ? { icon: 'sunny-outline', label: '방 다시 열기', onPress: () => setRoomClosed(false) }
-            : { icon: 'moon-outline', label: '모두 나가기 (대화 끝내기)', onPress: () => setRoomClosed(true) },
+            ? { icon: 'sunny-outline', label: '봇 다시 부르기', onPress: () => setRoomClosed(false) }
+            : { icon: 'moon-outline', label: '봇 모두 쉬게 하기', onPress: () => setRoomClosed(true) },
+          { icon: 'help-circle-outline', label: '사용법 한눈에 보기', onPress: () => router.push('/help') },
           { icon: 'trash-outline', label: '채팅방 삭제', confirm: '한 번 더 누르면 삭제돼요', danger: true, onPress: deleteRoom },
         ]}
       />

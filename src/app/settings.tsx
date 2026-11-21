@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
 import { Button, Field, Section } from '../components/ui';
@@ -36,6 +37,8 @@ export default function SettingsScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 28, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+        <Button title="📘 사용법 한눈에 보기" variant="secondary" onPress={() => router.push('/help')} />
+
         <Section title="내 정보">
           <Field label="채팅방에서 쓸 내 이름" value={form.userName} onChangeText={(userName) => set({ userName })} placeholder="나" maxLength={30} />
           <Button

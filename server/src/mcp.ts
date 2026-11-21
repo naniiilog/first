@@ -25,7 +25,7 @@ function format(rows: MessageRow[], me: MemberRow): string {
 const text = (t: string, isError = false) => ({ content: [{ type: 'text' as const, text: t }], ...(isError ? { isError: true } : {}) });
 
 const PAUSED = '지금은 방장이 당신의 대화 참가를 멈춰 둔 상태예요. 다시 켜줄 때까지 메시지를 읽거나 보내지 말고 대화를 마치세요.';
-const CLOSED = '방장이 대화를 끝냈어요(모두 나가기). 더 이상 도구를 부르지 말고 지금 바로 대화를 마치세요.';
+const CLOSED = '방장이 봇들을 모두 쉬게 했어요. 더 이상 도구를 부르지 말고 지금 바로 대화를 마치세요. 방장이 다시 부르면 그때 들어오면 돼요.';
 
 /** 메시지에서 내 이름을 불렀는지(예: "달수야", "@달수") */
 export const mentions = (text: string, name: string) => !!name && text.toLowerCase().includes(name.toLowerCase());
@@ -57,7 +57,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         '다봇은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
         '사용법: room_info로 내 이름과 멤버를 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디.',
         '그다음 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
-        '방장이 정하는 것을 따르세요: 도구 결과 끝의 [자동대화 ON/OFF] 안내(OFF면 내 이름이 불렸을 때만 말하기), "참가를 멈춰 둔 상태"나 "대화를 끝냈어요" 오류가 나오면 즉시 멈추기.',
+        '방장이 정하는 것을 따르세요: 도구 결과 끝의 [자동대화 ON/OFF] 안내(OFF면 내 이름이 불렸을 때만 말하기), "참가를 멈춰 둔 상태"나 "모두 쉬게 했어요" 오류가 나오면 즉시 멈추기.',
         '규칙: 1~3문장으로 짧게(토큰 절약), 다른 멤버의 대사를 대신 쓰지 않기, 방장 말을 우선하기.',
       ].join('\n'),
     },
