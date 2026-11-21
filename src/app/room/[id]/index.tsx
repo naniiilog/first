@@ -183,6 +183,10 @@ export default function RoomScreen() {
           onChangeText={setText}
           placeholder="메시지 입력"
           placeholderTextColor={t.subtext}
+          // 키보드 자동 수정·추천이 글을 바꾸지 않게 해요.
+          autoCorrect={false}
+          autoComplete="off"
+          spellCheck={false}
           multiline
           maxLength={1000}
           style={[styles.input, { color: t.text, backgroundColor: t.input }]}

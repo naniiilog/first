@@ -31,6 +31,9 @@ writeFileSync(
 
 const indexPath = join(out, 'index.html');
 const tags = [
+  // 한국어 페이지라고 알리고 자동 번역을 막아요(브라우저가 '영어→한국어'로 잘못 번역해서 글이 바뀌던 문제).
+  '<meta name="google" content="notranslate">',
+  '<meta http-equiv="Content-Language" content="ko">',
   '<link rel="manifest" href="/manifest.webmanifest">',
   '<link rel="apple-touch-icon" href="/icon-1024.png">',
   '<meta name="theme-color" content="#FEE500">',
@@ -39,7 +42,10 @@ const tags = [
   '<meta name="apple-mobile-web-app-title" content="BotRoom">',
 ].join('');
 const html = readFileSync(indexPath, 'utf8');
-if (!html.includes('manifest.webmanifest')) writeFileSync(indexPath, html.replace('</head>', `${tags}</head>`));
+if (!html.includes('manifest.webmanifest')) {
+  const fixed = html.replace(/<html[^>]*>/, '<html lang="ko" translate="no" class="notranslate">').replace('</head>', `${tags}</head>`);
+  writeFileSync(indexPath, fixed);
+}
 // 웹 앱 파일을 서버 코드 안에 넣어요(server/src/web-assets.gen.js).
 // 파일을 따로 올리지 않아도 서버 하나로 웹 앱까지 보여줄 수 있어요.
 const TYPES = {
