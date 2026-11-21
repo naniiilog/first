@@ -38,12 +38,6 @@ export default function RoomScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<Row>>(null);
-  // '방금 접속함(🟢)' 표시에 쓰는 현재 시각. 15초마다 갱신해요.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -149,7 +143,7 @@ export default function RoomScreen() {
       <View style={styles.memberBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 10 }}>
           {members.map((m) => (
-            <MemberChip key={m.id} member={m} now={now} onPress={() => toggleMember(m)} />
+            <MemberChip key={m.id} member={m} onPress={() => toggleMember(m)} />
           ))}
           <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
             <Text style={{ color: t.accentPurple, fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
@@ -216,15 +210,18 @@ export default function RoomScreen() {
   );
 }
 
-function MemberChip({ member, now, onPress }: { member: Member; now: number; onPress: () => void }) {
+/** 위쪽 멤버 칩: 누르면 참가를 켜고 꺼요. 참가 중이면 초록불, 쉬는 중이면 빨간불. */
+function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
   const t = useTheme();
-  const recentlySeen = member.lastSeen !== null && now - member.lastSeen < 60_000;
-  const status = !member.active ? '💤' : recentlySeen ? '🟢' : member.joined ? '⚪' : '✉️';
   return (
-    <Pressable onPress={onPress} style={[styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={`${member.name} ${member.active ? '참가 중' : '쉬는 중'}`}
+      style={[styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff }]}
+    >
       <Avatar bot={lookOf(member.kind, member.avatar)} size={22} dim={!member.active} />
       <Text style={{ color: member.active ? t.text : t.subtext, fontWeight: '600', fontSize: 12 }}>{member.name}</Text>
-      <Text style={{ fontSize: 10 }}>{status}</Text>
+      <View style={[styles.dot, { backgroundColor: member.active ? '#22C55E' : '#EF4444' }]} />
     </Pressable>
   );
 }
@@ -298,6 +295,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   memberBar: { paddingVertical: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 3, paddingRight: 8, paddingVertical: 3, borderRadius: 999 },
+  dot: { width: 9, height: 9, borderRadius: 5, marginLeft: 1 },
   errorBar: { paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
   systemPill: { fontSize: 12, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, overflow: 'hidden', maxWidth: 320 },
   mineRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 5 },
