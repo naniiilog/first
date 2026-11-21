@@ -35,13 +35,16 @@ export async function chat(settings: Settings, aiId: string, system: string, tur
   return data as ChatResult;
 }
 
-/** 서버에 키가 설정돼 지금 쓸 수 있는 AI id 목록. 서버에 못 붙으면 null. */
-export async function fetchAvailable(settings: Settings): Promise<string[] | null> {
+/** real: 진짜 그 AI가 답해요 / mimic: 무료 엔진이 그 AI 스타일로 따라 해요 */
+export type AiStatus = Record<string, 'real' | 'mimic'>;
+
+/** 서버에서 지금 쓸 수 있는 AI와 진짜/따라하기 여부. 서버에 못 붙으면 null. */
+export async function fetchAvailable(settings: Settings): Promise<AiStatus | null> {
   try {
     const res = await fetch(`${base(settings)}/ais`, { headers: headers(settings) });
     if (!res.ok) return null;
     const data = await res.json();
-    return Array.isArray(data?.available) ? data.available : null;
+    return data?.ais && typeof data.ais === 'object' ? data.ais : null;
   } catch {
     return null;
   }

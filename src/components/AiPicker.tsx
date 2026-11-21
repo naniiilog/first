@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { AI_KINDS, type AiKind } from '../lib/ais';
+import { AI_KINDS, modeText, type AiKind } from '../lib/ais';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 
@@ -10,7 +10,8 @@ export function AiPicker({ onPick }: { onPick: (ai: AiKind) => void }) {
   return (
     <View style={styles.grid}>
       {AI_KINDS.map((ai) => {
-        const ready = available === null || available.includes(ai.id);
+        const ready = available === null || ai.id in available;
+        const mode = modeText(available, ai.id);
         return (
           <Pressable
             key={ai.id}
@@ -25,7 +26,7 @@ export function AiPicker({ onPick }: { onPick: (ai: AiKind) => void }) {
               {ai.name}
             </Text>
             <Text style={{ color: t.subtext, fontSize: 11 }} numberOfLines={1}>
-              {ready ? (ai.mimic ? '따라하기 봇' : ai.blurb) : '준비 안 됨'}
+              {mode && mode !== '진짜 연결' ? mode : ai.blurb}
             </Text>
           </Pressable>
         );

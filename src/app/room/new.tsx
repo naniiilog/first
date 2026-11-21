@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AiPicker } from '../../components/AiPicker';
 import { Avatar, Button, Field, Section } from '../../components/ui';
-import { aiOf } from '../../lib/ais';
+import { aiOf, modeText } from '../../lib/ais';
 import { newId, useStore, type NewMember } from '../../lib/store';
 import { useTheme } from '../../lib/theme';
 
 export default function NewRoomScreen() {
-  const { createRoom } = useStore();
+  const { createRoom, available } = useStore();
   const t = useTheme();
   const [roomName, setRoomName] = useState('');
   const [invites, setInvites] = useState<(NewMember & { key: string })[]>([]);
@@ -48,7 +48,7 @@ export default function NewRoomScreen() {
                   />
                   <Text style={{ color: t.subtext, fontSize: 12, marginTop: 2 }}>
                     {ai.name}
-                    {ai.mimic ? ' · 따라하기 봇' : ''}
+                    {modeText(available, m.aiId) ? ` · ${modeText(available, m.aiId)}` : ''}
                   </Text>
                 </View>
                 <Pressable onPress={() => setInvites((list) => list.filter((_, j) => j !== i))} hitSlop={10}>

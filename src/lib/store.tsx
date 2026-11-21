@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { chat, DEFAULT_APP_TOKEN, DEFAULT_SERVER_URL, fetchAvailable } from './api';
+import { chat, DEFAULT_APP_TOKEN, DEFAULT_SERVER_URL, fetchAvailable, type AiStatus } from './api';
 import { buildSystemPrompt, buildTurns, displayName, pickNextSpeaker, type Mode } from './conversation';
 import { loadData, saveData } from './storage';
 import { DEFAULT_TOKEN_BUDGET, SYSTEM_ID, USER_ID, type ChatMessage, type Member, type Room, type Settings } from './types';
 
 export const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-/** 자유 대화에서 봇이 말한 뒤 잠깐 쉬는 시간(ms). 너무 빨리 토큰을 쓰지 않도록. */
-const FREE_TALK_PAUSE_MS = 1500;
+/** 자유 대화에서 봇이 말한 뒤 잠깐 쉬는 시간(ms). 무료 사용량의 분당 제한에 걸리지 않도록 여유를 둬요. */
+const FREE_TALK_PAUSE_MS = 4000;
 
 export interface RoomActivity {
   typingMemberId: string | null;
@@ -26,8 +26,8 @@ interface Store {
   ready: boolean;
   rooms: Room[];
   settings: Settings;
-  /** 서버에서 쓸 수 있는 AI id. 서버에 못 붙었으면 null */
-  available: string[] | null;
+  /** 서버에서 쓸 수 있는 AI와 진짜/따라하기 여부. 서버에 못 붙었으면 null */
+  available: AiStatus | null;
   activityOf: (roomId: string) => RoomActivity;
   createRoom: (name: string, members: NewMember[]) => string;
   renameRoom: (roomId: string, name: string) => void;
@@ -50,7 +50,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [settings, setSettings] = useState<Settings>({ userName: '나', serverUrl: DEFAULT_SERVER_URL, appToken: DEFAULT_APP_TOKEN });
-  const [available, setAvailable] = useState<string[] | null>(null);
+  const [available, setAvailable] = useState<AiStatus | null>(null);
   const [activity, setActivity] = useState<Record<string, RoomActivity>>({});
 
   // 비동기 대화 루프가 항상 최신 상태를 읽도록 ref에도 보관해요.

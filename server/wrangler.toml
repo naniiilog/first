@@ -1,0 +1,10 @@
+name = "botroom-server"
+main = "src/worker.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 비밀값(키)은 여기 쓰지 말고 아래 명령으로 넣어요:
+#   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler secret put APP_TOKEN
+[vars]
+RATE_PER_MINUTE = "20"

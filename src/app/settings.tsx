@@ -19,7 +19,7 @@ export default function SettingsScreen() {
   const status =
     ready === null
       ? '❌ 서버에 연결되지 않았어요'
-      : `✅ 연결됨 · 사용 가능: ${AI_KINDS.filter((a) => ready.includes(a.id)).map((a) => a.name).join(', ') || '없음'}`;
+      : `✅ 연결됨\n진짜 연결: ${AI_KINDS.filter((a) => ready[a.id] === 'real').map((a) => a.name).join(', ') || '없음'}\n따라하기(무료): ${AI_KINDS.filter((a) => ready[a.id] === 'mimic').map((a) => a.name).join(', ') || '없음'}`;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -29,7 +29,7 @@ export default function SettingsScreen() {
         </Section>
         <Section title="서버 연결 (개발자용)">
           <Text style={{ color: t.subtext, lineHeight: 20 }}>
-            AI 호출은 BotRoom 서버가 대신 해요. 앱 사용자는 API 키가 필요 없어요. 보통은 바꿀 필요 없어요.
+            AI 호출은 BotRoom 서버가 대신 해요. 앱 사용자는 API 키가 필요 없어요. '따라하기'는 무료 AI가 그 AI의 말투를 흉내 내는 거예요.
           </Text>
           <Text style={{ color: t.text }}>{status}</Text>
           <Field

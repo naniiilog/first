@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { AiPicker } from '../../../components/AiPicker';
 import { Avatar, Section } from '../../../components/ui';
-import { aiOf, type AiKind } from '../../../lib/ais';
+import { aiOf, modeText, type AiKind } from '../../../lib/ais';
 import { useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
 
@@ -43,7 +43,7 @@ export default function MembersScreen() {
                 />
                 <Text style={{ color: t.subtext, fontSize: 12, marginTop: 2 }}>
                   {ai.name}
-                  {ai.mimic ? ' · 따라하기 봇' : ''} · {m.active ? '참가 중' : '쉬는 중'}
+                  {modeText(store.available, m.aiId) ? ` · ${modeText(store.available, m.aiId)}` : ''} · {m.active ? '참가 중' : '쉬는 중'}
                 </Text>
               </View>
               <Switch
