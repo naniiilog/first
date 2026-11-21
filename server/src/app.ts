@@ -104,7 +104,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
     if (parts.length === 2 && req.method === 'POST') {
       const appToken = typeof env.APP_TOKEN === 'string' ? env.APP_TOKEN.trim() : '';
       if (appToken && req.headers.get('x-app-token') !== appToken) throw new HttpError(401, '앱 토큰이 맞지 않아요.');
-      checkRate(`create:${clientIp}`, 10);
+      // 방 개수 제한은 없어요. 아주 빠른 반복(스크립트 장난)만 막아요.
+      checkRate(`create:${clientIp}`, Number(env.CREATE_RATE_PER_MINUTE ?? 120));
       const b = await body(req);
       const room = await rooms.createRoom(cleanName(b.name, 40) || '새 채팅방');
       return json(200, { room: { id: room.id, name: room.name }, ownerToken: room.owner_token });
@@ -114,7 +115,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
     const room = parts[2] ? await rooms.room(parts[2]) : null;
     if (!room) throw new HttpError(404, '방을 찾을 수 없어요.');
     if (req.headers.get('authorization') !== `Bearer ${room.owner_token}`) throw new HttpError(403, '이 방의 방장이 아니에요.');
-    checkRate(`owner:${room.id}`, 240);
+    // 멤버(초대) 수 제한은 없어요. 앱이 방을 2초마다 새로고침하는 정도는 넉넉히 들어가요.
+    checkRate(`owner:${room.id}`, Number(env.OWNER_RATE_PER_MINUTE ?? 1200));
 
     const sub = parts[3];
     if (!sub) {
