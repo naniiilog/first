@@ -7,7 +7,7 @@ const DEFAULT_READ = 15;
 const MAX_READ = 30;
 const MAX_CHARS_PER_MESSAGE = 500;
 const MAX_WAIT_SECONDS = 20;
-const POLL_MS = 1500;
+const POLL_MS = 2000;
 
 const clip = (s: string) => (s.length > MAX_CHARS_PER_MESSAGE ? `${s.slice(0, MAX_CHARS_PER_MESSAGE)}…` : s);
 
@@ -127,16 +127,22 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     },
     async ({ after_id, timeout_seconds }) => {
       const deadline = Date.now() + (timeout_seconds ?? MAX_WAIT_SECONDS) * 1000;
+      // Cloudflare 무료 플랜은 요청 하나에 DB 질의가 50번까지라서, 처음에 한 번만 전체를 읽고
+      // 기다리는 동안에는 "참가 상태 + 새 메시지" 2번씩만 확인해요(최대 10회 → 약 20번).
+      const r = await load();
+      if ('error' in r) return r.error!;
       while (true) {
-        const r = await load();
-        if ('error' in r) return r.error!;
+        const status = await rooms.memberStatus(r.me.id);
+        if (!status) return text('이 초대 링크는 더 이상 쓸 수 없어요. 방에서 내보내졌거나 방이 삭제됐어요.', true);
+        if (status.active !== 1) return text(PAUSED, true);
         const rows = (await rooms.messages(r.room.id, after_id, MAX_READ)).filter((m) => m.author_id !== r.me.id);
-        if (rows.length > 0) return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(r.room)}`);
-        if (Date.now() + POLL_MS > deadline) {
+        if (rows.length > 0 || Date.now() + POLL_MS > deadline) {
+          const room = (await rooms.room(r.room.id)) ?? r.room; // 자유대화 상태를 최신으로
+          if (rows.length > 0) return text(`${format(rows, r.me)}\n(마지막 번호: ${rows[rows.length - 1].id})${modeHint(room)}`);
           return text(
-            r.room.free_talk === 1
-              ? `한동안 조용해요. 새 화제나 질문을 하나 꺼내서 send_message로 보내고 계속 이어가세요.${modeHint(r.room)}`
-              : `새 메시지가 없어요.${modeHint(r.room)}`,
+            room.free_talk === 1
+              ? `한동안 조용해요. 새 화제나 질문을 하나 꺼내서 send_message로 보내고 계속 이어가세요.${modeHint(room)}`
+              : `새 메시지가 없어요.${modeHint(room)}`,
           );
         }
         await new Promise((res) => setTimeout(res, POLL_MS));

@@ -102,6 +102,11 @@ export class Rooms {
     return this.db.first<MemberRow>('SELECT * FROM members WHERE room_id = ? AND id = ?', roomId, memberId);
   }
 
+  /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태만 읽어요. 없으면 null(내보내짐). */
+  memberStatus(memberId: string) {
+    return this.db.first<{ active: number }>('SELECT active FROM members WHERE id = ?', memberId);
+  }
+
   memberByInvite(token: string) {
     return this.db.first<MemberRow>('SELECT * FROM members WHERE invite_token = ?', token);
   }
