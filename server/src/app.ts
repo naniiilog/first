@@ -1,88 +1,169 @@
-import { route, status, type Env } from './catalog.js';
-import { complete, UpstreamError, type Turn } from './providers.js';
+import type { Db } from './db.js';
+import { ensureSchema } from './db.js';
+import { handleMcp } from './mcp.js';
+import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
 
 /**
- * BotRoom API (Node 서버와 Cloudflare Worker가 같이 써요)
+ * BotRoom 서버 (Node와 Cloudflare Worker가 같이 써요)
  *
- *   GET  /health  → { ok: true }
- *   GET  /ais     → { ais: { [aiId]: 'real' | 'mimic' } }   쓸 수 있는 AI와 진짜/따라하기 여부
- *   POST /chat    → { text, usage: { input, output }, mode }
- *        body: { aiId, system, turns: [{ role, content }] }
+ * 방장(휴대폰 앱)용 API — Authorization: Bearer <ownerToken>
+ *   POST   /api/rooms                         { name }            → { room, ownerToken }
+ *   GET    /api/rooms/:id                                         → { room, members }
+ *   PATCH  /api/rooms/:id                     { name }
+ *   DELETE /api/rooms/:id
+ *   GET    /api/rooms/:id/messages?after=ID                       → { messages }
+ *   POST   /api/rooms/:id/messages            { text, authorName }
+ *   POST   /api/rooms/:id/members             { kind, name }      → { member, inviteUrl }
+ *   GET    /api/rooms/:id/members/:mid/invite                     → { inviteUrl }
+ *   PATCH  /api/rooms/:id/members/:mid        { name?, active? }
+ *   DELETE /api/rooms/:id/members/:mid
+ *
+ * AI 에이전트용 MCP 입구 — 초대 링크 자체가 열쇠예요
+ *   POST   /mcp/:inviteToken
  */
 
-const MAX_BODY_CHARS = 64 * 1024;
-const MAX_TURNS = 40;
-const MAX_CHARS = 24_000;
+export type Env = Record<string, unknown>;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-app-token',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  'Access-Control-Expose-Headers': '*',
 };
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS } });
 
-// 같은 서버 인스턴스 안에서만 세는 간단한 분당 제한이에요(무료 사용량 보호용).
-const hits = new Map<string, number[]>();
-function rateLimited(ip: string, perMinute: number): boolean {
-  const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < 60_000);
-  recent.push(now);
-  hits.set(ip, recent);
-  if (hits.size > 5000) hits.clear();
-  return recent.length > perMinute;
-}
+const withCors = (res: Response) => {
+  const out = new Response(res.body, res);
+  for (const [k, v] of Object.entries(CORS)) out.headers.set(k, v);
+  return out;
+};
 
-function validTurns(value: unknown): value is Turn[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_TURNS) return false;
-  let chars = 0;
-  for (const t of value) {
-    if (!t || (t.role !== 'user' && t.role !== 'assistant') || typeof t.content !== 'string') return false;
-    chars += t.content.length;
+class HttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
   }
-  return chars <= MAX_CHARS && value[0].role === 'user';
 }
 
-export async function handle(req: Request, env: Env, clientIp: string): Promise<Response> {
+// 같은 서버 인스턴스 안에서만 세는 간단한 분당 제한(장난 방지용).
+const hits = new Map<string, number[]>();
+function checkRate(key: string, perMinute: number) {
+  const now = Date.now();
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < 60_000);
+  recent.push(now);
+  hits.set(key, recent);
+  if (hits.size > 5000) hits.clear();
+  if (recent.length > perMinute) throw new HttpError(429, '요청이 너무 많아요. 잠시 쉬었다가 해 주세요.');
+}
+
+async function body(req: Request): Promise<any> {
+  const raw = await req.text();
+  if (raw.length > 16_000) throw new HttpError(413, '요청이 너무 커요.');
   try {
-    const url = new URL(req.url);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new HttpError(400, 'JSON 형식이 아니에요.');
+  }
+}
+
+const cleanName = (v: unknown, max = 30) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+export async function handle(req: Request, env: Env, db: Db, clientIp: string): Promise<Response> {
+  try {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    const url = new URL(req.url);
+    const parts = url.pathname.split('/').filter(Boolean);
     if (url.pathname === '/health') return json(200, { ok: true });
 
-    const appToken = env.APP_TOKEN?.trim();
-    if (appToken && req.headers.get('x-app-token') !== appToken) return json(401, { error: '앱 토큰이 맞지 않아요.' });
+    await ensureSchema(db);
+    const rooms = new Rooms(db);
 
-    if (req.method === 'GET' && url.pathname === '/ais') return json(200, { ais: status(env) });
-
-    if (req.method === 'POST' && url.pathname === '/chat') {
-      if (rateLimited(clientIp, Number(env.RATE_PER_MINUTE ?? 20))) {
-        return json(429, { error: '요청이 너무 많아요. 잠시 쉬었다가 해 주세요.' });
-      }
-      const raw = await req.text();
-      if (raw.length > MAX_BODY_CHARS) return json(413, { error: '요청이 너무 커요.' });
-      let body: any;
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        return json(400, { error: 'JSON 형식이 아니에요.' });
-      }
-      const r = typeof body?.aiId === 'string' ? route(env, body.aiId) : null;
-      if (!r) return json(400, { error: '이 AI는 지금 서버에서 쓸 수 없어요.' });
-      if (typeof body.system !== 'string' || body.system.length > 4000) return json(400, { error: 'system 값이 잘못됐어요.' });
-      if (!validTurns(body.turns)) return json(400, { error: '대화 형식이 잘못됐거나 너무 길어요.' });
-
-      const result = await complete(env, r, body.system, body.turns);
-      return json(200, {
-        text: result.text || '(…)',
-        usage: { input: result.inputTokens, output: result.outputTokens },
-        mode: r.mode,
-      });
+    // ── AI 에이전트 입구 ──
+    if (parts[0] === 'mcp' && parts[1]) {
+      checkRate(`mcp:${parts[1]}`, Number(env.MCP_RATE_PER_MINUTE ?? 60));
+      return withCors(await handleMcp(req, rooms, parts[1]));
     }
 
-    return json(404, { error: 'Not found' });
+    if (parts[0] !== 'api' || parts[1] !== 'rooms') throw new HttpError(404, 'Not found');
+
+    // ── 방 만들기 ──
+    if (parts.length === 2 && req.method === 'POST') {
+      const appToken = typeof env.APP_TOKEN === 'string' ? env.APP_TOKEN.trim() : '';
+      if (appToken && req.headers.get('x-app-token') !== appToken) throw new HttpError(401, '앱 토큰이 맞지 않아요.');
+      checkRate(`create:${clientIp}`, 10);
+      const b = await body(req);
+      const room = await rooms.createRoom(cleanName(b.name, 40) || '새 채팅방');
+      return json(200, { room: { id: room.id, name: room.name }, ownerToken: room.owner_token });
+    }
+
+    // ── 이하 방장 전용 ──
+    const room = parts[2] ? await rooms.room(parts[2]) : null;
+    if (!room) throw new HttpError(404, '방을 찾을 수 없어요.');
+    if (req.headers.get('authorization') !== `Bearer ${room.owner_token}`) throw new HttpError(403, '이 방의 방장이 아니에요.');
+    checkRate(`owner:${room.id}`, 240);
+
+    const sub = parts[3];
+    if (!sub) {
+      if (req.method === 'GET') {
+        const members = await rooms.members(room.id);
+        return json(200, { room: { id: room.id, name: room.name }, members: members.map(publicMember) });
+      }
+      if (req.method === 'PATCH') {
+        const name = cleanName((await body(req)).name, 40);
+        if (name) await rooms.renameRoom(room.id, name);
+        return json(200, { ok: true });
+      }
+      if (req.method === 'DELETE') {
+        await rooms.deleteRoom(room.id);
+        return json(200, { ok: true });
+      }
+    }
+
+    if (sub === 'messages') {
+      if (req.method === 'GET') {
+        const after = url.searchParams.get('after');
+        const rows = await rooms.messages(room.id, after ? Number(after) : null, after ? 200 : 100);
+        return json(200, { messages: rows.map(publicMessage) });
+      }
+      if (req.method === 'POST') {
+        const b = await body(req);
+        const text = typeof b.text === 'string' ? b.text.trim() : '';
+        if (!text || text.length > MAX_TEXT) throw new HttpError(400, `메시지는 1~${MAX_TEXT}자로 써주세요.`);
+        const id = await rooms.post(room.id, OWNER_ID, cleanName(b.authorName) || '방장', text);
+        return json(200, { id });
+      }
+    }
+
+    if (sub === 'members') {
+      const inviteUrl = (token: string) => `${url.origin}/mcp/${token}`;
+      if (!parts[4] && req.method === 'POST') {
+        const b = await body(req);
+        const kind = cleanName(b.kind, 20) || 'other';
+        const name = cleanName(b.name) || cleanName(b.defaultName) || 'AI';
+        const m = await rooms.addMember(room.id, kind, name);
+        return json(200, { member: publicMember(m), inviteUrl: inviteUrl(m.invite_token) });
+      }
+      const m = parts[4] ? await rooms.member(room.id, parts[4]) : null;
+      if (!m) throw new HttpError(404, '멤버를 찾을 수 없어요.');
+      if (parts[5] === 'invite' && req.method === 'GET') return json(200, { inviteUrl: inviteUrl(m.invite_token) });
+      if (req.method === 'PATCH') {
+        const b = await body(req);
+        await rooms.updateMember(m, {
+          name: cleanName(b.name) || undefined,
+          active: typeof b.active === 'boolean' ? b.active : undefined,
+        });
+        return json(200, { ok: true });
+      }
+      if (req.method === 'DELETE') {
+        await rooms.removeMember(m);
+        return json(200, { ok: true });
+      }
+    }
+
+    throw new HttpError(404, 'Not found');
   } catch (err) {
-    if (err instanceof UpstreamError) return json(err.status, { error: err.message });
+    if (err instanceof HttpError) return json(err.status, { error: err.message });
     console.error(err);
     return json(500, { error: '서버 오류가 났어요.' });
   }

@@ -1,51 +1,61 @@
-import type { Settings } from './types';
-
-export interface Turn {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-export interface ChatResult {
-  text: string;
-  usage: { input: number; output: number };
-}
+import type { ChatMessage, LocalRoom, Member, Settings } from './types';
 
 export const DEFAULT_SERVER_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8787';
 export const DEFAULT_APP_TOKEN = process.env.EXPO_PUBLIC_APP_TOKEN ?? '';
 
 const base = (s: Settings) => (s.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-const headers = (s: Settings): Record<string, string> => ({
-  'Content-Type': 'application/json',
-  ...(s.appToken ? { 'x-app-token': s.appToken } : {}),
-});
 
-export async function chat(settings: Settings, aiId: string, system: string, turns: Turn[]): Promise<ChatResult> {
+async function call<T>(s: Settings, path: string, init: { method?: string; body?: unknown; ownerToken?: string } = {}): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${base(settings)}/chat`, {
-      method: 'POST',
-      headers: headers(settings),
-      body: JSON.stringify({ aiId, system, turns }),
+    res = await fetch(`${base(s)}${path}`, {
+      method: init.method ?? 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(s.appToken ? { 'x-app-token': s.appToken } : {}),
+        ...(init.ownerToken ? { Authorization: `Bearer ${init.ownerToken}` } : {}),
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
   } catch {
     throw new Error('서버에 연결할 수 없어요. 설정에서 서버 주소를 확인해 주세요.');
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? `서버 오류 (${res.status})`);
-  return data as ChatResult;
+  return data as T;
 }
 
-/** real: 진짜 그 AI가 답해요 / mimic: 무료 엔진이 그 AI 스타일로 따라 해요 */
-export type AiStatus = Record<string, 'real' | 'mimic'>;
+export const api = {
+  createRoom: (s: Settings, name: string) =>
+    call<{ room: { id: string; name: string }; ownerToken: string }>(s, '/api/rooms', { method: 'POST', body: { name } }),
 
-/** 서버에서 지금 쓸 수 있는 AI와 진짜/따라하기 여부. 서버에 못 붙으면 null. */
-export async function fetchAvailable(settings: Settings): Promise<AiStatus | null> {
-  try {
-    const res = await fetch(`${base(settings)}/ais`, { headers: headers(settings) });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.ais && typeof data.ais === 'object' ? data.ais : null;
-  } catch {
-    return null;
-  }
-}
+  getRoom: (s: Settings, r: LocalRoom) =>
+    call<{ room: { id: string; name: string }; members: Member[] }>(s, `/api/rooms/${r.id}`, { ownerToken: r.ownerToken }),
+
+  renameRoom: (s: Settings, r: LocalRoom, name: string) =>
+    call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { name }, ownerToken: r.ownerToken }),
+
+  deleteRoom: (s: Settings, r: LocalRoom) => call(s, `/api/rooms/${r.id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
+
+  messages: (s: Settings, r: LocalRoom, after: number | null) =>
+    call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages${after !== null ? `?after=${after}` : ''}`, { ownerToken: r.ownerToken }),
+
+  send: (s: Settings, r: LocalRoom, text: string) =>
+    call<{ id: number }>(s, `/api/rooms/${r.id}/messages`, { method: 'POST', body: { text, authorName: s.userName }, ownerToken: r.ownerToken }),
+
+  invite: (s: Settings, r: LocalRoom, kind: string, name: string, defaultName: string) =>
+    call<{ member: Member; inviteUrl: string }>(s, `/api/rooms/${r.id}/members`, {
+      method: 'POST',
+      body: { kind, name, defaultName },
+      ownerToken: r.ownerToken,
+    }),
+
+  inviteUrl: (s: Settings, r: LocalRoom, memberId: string) =>
+    call<{ inviteUrl: string }>(s, `/api/rooms/${r.id}/members/${memberId}/invite`, { ownerToken: r.ownerToken }),
+
+  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean }) =>
+    call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
+
+  removeMember: (s: Settings, r: LocalRoom, memberId: string) =>
+    call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'DELETE', ownerToken: r.ownerToken }),
+};

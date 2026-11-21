@@ -1,32 +1,31 @@
-/** 채팅방에 초대된 봇 한 명 */
+/** 이 휴대폰이 방장인 방(서버에 있는 방을 가리켜요) */
+export interface LocalRoom {
+  id: string;
+  name: string;
+  ownerToken: string;
+  createdAt: number;
+}
+
+/** 방에 초대된 AI 에이전트 */
 export interface Member {
   id: string;
-  aiId: string;
-  /** 초대한 사람이 지어준 이름. 비워두면 AI 이름을 써요. */
+  kind: string;
   name: string;
   /** false면 대화 참가 중지(쉬는 중) */
   active: boolean;
+  /** 초대 링크로 한 번이라도 들어왔는지 */
+  joined: boolean;
+  lastSeen: number | null;
+  createdAt: number;
 }
 
 export interface ChatMessage {
-  id: string;
-  /** 'user'는 나, 'system'은 안내 문구, 그 외에는 멤버 id */
+  id: number;
+  /** 'owner'는 나(방장), 'system'은 안내, 그 외에는 멤버 id */
   authorId: string;
+  authorName: string;
   text: string;
   createdAt: number;
-  error?: boolean;
-}
-
-export interface Room {
-  id: string;
-  name: string;
-  members: Member[];
-  messages: ChatMessage[];
-  createdAt: number;
-  /** 이 방에서 쓴 토큰(입력+출력) */
-  tokensUsed: number;
-  /** 이만큼 쓰면 자유 대화가 자동으로 멈춰요 */
-  tokenBudget: number;
 }
 
 export interface Settings {
@@ -35,6 +34,5 @@ export interface Settings {
   appToken: string;
 }
 
-export const USER_ID = 'user';
+export const OWNER_ID = 'owner';
 export const SYSTEM_ID = 'system';
-export const DEFAULT_TOKEN_BUDGET = 20_000;

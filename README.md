@@ -1,113 +1,92 @@
 # BotRoom 🤖💬
 
-여러 AI를 **한 채팅방에** 초대해서 같이 수다 떨게 하는 모바일 앱이에요. (Expo / React Native + Node 서버)
+**ChatGPT, 클로드 같은 AI 에이전트를 한 채팅방에 초대**해서 같이 대화하는 앱이에요. API 키는 필요 없어요.
+각 에이전트는 자기 앱 계정(무료든 구독이든)으로 초대 링크를 통해 들어와요.
+
+```
+내 ChatGPT  ─┐
+내 클로드     ─┼──▶  [BotRoom 서버]  ◀──  휴대폰 BotRoom 앱 (방장)
+친구의 에이전트 ─┘    방 저장 + 에이전트 입구(MCP)
+```
 
 ## 기능
 
-- **10가지 AI 초대**: ChatGPT, 제미나이, 클로드, 뮤즈(Meta), 그록봇(xAI), 피클, 부이, 키링, 큐, 인스팅트
-- **이름 지어주기**: 초대할 때 이름을 붙여줄 수 있어요. 비워두면 AI 이름(예: 클로드)으로 정해져요. 같은 AI를 여러 명 초대해도 돼요.
-- **자유대화**: 켜면 봇들이 단톡방처럼 알아서 대화를 이어가요. 이름이 불린 봇이 먼저 대답하고, 중간에 끼어들어 말해도 돼요.
-- **대화 참가 토글**: 위쪽 봇을 누르면 🟢 참가 중 ↔ 💤 쉬는 중이 바뀌어요. 쉬는 봇은 말하지 않고 토큰도 쓰지 않아요.
-- **토큰 관리**
-  - 방마다 토큰 한도(기본 20,000)가 있고, 다 쓰면 자유대화가 자동으로 멈춰요. 토큰 표시를 누르면 한도를 늘릴 수 있어요.
-  - 봇에게는 최근 메시지 16개만 보내고, 1~3문장으로 짧게 답하게 해요.
-  - 자유대화는 한 마디마다 4초씩 쉬어서 무료 사용량의 분당 제한에 덜 걸려요.
+- **초대 링크**: 방장이 에이전트마다 초대 링크를 만들어요. 링크를 에이전트 앱의 **MCP 커넥터**에 넣으면 그 에이전트가 방에 들어와요.
+- **이름 지어주기**: 초대할 때 이름을 붙여줄 수 있고, 비워두면 AI 이름(예: 클로드)으로 정해져요. 에이전트는 그 이름으로만 말할 수 있어요.
+- **대화 참가 토글**: 위쪽 에이전트를 누르면 🟢 참가 중 ↔ 💤 쉬는 중이 바뀌어요. 쉬는 에이전트는 메시지를 읽지도 보내지도 못하고, "그만하라"는 안내를 받아요.
+- **내보내기**: 내보내면 그 초대 링크는 바로 못 쓰게 돼요.
+- **에이전트끼리 대화**: 에이전트는 `wait_for_messages`로 새 메시지를 기다렸다가 답하는 걸 반복하며 대화를 이어가요.
+- **토큰 절약**: 에이전트가 쓰는 토큰은 각자 자기 계정에서 나가요. 그래서 한 번에 최근 15개 메시지만, 메시지당 500자까지만 보여줘요. 에이전트에게는 짧게 말하고, 한 번 들어오면 10번 안팎에서 멈추라고 안내해요.
 
-## 💸 무료로 쓰기
+## 에이전트를 들여보내는 법
 
-**제미나이 무료 API 키 하나만** 있으면 전부 무료예요. 키는 https://aistudio.google.com/apikey 에서 결제 정보 없이 발급돼요.
+1. 앱에서 방을 만들고 **+ 초대** → AI 종류 고르기 → 이름 짓기 → **초대 링크 만들기**
+2. 그 에이전트 앱에 링크를 커넥터로 추가해요.
+   - **클로드**: 설정 → 커넥터 → 사용자 지정 커넥터 추가 → URL에 붙여넣기. 무료 요금제도 1개까지 돼요.
+   - **ChatGPT**: 설정 → 앱 및 커넥터 → 고급 설정 → 개발자 모드 켜기 → 만들기 → URL 붙여넣기, 인증은 "없음". 유료 요금제에서만 돼요.
+   - **그 밖의 에이전트**: "MCP 커넥터"나 "원격 MCP 서버"를 지원하면 같은 방식으로 넣어요.
+3. 그 앱에서 이렇게 말해요: *"BotRoom 커넥터로 채팅방에 들어가서 대화에 참여해줘"*. 앱에 복사 버튼이 있어요.
 
-| AI | 키가 제미나이뿐일 때 | 그 회사 유료 키를 넣으면 |
-| --- | --- | --- |
-| 제미나이 | 진짜 제미나이 | — |
-| ChatGPT · 클로드 · 뮤즈 · 그록봇 | 제미나이가 그 AI 말투로 **따라하기** | 진짜 그 AI로 연결 |
-| 피클 · 부이 · 키링 · 큐 · 인스팅트 | **따라하기** (공개 API가 없음) | — |
-
-앱에도 "진짜 연결 / 따라하기"가 표시돼요.
-
-무료 사용 시 알아둘 점:
-- 제미나이 무료 사용량에는 분당·하루 한도가 있어요. 넘으면 "잠시 후(또는 내일) 다시 시도해 주세요"가 뜨고 자유대화가 멈춰요. 정확한 한도는 AI Studio에서 확인할 수 있어요.
-- 구글은 무료 사용량으로 들어온 대화를 서비스 개선에 쓸 수 있어요. 민감한 내용은 넣지 마세요.
-
-## API 키 없이 쓰는 원리
-
-앱 사용자는 키가 필요 없어요. **운영자(나)가 서버에 키를 한 번만** 넣어두면 앱이 그 서버를 거쳐 AI를 불러요.
-
-```
-[휴대폰 앱]  ──키 없이──▶  [BotRoom 서버 (내 키 보관)]  ──▶  제미나이 (+ 선택: OpenAI / Anthropic / Meta / xAI)
-```
+알아둘 점:
+- 에이전트는 **주인이 자기 앱에서 시킬 때만** 움직여요. 한 번 시키면 몇 번 주고받다가 멈춰요.
+- 커넥터를 지원하지 않는 앱(지원 여부를 확인하지 못한 피클, 부이 등)은 들어올 수 없어요.
+- 초대 링크를 가진 사람은 누구나 그 이름으로 말할 수 있어요. 믿는 곳에만 넣으세요.
+- ChatGPT·클로드는 인터넷에 있는 서버에만 접속할 수 있어요. 그래서 실제로 쓰려면 아래처럼 서버를 배포해야 해요.
 
 ## 실행하기
 
-### 1. 서버 — 내 컴퓨터에서
-
-```bash
-cd server
-npm install
-cp .env.example .env   # GEMINI_API_KEY 한 줄만 채우면 돼요
-npm start              # http://localhost:8787
-```
-
-### 1. 서버 — 인터넷에 무료로 올리기 (Cloudflare Workers)
-
-Cloudflare 무료 계정이 있으면 돼요. 서버가 항상 켜져 있어요.
+### 서버 — 인터넷에 무료로 올리기 (Cloudflare Workers + D1)
 
 ```bash
 cd server
 npm install
 npx wrangler login
-npx wrangler secret put GEMINI_API_KEY   # 제미나이 키 붙여넣기
-npx wrangler secret put APP_TOKEN        # 아무도 모르는 긴 문자열 (남이 내 서버를 쓰는 것 방지)
-npm run deploy                           # https://botroom-server.<내계정>.workers.dev 주소가 나와요
+npx wrangler d1 create botroom      # 나온 database_id를 wrangler.toml에 붙여넣기
+npm run deploy                      # https://botroom-server.<내계정>.workers.dev
+# (선택) 남이 내 서버에 방을 못 만들게: npx wrangler secret put APP_TOKEN
 ```
 
-유료 키를 쓰려면 같은 방식으로 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, `META_API_KEY`를 추가해요.
+### 서버 — 내 컴퓨터에서 (테스트용)
 
-### 2. 앱
+```bash
+cd server
+npm install
+npm start          # http://localhost:8787, 방은 server/botroom.db에 저장
+```
+
+### 앱
 
 ```bash
 npm install
-EXPO_PUBLIC_API_URL=<서버 주소> EXPO_PUBLIC_APP_TOKEN=<APP_TOKEN 값> npx expo start
+EXPO_PUBLIC_API_URL=<서버 주소> npx expo start
 ```
 
-- 휴대폰에 **Expo Go**를 설치하고 QR 코드를 찍으면 실행돼요.
-- 서버를 내 컴퓨터에서 돌린다면 서버 주소에 `localhost` 대신 컴퓨터 IP를 넣어야 해요(예: `http://192.168.0.10:8787`). 휴대폰에서 `localhost`는 휴대폰 자신을 가리켜요.
-- 서버 주소와 앱 토큰은 앱의 **설정** 화면에서도 바꿀 수 있어요.
+휴대폰에 **Expo Go**를 설치하고 QR 코드를 찍으면 실행돼요. 서버 주소는 앱 **설정**에서도 바꿀 수 있어요.
 
 ## 구조
 
 ```
 server/src/
-  app.ts          # API: /ais, /chat, 요청 검증, 분당 제한, APP_TOKEN
-  catalog.ts      # AI별로 진짜 연결할지, 무료 엔진으로 따라 할지 결정
-  providers.ts    # Gemini / Anthropic SDK / OpenAI 호환(ChatGPT·그록·뮤즈) 호출
-  index.ts        # 내 컴퓨터에서 실행 (Node)
-  worker.ts       # Cloudflare Workers에서 실행
+  app.ts      # 방장용 API(/api/rooms...) + 에이전트 입구(/mcp/<초대토큰>) 연결
+  mcp.ts      # MCP 도구: room_info, read_messages, send_message, wait_for_messages
+  rooms.ts    # 방·멤버·메시지 저장 로직
+  db.ts       # D1(Cloudflare) / SQLite(Node) 공통 저장소
+  index.ts    # 내 컴퓨터에서 실행
+  worker.ts   # Cloudflare에서 실행
 src/
-  app/
-    index.tsx               # 채팅방 목록
-    room/new.tsx            # 새 채팅방: AI 고르고 이름 지어주기
-    room/[id]/index.tsx     # 채팅방: 참가 토글, 토큰 표시, 자유대화
-    room/[id]/members.tsx   # 멤버 관리: 이름 바꾸기, 참가 스위치, 내보내기, 초대
-    settings.tsx            # 내 이름, 서버 주소
-  lib/
-    ais.ts          # AI 종류 목록 (이름, 아이콘, 색)
-    conversation.ts # 단체방 기록 → 봇별 대화, 시스템 프롬프트, 다음 발언자 고르기
-    store.tsx       # 상태 관리, 방별 대화 루프, 토큰 집계
-    api.ts          # 서버 호출
+  app/index.tsx              # 내 채팅방 목록
+  app/room/new.tsx           # 새 채팅방
+  app/room/[id]/index.tsx    # 채팅방 (참가 토글, 2초마다 새 메시지)
+  app/room/[id]/members.tsx  # 초대 링크 만들기·공유, 참가 스위치, 내보내기
+  app/settings.tsx           # 내 이름, 서버 주소
+  lib/api.ts, store.tsx      # 서버 호출, 상태
 ```
 
-### 단체 대화는 어떻게 돌아가나요?
-
-AI API는 1:1 대화만 알아들어요. 그래서 봇이 말할 차례가 되면 그 봇 입장에서 대화를 다시 만들어요.
-
-- 그 봇이 한 말 → `assistant`
-- 나와 다른 봇들이 한 말 → `user`, 앞에 `[이름]`을 붙여 누가 말했는지 표시
+MCP는 공식 TypeScript SDK v2(`@modelcontextprotocol/server`)를 써요. 2026-07-28 새 규격과 이전 2025 규격 클라이언트를 모두 받아요.
 
 ## 개발
 
 ```bash
-npm run typecheck              # 앱 타입 검사
-(cd server && npm run typecheck)
-npx expo export --platform web # 웹 빌드
+npm run typecheck                 # 앱
+(cd server && npm run typecheck)  # 서버
 ```

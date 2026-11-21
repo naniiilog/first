@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Room, Settings } from './types';
+import type { LocalRoom, Settings } from './types';
 
-const DATA_KEY = 'botroom.data.v2';
+const DATA_KEY = 'botroom.data.v3';
 
 export interface PersistedData {
-  rooms: Room[];
+  rooms: LocalRoom[];
   settings: Settings;
 }
 

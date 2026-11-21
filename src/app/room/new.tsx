@@ -1,71 +1,41 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AiPicker } from '../../components/AiPicker';
-import { Avatar, Button, Field, Section } from '../../components/ui';
-import { aiOf, modeText } from '../../lib/ais';
-import { newId, useStore, type NewMember } from '../../lib/store';
+import { ScrollView, Text } from 'react-native';
+import { Button, Field } from '../../components/ui';
+import { useStore } from '../../lib/store';
 import { useTheme } from '../../lib/theme';
 
 export default function NewRoomScreen() {
-  const { createRoom, available } = useStore();
+  const { createRoom } = useStore();
   const t = useTheme();
-  const [roomName, setRoomName] = useState('');
-  const [invites, setInvites] = useState<(NewMember & { key: string })[]>([]);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const create = () => {
-    if (invites.length === 0) return;
-    const fallback = invites.map((m) => m.name.trim() || aiOf(m.aiId).name).join(', ');
-    const id = createRoom(roomName.trim() || fallback, invites);
-    router.replace({ pathname: '/room/[id]', params: { id } });
+  const create = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const room = await createRoom(name.trim() || 'AI 수다방');
+      // 뒤로 가면 방으로 돌아오도록: 방 화면으로 바꾼 뒤 그 위에 초대 화면을 열어요.
+      router.replace({ pathname: '/room/[id]', params: { id: room.id } });
+      router.push({ pathname: '/room/[id]/members', params: { id: room.id } });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 22, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
-      <Field label="채팅방 이름" value={roomName} onChangeText={setRoomName} placeholder="비워두면 멤버 이름으로 정해져요" />
-
-      <Section title="AI 초대하기">
-        <Text style={{ color: t.subtext }}>누르면 초대 목록에 추가돼요. 같은 AI를 여러 번 넣어도 돼요.</Text>
-        <AiPicker onPick={(ai) => setInvites((list) => [...list, { key: newId(), aiId: ai.id, name: '' }])} />
-      </Section>
-
-      <Section title={`초대 목록 (${invites.length}명)`}>
-        {invites.length === 0 ? (
-          <Text style={{ color: t.subtext }}>아직 아무도 없어요.</Text>
-        ) : (
-          invites.map((m, i) => {
-            const ai = aiOf(m.aiId);
-            return (
-              <View key={m.key} style={[styles.row, { backgroundColor: t.card, borderColor: t.border }]}>
-                <Avatar bot={ai} size={36} />
-                <View style={{ flex: 1 }}>
-                  <TextInput
-                    value={m.name}
-                    onChangeText={(name) => setInvites((list) => list.map((x, j) => (j === i ? { ...x, name } : x)))}
-                    placeholder={`이름 지어주기 (기본: ${ai.name})`}
-                    placeholderTextColor={t.subtext}
-                    style={[styles.nameInput, { color: t.text, borderColor: t.border }]}
-                  />
-                  <Text style={{ color: t.subtext, fontSize: 12, marginTop: 2 }}>
-                    {ai.name}
-                    {modeText(available, m.aiId) ? ` · ${modeText(available, m.aiId)}` : ''}
-                  </Text>
-                </View>
-                <Pressable onPress={() => setInvites((list) => list.filter((_, j) => j !== i))} hitSlop={10}>
-                  <Text style={{ color: t.danger, fontSize: 18 }}>✕</Text>
-                </Pressable>
-              </View>
-            );
-          })
-        )}
-      </Section>
-
-      <Button title="채팅방 만들기" onPress={create} disabled={invites.length === 0} />
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+      <Field label="채팅방 이름" value={name} onChangeText={setName} placeholder="AI 수다방" autoFocus />
+      <Text style={{ color: t.subtext, lineHeight: 20 }}>
+        방을 만든 다음 AI 에이전트마다 초대 링크를 만들어 줄 수 있어요. 에이전트는 자기 앱(ChatGPT, 클로드 등)에 그 링크를
+        커넥터로 넣으면 이 방에 들어와요. API 키는 필요 없어요.
+      </Text>
+      {error ? <Text style={{ color: t.danger }}>⚠️ {error}</Text> : null}
+      <Button title={busy ? '만드는 중…' : '채팅방 만들기'} onPress={create} disabled={busy} />
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
-  nameInput: { borderBottomWidth: 1, paddingVertical: 6, fontSize: 16 },
-});

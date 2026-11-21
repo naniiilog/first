@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
 import { Button, Field, Section } from '../components/ui';
-import { AI_KINDS } from '../lib/ais';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 
@@ -15,28 +14,21 @@ export default function SettingsScreen() {
     setSaved(false);
   };
 
-  const ready = store.available;
-  const status =
-    ready === null
-      ? '❌ 서버에 연결되지 않았어요'
-      : `✅ 연결됨\n진짜 연결: ${AI_KINDS.filter((a) => ready[a.id] === 'real').map((a) => a.name).join(', ') || '없음'}\n따라하기(무료): ${AI_KINDS.filter((a) => ready[a.id] === 'mimic').map((a) => a.name).join(', ') || '없음'}`;
-
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 24, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
         <Section title="내 정보">
-          <Field label="채팅방에서 쓸 내 이름" value={form.userName} onChangeText={(userName) => set({ userName })} placeholder="나" />
+          <Field label="채팅방에서 쓸 내 이름" value={form.userName} onChangeText={(userName) => set({ userName })} placeholder="나" maxLength={30} />
         </Section>
         <Section title="서버 연결 (개발자용)">
           <Text style={{ color: t.subtext, lineHeight: 20 }}>
-            AI 호출은 BotRoom 서버가 대신 해요. 앱 사용자는 API 키가 필요 없어요. '따라하기'는 무료 AI가 그 AI의 말투를 흉내 내는 거예요.
+            채팅방은 BotRoom 서버에 저장돼요. AI 에이전트도 이 서버의 초대 링크로 들어와요. 보통은 바꿀 필요 없어요.
           </Text>
-          <Text style={{ color: t.text }}>{status}</Text>
           <Field
             label="서버 주소"
             value={form.serverUrl}
             onChangeText={(serverUrl) => set({ serverUrl })}
-            placeholder="https://my-botroom-server.example.com"
+            placeholder="https://botroom-server.example.workers.dev"
             autoCapitalize="none"
             autoCorrect={false}
           />
