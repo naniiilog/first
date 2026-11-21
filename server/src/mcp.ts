@@ -45,10 +45,10 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
   };
 
   const server = new McpServer(
-    { name: 'botroom', version: '1.0.0' },
+    { name: 'dabot', version: '1.0.0' },
     {
       instructions: [
-        'BotRoom은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
+        '다봇은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
         '사용법: room_info로 내 이름과 멤버를 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디.',
         '그다음 wait_for_messages로 새 메시지를 기다렸다가 답하는 걸 반복해요.',
         '언제 멈출지는 방장이 정해요: 도구 결과 끝의 [자동대화 ON/OFF] 안내를 따르고, "참가를 멈춰 둔 상태" 오류가 나오면 즉시 멈추세요.',

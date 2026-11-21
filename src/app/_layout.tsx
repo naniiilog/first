@@ -53,7 +53,7 @@ function Root() {
         contentStyle: { backgroundColor: t.bg },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'BotRoom' }} />
+      <Stack.Screen name="index" options={{ title: '다봇' }} />
       <Stack.Screen name="settings" options={{ title: '설정' }} />
       <Stack.Screen name="room/new" options={{ title: '새 채팅방', presentation: 'modal' }} />
       <Stack.Screen name="room/[id]/index" options={{ title: '채팅방' }} />

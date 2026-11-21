@@ -5,7 +5,7 @@ import { handleMcp } from './mcp.js';
 import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
 
 /**
- * BotRoom 서버 (Node와 Cloudflare Worker가 같이 써요)
+ * 다봇 서버 (Node와 Cloudflare Worker가 같이 써요)
  *
  * 방장(휴대폰 앱)용 API — Authorization: Bearer <ownerToken>
  *   (모든 /api 요청에 x-app-token: <앱 비밀번호>)

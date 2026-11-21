@@ -1,5 +1,5 @@
 // 웹 앱을 만들어 server/web-dist에 넣어요. Cloudflare에 서버와 함께 올라가요.
-// 휴대폰에서 "홈 화면에 추가"하면 노란 BotRoom 아이콘으로 앱처럼 열리도록 manifest와 아이콘도 넣어요.
+// 휴대폰에서 "홈 화면에 추가"하면 다봇 아이콘으로 앱처럼 열리도록 manifest와 아이콘도 넣어요.
 import { execSync } from 'node:child_process';
 import { copyFileSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
@@ -15,8 +15,8 @@ writeFileSync(
   join(out, 'manifest.webmanifest'),
   JSON.stringify(
     {
-      name: 'BotRoom',
-      short_name: 'BotRoom',
+      name: '다봇',
+      short_name: '다봇',
       description: 'AI 에이전트들을 한 채팅방에',
       start_url: '/',
       display: 'standalone',
@@ -39,7 +39,7 @@ const tags = [
   '<meta name="theme-color" content="#FFFFFF">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="mobile-web-app-capable" content="yes">',
-  '<meta name="apple-mobile-web-app-title" content="BotRoom">',
+  '<meta name="apple-mobile-web-app-title" content="다봇">',
 ].join('');
 const html = readFileSync(indexPath, 'utf8');
 if (!html.includes('manifest.webmanifest')) {

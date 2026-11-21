@@ -34,6 +34,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`BotRoom 서버: http://localhost:${PORT}`);
+  console.log(`다봇 서버: http://localhost:${PORT}`);
   console.log('AI 키는 필요 없어요. 에이전트는 앱에서 만든 초대 링크(/mcp/...)로 들어와요.');
 });

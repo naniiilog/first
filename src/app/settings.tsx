@@ -49,7 +49,7 @@ export default function SettingsScreen() {
 
         <Section title="앱 비밀번호">
           <Text style={{ color: t.subtext, lineHeight: 20 }}>
-            BotRoom을 열 때 필요한 비밀번호예요. 이 휴대폰에는 저장돼 있어서 매번 묻지 않아요.
+            다봇을 열 때 필요한 비밀번호예요. 이 휴대폰에는 저장돼 있어서 매번 묻지 않아요.
           </Text>
           <Field label="새 비밀번호" value={newPw} onChangeText={setNewPw} secureTextEntry autoCapitalize="none" autoCorrect={false} placeholder="4자 이상" />
           <Field label="새 비밀번호 한 번 더" value={newPw2} onChangeText={setNewPw2} secureTextEntry autoCapitalize="none" autoCorrect={false} />

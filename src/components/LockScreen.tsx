@@ -46,7 +46,7 @@ export function LockScreen({ mode, onUnlocked, offline }: { mode: 'setup' | 'log
     <KeyboardAvoidingView style={[styles.wrap, { backgroundColor: t.chatBg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ alignItems: 'center', gap: 8, marginBottom: 28 }}>
         <Image source={require('../../assets/icon.png')} style={{ width: 96, height: 96, borderRadius: 24 }} />
-        <Text style={[styles.title, { color: t.text }]}>BotRoom</Text>
+        <Text style={[styles.title, { color: t.text }]}>다봇</Text>
         <Text style={{ color: t.subtext, textAlign: 'center', lineHeight: 21 }}>
           {mode === 'setup' ? '처음이에요! 나만 쓸 수 있게\n앱 비밀번호를 정해 주세요.' : '앱 비밀번호를 입력해 주세요.'}
         </Text>
