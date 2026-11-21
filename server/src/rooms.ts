@@ -10,6 +10,8 @@ export interface RoomRow {
   owner_token: string;
   created_at: number;
   free_talk: number;
+  /** 1이면 '모두 나가기' 상태: 에이전트가 들어와도 바로 대화를 마치라고 안내해요 */
+  closed: number;
 }
 
 export interface MemberRow {
@@ -64,7 +66,7 @@ export class Rooms {
   constructor(private db: Db) {}
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0 };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0 };
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at) VALUES (?, ?, ?, ?)', room.id, room.name, room.owner_token, room.created_at);
     return room;
   }
@@ -88,6 +90,20 @@ export class Rooms {
     );
   }
 
+  /** 모두 나가기(대화 끝내기) / 다시 열기 */
+  async setClosed(room: RoomRow, closed: boolean) {
+    if ((closed ? 1 : 0) === room.closed) return;
+    await this.db.run('UPDATE rooms SET closed = ? WHERE id = ?', closed ? 1 : 0, room.id);
+    await this.post(
+      room.id,
+      SYSTEM_ID,
+      '안내',
+      closed
+        ? '대화를 끝냈어요. 에이전트들이 모두 나가고 더 이상 토큰을 쓰지 않아요.'
+        : '방을 다시 열었어요. 각 에이전트 앱에서 "다봇 방에 다시 들어가"라고 말해 주세요.',
+    );
+  }
+
   async deleteRoom(id: string) {
     await this.db.run('DELETE FROM messages WHERE room_id = ?', id);
     await this.db.run('DELETE FROM members WHERE room_id = ?', id);
@@ -104,8 +120,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }

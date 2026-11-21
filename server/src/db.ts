@@ -52,6 +52,7 @@ export function ensureSchema(db: Db): Promise<void> {
     // 나중에 추가된 칸: 이미 있으면 오류가 나므로 무시해요.
     await db.run('ALTER TABLE rooms ADD COLUMN free_talk INTEGER NOT NULL DEFAULT 0').catch(() => {});
     await db.run('ALTER TABLE members ADD COLUMN avatar TEXT').catch(() => {});
+    await db.run('ALTER TABLE rooms ADD COLUMN closed INTEGER NOT NULL DEFAULT 0').catch(() => {});
   })().catch((err) => {
     schemaReady = null;
     throw err;

@@ -43,13 +43,17 @@ export const api = {
     call<{ room: { id: string; name: string }; ownerToken: string }>(s, '/api/rooms', { method: 'POST', body: { name } }),
 
   getRoom: (s: Settings, r: LocalRoom) =>
-    call<{ room: { id: string; name: string; freeTalk: boolean }; members: Member[] }>(s, `/api/rooms/${r.id}`, { ownerToken: r.ownerToken }),
+    call<{ room: { id: string; name: string; freeTalk: boolean; closed: boolean }; members: Member[] }>(s, `/api/rooms/${r.id}`, { ownerToken: r.ownerToken }),
 
   renameRoom: (s: Settings, r: LocalRoom, name: string) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { name }, ownerToken: r.ownerToken }),
 
   setFreeTalk: (s: Settings, r: LocalRoom, freeTalk: boolean) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { freeTalk }, ownerToken: r.ownerToken }),
+
+  /** 모두 나가기(true) / 다시 열기(false) */
+  setClosed: (s: Settings, r: LocalRoom, closed: boolean) =>
+    call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { closed }, ownerToken: r.ownerToken }),
 
   deleteRoom: (s: Settings, r: LocalRoom) => call(s, `/api/rooms/${r.id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
 

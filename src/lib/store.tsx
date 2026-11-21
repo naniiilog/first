@@ -68,6 +68,7 @@ export function useLiveRoom(roomId: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [freeTalk, setFreeTalk] = useState(false);
+  const [closed, setClosed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const lastId = useRef<number | null>(null);
@@ -78,6 +79,7 @@ export function useLiveRoom(roomId: string | undefined) {
       const res = await api.getRoom(settings, room);
       setMembers(res.members);
       setFreeTalk(res.room.freeTalk);
+      setClosed(res.room.closed);
       if (res.room.name !== room.name) setRoomName(room.id, res.room.name);
       setError(null);
     } catch (e) {
@@ -120,5 +122,5 @@ export function useLiveRoom(roomId: string | undefined) {
     };
   }, [room, refreshMessages, refreshMembers]);
 
-  return { room, messages, members, freeTalk, error, gone, refreshMessages, refreshMembers };
+  return { room, messages, members, freeTalk, closed, error, gone, refreshMessages, refreshMembers };
 }

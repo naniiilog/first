@@ -1,8 +1,9 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderIcon } from '../../../components/HeaderIcon';
+import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { lookOf } from '../../../lib/avatar';
@@ -32,13 +33,14 @@ function toRows(messages: ChatMessage[]): Row[] {
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings, forgetRoom } = useStore();
-  const { room, messages, members, freeTalk, error, gone, refreshMessages, refreshMembers } = useLiveRoom(id);
+  const { room, messages, members, freeTalk, closed, error, gone, refreshMessages, refreshMembers } = useLiveRoom(id);
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<Row>>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -100,17 +102,17 @@ export default function RoomScreen() {
     router.back();
   };
 
-  const openMenu = () => {
-    if (Platform.OS === 'web') {
-      openMembers();
-      return;
+  /** 모두 나가기(대화 끝내기) / 다시 열기 */
+  const setRoomClosed = async (next: boolean) => {
+    try {
+      await api.setClosed(settings, room, next);
+      await Promise.all([refreshMembers(), refreshMessages()]);
+    } catch (e) {
+      fail(e);
     }
-    Alert.alert(room.name, undefined, [
-      { text: '멤버 · 초대 · 프로필', onPress: openMembers },
-      { text: '채팅방 나가기(삭제)', style: 'destructive', onPress: deleteRoom },
-      { text: '취소', style: 'cancel' },
-    ]);
   };
+
+  const openMenu = () => setMenuOpen(true);
 
   const rows = toRows(messages);
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
@@ -173,18 +175,44 @@ export default function RoomScreen() {
         renderItem={({ item }) => <MessageRow row={item} member={memberById[item.msg.authorId]} t={t} onProfile={openMembers} />}
       />
 
-      {/* 자동대화 스위치: 켜짐/꺼짐을 글자로 분명하게 보여줘요 */}
-      <Pressable onPress={toggleFreeTalk} style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
-        <View style={[styles.track, { backgroundColor: freeTalk ? t.accent : t.switchOff }]}>
-          <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: '#FFFFFF' }]} />
+      {closed ? (
+        /* 모두 나가기 상태: 봇들이 다 나가서 토큰을 안 써요 */
+        <View style={[styles.autoBar, { backgroundColor: t.input, borderColor: t.border }]}>
+          <Text style={{ fontSize: 16 }}>🌙</Text>
+          <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>대화 종료</Text>
+          <Text style={{ color: t.subtext, fontSize: 12, flex: 1 }} numberOfLines={1}>
+            · 봇들이 모두 나갔어요
+          </Text>
+          <Pressable onPress={() => setRoomClosed(false)} style={[styles.reopen, { backgroundColor: t.accent }]}>
+            <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>다시 열기</Text>
+          </Pressable>
         </View>
-        <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>
-          자동대화 {freeTalk ? '켜짐' : '꺼짐'}
-        </Text>
-        <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>
-          {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 이름을 부를 때만 답해요'}
-        </Text>
-      </Pressable>
+      ) : (
+        /* 자동대화 스위치: 켜짐/꺼짐을 글자로 분명하게 보여줘요 */
+        <Pressable onPress={toggleFreeTalk} style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
+          <View style={[styles.track, { backgroundColor: freeTalk ? t.accent : t.switchOff }]}>
+            <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: '#FFFFFF' }]} />
+          </View>
+          <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>
+            자동대화 {freeTalk ? '켜짐' : '꺼짐'}
+          </Text>
+          <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>
+            {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 이름을 부를 때만 답해요'}
+          </Text>
+        </Pressable>
+      )}
+
+      <RoomMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
+          closed
+            ? { icon: 'sunny-outline', label: '방 다시 열기', onPress: () => setRoomClosed(false) }
+            : { icon: 'moon-outline', label: '모두 나가기 (대화 끝내기)', onPress: () => setRoomClosed(true) },
+          { icon: 'trash-outline', label: '채팅방 삭제', confirm: '한 번 더 누르면 삭제돼요', danger: true, onPress: deleteRoom },
+        ]}
+      />
 
       <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TextInput
@@ -307,6 +335,7 @@ const styles = StyleSheet.create({
   bubbleText: { fontSize: 15, lineHeight: 21 },
   time: { fontSize: 10, marginBottom: 1, flexShrink: 0 },
   autoBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  reopen: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   track: { width: 40, height: 24, borderRadius: 12, padding: 3, justifyContent: 'center' },
   knob: { width: 18, height: 18, borderRadius: 9 },
   inputBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingTop: 6 },

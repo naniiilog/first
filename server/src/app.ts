@@ -14,7 +14,7 @@ import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.
  *   POST   /api/auth/change                   { password }        비밀번호 바꾸기
  *   POST   /api/rooms                         { name }            → { room, ownerToken }
  *   GET    /api/rooms/:id                                         → { room, members }
- *   PATCH  /api/rooms/:id                     { name?, freeTalk? }
+ *   PATCH  /api/rooms/:id                     { name?, freeTalk?, closed? }
  *   DELETE /api/rooms/:id
  *   GET    /api/rooms/:id/messages?after=ID                       → { messages }
  *   POST   /api/rooms/:id/messages            { text, authorName }
@@ -173,13 +173,17 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
     if (!sub) {
       if (req.method === 'GET') {
         const members = await rooms.members(room.id);
-        return json(200, { room: { id: room.id, name: room.name, freeTalk: room.free_talk === 1 }, members: members.map(publicMember) });
+        return json(200, {
+          room: { id: room.id, name: room.name, freeTalk: room.free_talk === 1, closed: room.closed === 1 },
+          members: members.map(publicMember),
+        });
       }
       if (req.method === 'PATCH') {
         const b = await body(req);
         const name = cleanName(b.name, 40);
         if (name) await rooms.renameRoom(room.id, name);
         if (typeof b.freeTalk === 'boolean') await rooms.setFreeTalk(room, b.freeTalk);
+        if (typeof b.closed === 'boolean') await rooms.setClosed(room, b.closed);
         return json(200, { ok: true });
       }
       if (req.method === 'DELETE') {
