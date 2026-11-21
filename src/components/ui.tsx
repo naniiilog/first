@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { useTheme } from '../lib/theme';
-import type { Bot } from '../lib/types';
 
-export function Avatar({ bot, size = 40 }: { bot: Pick<Bot, 'emoji' | 'color'>; size?: number }) {
+export function Avatar({ bot, size = 40, dim }: { bot: { emoji: string; color: string }; size?: number; dim?: boolean }) {
   return (
     <View
       style={{
@@ -15,6 +14,7 @@ export function Avatar({ bot, size = 40 }: { bot: Pick<Bot, 'emoji' | 'color'>; 
         borderColor: bot.color,
         alignItems: 'center',
         justifyContent: 'center',
+        opacity: dim ? 0.35 : 1,
       }}
     >
       <Text style={{ fontSize: size * 0.5 }}>{bot.emoji}</Text>

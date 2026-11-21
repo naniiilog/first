@@ -1,33 +1,30 @@
 import { Link, Stack, router } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Button } from '../components/ui';
+import { aiOf } from '../lib/ais';
+import { displayName } from '../lib/conversation';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
+import { SYSTEM_ID, USER_ID } from '../lib/types';
 
 export default function RoomsScreen() {
-  const { rooms, botsById, keys } = useStore();
+  const { rooms, available, settings } = useStore();
   const t = useTheme();
-  const hasAnyKey = Object.values(keys).some(Boolean);
 
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 18 }}>
-              <Link href="/bots" style={{ color: t.accent, fontSize: 16, fontWeight: '600' }}>
-                봇
-              </Link>
-              <Link href="/settings" style={{ color: t.accent, fontSize: 16, fontWeight: '600' }}>
-                설정
-              </Link>
-            </View>
+            <Link href="/settings" style={{ color: t.accent, fontSize: 16, fontWeight: '600' }}>
+              설정
+            </Link>
           ),
         }}
       />
-      {!hasAnyKey && (
-        <Pressable onPress={() => router.push('/settings')} style={[styles.banner, { backgroundColor: t.accent + '1A', borderColor: t.accent }]}>
-          <Text style={{ color: t.text, fontWeight: '600' }}>🔑 먼저 설정에서 AI API 키를 입력해 주세요</Text>
+      {available === null && (
+        <Pressable onPress={() => router.push('/settings')} style={[styles.banner, { backgroundColor: t.danger + '1A', borderColor: t.danger }]}>
+          <Text style={{ color: t.text, fontWeight: '600' }}>⚠️ AI 서버에 연결할 수 없어요. 눌러서 확인해 주세요.</Text>
         </Pressable>
       )}
       <FlatList
@@ -38,31 +35,33 @@ export default function RoomsScreen() {
           <View style={styles.empty}>
             <Text style={{ fontSize: 48 }}>💬</Text>
             <Text style={[styles.emptyTitle, { color: t.text }]}>아직 채팅방이 없어요</Text>
-            <Text style={{ color: t.subtext, textAlign: 'center' }}>여러 AI 봇을 한 방에 모아서{'\n'}같이 이야기하거나 토론을 시켜보세요.</Text>
+            <Text style={{ color: t.subtext, textAlign: 'center' }}>
+              ChatGPT, 제미나이, 클로드… 여러 AI를 한 방에 초대해서{'\n'}같이 수다를 떨게 해보세요.
+            </Text>
           </View>
         }
         renderItem={({ item }) => {
-          const members = item.botIds.map((id) => botsById[id]).filter(Boolean);
-          const last = item.messages[item.messages.length - 1];
-          const lastAuthor = last ? (last.authorId === 'user' ? '나' : botsById[last.authorId]?.name ?? '') : '';
+          const last = [...item.messages].reverse().find((m) => m.authorId !== SYSTEM_ID);
+          const lastMember = last && item.members.find((m) => m.id === last.authorId);
+          const lastAuthor = !last ? '' : last.authorId === USER_ID ? settings.userName : lastMember ? displayName(lastMember) : '';
           return (
             <Pressable
               onPress={() => router.push({ pathname: '/room/[id]', params: { id: item.id } })}
               style={({ pressed }) => [styles.row, { backgroundColor: t.card, borderColor: t.border, opacity: pressed ? 0.85 : 1 }]}
             >
               <View style={styles.avatars}>
-                {members.slice(0, 3).map((b, i) => (
-                  <View key={b.id} style={{ marginLeft: i === 0 ? 0 : -14 }}>
-                    <Avatar bot={b} size={36} />
+                {item.members.slice(0, 3).map((m, i) => (
+                  <View key={m.id} style={{ marginLeft: i === 0 ? 0 : -14 }}>
+                    <Avatar bot={aiOf(m.aiId)} size={36} dim={!m.active} />
                   </View>
                 ))}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.roomName, { color: t.text }]} numberOfLines={1}>
-                  {item.name} <Text style={{ color: t.subtext, fontWeight: '400' }}>{members.length}</Text>
+                  {item.name} <Text style={{ color: t.subtext, fontWeight: '400' }}>{item.members.length}</Text>
                 </Text>
                 <Text style={{ color: t.subtext }} numberOfLines={1}>
-                  {last ? `${lastAuthor}: ${last.text}` : members.map((b) => b.name).join(', ')}
+                  {last ? `${lastAuthor}: ${last.text}` : item.members.map(displayName).join(', ')}
                 </Text>
               </View>
             </Pressable>
