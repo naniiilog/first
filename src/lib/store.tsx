@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { api, DEFAULT_APP_TOKEN, DEFAULT_SERVER_URL } from './api';
+import { api, DEFAULT_APP_TOKEN, DEFAULT_SERVER_URL, type RoomInfo } from './api';
 import { loadData, saveData } from './storage';
 import type { ChatMessage, LocalRoom, Member, Settings } from './types';
 
@@ -73,6 +73,7 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
   const [membersLoaded, setMembersLoaded] = useState(!!cached);
   const [freeTalk, setFreeTalk] = useState(cached?.room.freeTalk ?? false);
   const [closed, setClosed] = useState(cached?.room.closed ?? false);
+  const [roomInfo, setRoomInfo] = useState<RoomInfo['room'] | null>(cached?.room ?? null);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const lastId = useRef<number | null>(null);
@@ -91,6 +92,7 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
       setMembersLoaded(true);
       setFreeTalk(res.room.freeTalk);
       setClosed(res.room.closed);
+      setRoomInfo(res.room);
       if (res.room.name !== room.name) setRoomName(room.id, res.room.name);
       setError(null);
     } catch (e) {
@@ -224,6 +226,7 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
     setMembers,
     freeTalk,
     closed,
+    roomInfo,
     error,
     gone,
     refreshMessages,

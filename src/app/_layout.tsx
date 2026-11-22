@@ -59,6 +59,7 @@ function Root() {
       <Stack.Screen name="room/new" options={{ title: '새 채팅방', presentation: 'modal' }} />
       <Stack.Screen name="room/[id]/index" options={{ title: '채팅방' }} />
       <Stack.Screen name="room/[id]/members" options={{ title: '멤버', presentation: 'modal' }} />
+      <Stack.Screen name="room/[id]/settings" options={{ title: '방 설정', presentation: 'modal' }} />
     </Stack>
   );
 }

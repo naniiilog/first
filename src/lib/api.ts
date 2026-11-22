@@ -39,7 +39,20 @@ async function call<T>(s: Settings, path: string, init: { method?: string; body?
 export type AuthStatus = { passwordSet: boolean; ok: boolean };
 
 export interface RoomInfo {
-  room: { id: string; name: string; freeTalk: boolean; closed: boolean };
+  room: {
+    id: string;
+    name: string;
+    freeTalk: boolean;
+    closed: boolean;
+    /** 봇 확인 간격(분, 0이면 실시간) */
+    checkIntervalMin?: number;
+    quietEnabled?: boolean;
+    quietStart?: number;
+    quietEnd?: number;
+    tz?: string;
+    /** 지금 매너타임인지 */
+    quietNow?: boolean;
+  };
   members: Member[];
 }
 const roomCache = new Map<string, { etag: string; data: RoomInfo }>();
@@ -75,6 +88,13 @@ export const api = {
 
   setFreeTalk: (s: Settings, r: LocalRoom, freeTalk: boolean) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { freeTalk }, ownerToken: r.ownerToken }),
+
+  /** 확인 간격·매너타임 바꾸기 */
+  setSchedule: (
+    s: Settings,
+    r: LocalRoom,
+    patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string },
+  ) => call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 모두 쉬게 하기(true) / 다시 부르기(false) */
   setClosed: (s: Settings, r: LocalRoom, closed: boolean) =>

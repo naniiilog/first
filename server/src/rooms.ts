@@ -12,6 +12,14 @@ export interface RoomRow {
   free_talk: number;
   /** 1이면 '봇 모두 쉬게 하기' 상태: 에이전트가 들어와도 바로 대화를 마치라고 안내해요 */
   closed: number;
+  /** 봇이 방을 확인하는 간격(분). 0이면 실시간 */
+  check_interval_min: number;
+  /** 매너타임: 이 시간에는 봇이 확인도 말도 안 해요(방장이 이름을 부르면 예외) */
+  quiet_enabled: number;
+  quiet_start: number;
+  quiet_end: number;
+  /** 매너타임을 계산할 시간대 */
+  tz: string;
 }
 
 export interface MemberRow {
@@ -27,6 +35,8 @@ export interface MemberRow {
   avatar: string | null;
   /** 이 에이전트가 마지막으로 읽은 메시지 번호(서버가 대신 기억해요) */
   read_cursor: number;
+  /** 마지막으로 방을 확인한 시각(확인 간격 계산용) */
+  last_check: number | null;
 }
 
 export interface MessageRow {
@@ -71,11 +81,13 @@ export const publicMessage = (m: MessageRow) => ({
   image: m.image ?? null,
 });
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
 export class Rooms {
   constructor(private db: Db) {}
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0 };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 30, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul' };
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at) VALUES (?, ?, ?, ?)', room.id, room.name, room.owner_token, room.created_at);
     return room;
   }
@@ -96,6 +108,37 @@ export class Rooms {
       SYSTEM_ID,
       '안내',
       on ? '자동대화를 켰어요. 에이전트들이 멈추지 않고 계속 대화를 이어가요.' : '자동대화를 껐어요. 이제 이름을 불러야 답해요.',
+    );
+  }
+
+  /** 확인 간격·매너타임 바꾸기 */
+  async setSchedule(room: RoomRow, patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string }) {
+    const next = {
+      check_interval_min: patch.checkIntervalMin ?? room.check_interval_min,
+      quiet_enabled: patch.quietEnabled === undefined ? room.quiet_enabled : patch.quietEnabled ? 1 : 0,
+      quiet_start: patch.quietStart ?? room.quiet_start,
+      quiet_end: patch.quietEnd ?? room.quiet_end,
+      tz: patch.tz ?? room.tz,
+    };
+    await this.db.run(
+      'UPDATE rooms SET check_interval_min = ?, quiet_enabled = ?, quiet_start = ?, quiet_end = ?, tz = ? WHERE id = ?',
+      next.check_interval_min, next.quiet_enabled, next.quiet_start, next.quiet_end, next.tz, room.id,
+    );
+    const interval = next.check_interval_min === 0 ? '실시간' : `${next.check_interval_min}분마다`;
+    const quiet = next.quiet_enabled ? `매너타임 ${pad2(next.quiet_start)}:00~${pad2(next.quiet_end)}:00` : '매너타임 없음';
+    await this.post(room.id, SYSTEM_ID, '안내', `방 설정을 바꿨어요. 봇 확인: ${interval} · ${quiet}`);
+  }
+
+  /** 확인 간격 계산용으로 '마지막 확인 시각'을 남겨요. */
+  markChecked(memberId: string) {
+    return this.db.run('UPDATE members SET last_check = ? WHERE id = ?', Date.now(), memberId);
+  }
+
+  /** 방장이 afterId 뒤에 쓴 글(확인 간격·매너타임 예외 판단용) */
+  ownerMessagesAfter(roomId: string, afterId: number) {
+    return this.db.all<Pick<MessageRow, 'id' | 'text'>>(
+      'SELECT id, text FROM messages WHERE room_id = ? AND author_id = ? AND id > ? ORDER BY id LIMIT 50',
+      roomId, OWNER_ID, afterId,
     );
   }
 
@@ -161,6 +204,7 @@ export class Rooms {
       last_seen: null,
       avatar: null,
       read_cursor: 0,
+      last_check: null,
     };
     await this.db.run(
       'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

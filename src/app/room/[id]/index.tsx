@@ -1,7 +1,7 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderIcon } from '../../../components/HeaderIcon';
 import { RoomMenu } from '../../../components/RoomMenu';
@@ -36,7 +36,7 @@ export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings, forgetRoom } = useStore();
   const live = useLiveRoom(id);
-  const { room, messages, members, freeTalk, closed, error, gone } = live;
+  const { room, messages, members, freeTalk, closed, error, gone, roomInfo } = live;
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
@@ -78,6 +78,7 @@ export default function RoomScreen() {
     );
   }
 
+  const openSettings = () => room && router.push({ pathname: '/room/[id]/settings', params: { id: room.id } });
   const openMembers = () => router.push({ pathname: '/room/[id]/members', params: { id: room.id } });
   /** 버튼 동작은 화면을 먼저 바꾸고(바로 반응), 실패하면 되돌린 뒤 이유를 보여줘요. */
   const run = (p: Promise<string | null>) => {
@@ -157,13 +158,18 @@ export default function RoomScreen() {
         }}
       />
 
+      {/* 봇이 많아도 한눈에 보이게: 옆으로 밀지 않고 여러 줄로 작게 보여줘요(너무 많으면 이 칸만 위아래로 밀어요). */}
       <View style={styles.memberBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 10 }}>
+        <Text style={[styles.memberSummary, { color: t.chatTime }]}>
+          참가 {members.filter((m) => m.active).length} · 대화 중 {members.filter((m) => m.active && m.online).length} · 쉬는 중{' '}
+          {members.filter((m) => !m.active).length}
+        </Text>
+        <ScrollView style={{ maxHeight: 96 }} contentContainerStyle={styles.memberWrap} showsVerticalScrollIndicator={false}>
           {members.map((m) => (
             <MemberChip key={m.id} member={m} onPress={() => run(live.toggleMember(m))} />
           ))}
           <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
-            <Text style={{ color: t.accentPurple, fontWeight: '700', paddingHorizontal: 6 }}>＋ 초대</Text>
+            <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
           </Pressable>
         </ScrollView>
       </View>
@@ -245,9 +251,15 @@ export default function RoomScreen() {
           <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>
             자동대화 {freeTalk ? '켜짐' : '꺼짐'}
           </Text>
-          <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>
+          <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1, flex: 1 }} numberOfLines={1}>
             {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 이름을 부를 때만 답해요'}
           </Text>
+          {/* 확인 간격·매너타임: 누르면 방 설정으로 */}
+          <Pressable onPress={openSettings} hitSlop={6} style={[styles.schedPill, { backgroundColor: roomInfo?.quietNow ? t.accentSoft : t.input }]}>
+            <Text style={{ color: roomInfo?.quietNow ? t.accentPurple : t.subtext, fontSize: 11, fontWeight: '700' }}>
+              {roomInfo?.quietNow ? '🌙 매너타임' : `⏱ ${scheduleLabel(roomInfo?.checkIntervalMin ?? 30)}`}
+            </Text>
+          </Pressable>
         </Pressable>
       )}
 
@@ -256,6 +268,7 @@ export default function RoomScreen() {
         onClose={() => setMenuOpen(false)}
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
+          { icon: 'time-outline', label: '확인 간격 · 매너타임', onPress: openSettings },
           closed
             ? { icon: 'sunny-outline', label: '봇 다시 부르기', onPress: () => run(live.setRoomClosed(false)) }
             : { icon: 'moon-outline', label: '봇 모두 쉬게 하기', onPress: () => run(live.setRoomClosed(true)) },
@@ -325,18 +338,42 @@ export default function RoomScreen() {
   );
 }
 
-/** 위쪽 멤버 칩: 누르면 참가를 켜고 꺼요. 참가 중이면 초록불, 쉬는 중이면 빨간불. */
+const scheduleLabel = (n: number) => (n === 0 ? '실시간' : n >= 60 ? `${n / 60}시간마다` : `${n}분마다`);
+
+/** 지금 대화 중인 봇의 초록불: 깜빡깜빡 */
+function BlinkDot() {
+  const [opacity] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.2, duration: 550, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(opacity, { toValue: 1, duration: 550, useNativeDriver: Platform.OS !== 'web' }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return <Animated.View style={[styles.dot, { backgroundColor: '#22C55E', opacity }]} />;
+}
+
+/**
+ * 위쪽 멤버 칩: 누르면 참가를 켜고 꺼요.
+ * 대화 중(최근 확인)이면 초록불이 깜빡이고, 참가 중이면 초록불, 쉬는 중이면 빨간불.
+ */
 function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
   const t = useTheme();
+  const talking = member.active && member.online;
   return (
     <Pressable
       onPress={onPress}
-      accessibilityLabel={`${member.name} ${member.active ? '참가 중' : '쉬는 중'}`}
-      style={[styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff }]}
+      accessibilityLabel={`${member.name} ${!member.active ? '쉬는 중' : talking ? '대화 중' : '참가 중'}`}
+      style={({ pressed }) => [styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff, opacity: pressed ? 0.6 : 1 }]}
     >
-      <Avatar bot={lookOf(member.kind, member.avatar)} size={22} dim={!member.active} />
-      <Text style={{ color: member.active ? t.text : t.subtext, fontWeight: '600', fontSize: 12 }}>{member.name}</Text>
-      <View style={[styles.dot, { backgroundColor: member.active ? '#22C55E' : '#EF4444' }]} />
+      <Avatar bot={lookOf(member.kind, member.avatar)} size={18} dim={!member.active} />
+      <Text style={{ color: member.active ? t.text : t.subtext, fontWeight: '600', fontSize: 11 }} numberOfLines={1}>
+        {member.name}
+      </Text>
+      {talking ? <BlinkDot /> : <View style={[styles.dot, { backgroundColor: member.active ? '#22C55E' : '#EF4444' }]} />}
     </Pressable>
   );
 }
@@ -500,9 +537,12 @@ const styles = StyleSheet.create({
   attachBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  memberBar: { paddingVertical: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 3, paddingRight: 8, paddingVertical: 3, borderRadius: 999 },
-  dot: { width: 9, height: 9, borderRadius: 5, marginLeft: 1 },
+  memberBar: { paddingTop: 2, paddingBottom: 6, paddingHorizontal: 10, gap: 4 },
+  schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  memberSummary: { fontSize: 11, marginLeft: 2 },
+  memberWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 3, paddingRight: 7, paddingVertical: 2, borderRadius: 999, maxWidth: 150 },
+  dot: { width: 8, height: 8, borderRadius: 4, marginLeft: 1 },
   errorBar: { paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
   systemPill: { fontSize: 12, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, overflow: 'hidden', maxWidth: 320 },
   mineRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 5 },

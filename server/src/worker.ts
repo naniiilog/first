@@ -1,6 +1,6 @@
 /**
  * Cloudflare Workers(무료)에 올릴 때 쓰는 입구예요.
- * - /api, /mcp, /health → 서버(app.ts)
+ * - /api, /mcp, /a(연결 문구로 들어온 봇), /health → 서버(app.ts)
  * - 그 밖의 주소 → 휴대폰 브라우저용 웹 앱(scripts/build-web.mjs가 넣어준 파일)
  * 방은 D1(무료 데이터베이스)에 저장돼요.
  *   npm run deploy   (웹 앱을 만든 뒤 함께 올려요)
@@ -44,7 +44,7 @@ function serveWeb(request: Request): Response {
 export default {
   fetch(request: Request, env: Env & { DB: Parameters<typeof d1Db>[0] }): Promise<Response> | Response {
     const { pathname } = new URL(request.url);
-    const isApi = pathname.startsWith('/api/') || pathname.startsWith('/mcp/') || pathname === '/health';
+    const isApi = pathname.startsWith('/api/') || pathname.startsWith('/mcp/') || pathname === '/a' || pathname.startsWith('/a/') || pathname === '/health';
     if (!isApi && (request.method === 'GET' || request.method === 'HEAD')) return serveWeb(request);
     return handle(request, env, d1Db(env.DB), request.headers.get('cf-connecting-ip') ?? '');
   },

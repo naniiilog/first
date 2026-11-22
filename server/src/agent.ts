@@ -20,12 +20,14 @@ const RELAY_SLOT_MS = 40_000; // 앞 봇이 40초 넘게 조용하면 다음 봇
 const PRESENT_MS = 2 * 60_000; // 2분 안에 다녀간 봇만 '방에 있는' 것으로 봐요
 export const MAX_IMAGE_BYTES = 600 * 1024;
 
-export type AgentErrorCode = 'gone' | 'resting' | 'paused' | 'not_called' | 'not_your_turn' | 'duplicate' | 'secret' | 'bad_request';
+export type AgentErrorCode = 'gone' | 'resting' | 'paused' | 'not_called' | 'not_your_turn' | 'duplicate' | 'secret' | 'bad_request' | 'too_early' | 'quiet_hours';
 export interface AgentError {
   error: AgentErrorCode;
   message: string;
+  /** 몇 초 뒤에 다시 하면 되는지(확인 간격·매너타임) */
+  retryAfter?: number;
 }
-const fail = (error: AgentErrorCode, message: string): AgentError => ({ error, message });
+const fail = (error: AgentErrorCode, message: string, retryAfter?: number): AgentError => ({ error, message, ...(retryAfter ? { retryAfter } : {}) });
 export const isError = (v: unknown): v is AgentError => !!v && typeof v === 'object' && 'error' in v;
 
 export const GONE = fail('gone', '이 초대 링크는 더 이상 쓸 수 없어요. 방에서 내보내졌거나 방이 삭제됐어요.');
@@ -48,6 +50,36 @@ export function imageFrom(b64: unknown, type: unknown): string | null | AgentErr
   if (clean.length * 0.75 > MAX_IMAGE_BYTES) return fail('bad_request', `사진이 너무 커요. ${Math.round(MAX_IMAGE_BYTES / 1024)}KB 이하로 줄여 주세요.`);
   return `data:${type};base64,${clean}`;
 }
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** 방의 시간대 기준 지금 시·분·초 */
+function localClock(tz: string, now: number) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(now));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+    return { h: get('hour') % 24, m: get('minute'), s: get('second') };
+  } catch {
+    const d = new Date(now + 9 * 3600_000); // 시간대를 모르면 한국 시간
+    return { h: d.getUTCHours(), m: d.getUTCMinutes(), s: d.getUTCSeconds() };
+  }
+}
+
+/** 지금이 매너타임인지, 끝나기까지 몇 초 남았는지 */
+export function quietState(room: RoomRow, now = Date.now()): { quiet: boolean; secondsLeft: number } {
+  if (room.quiet_enabled !== 1 || room.quiet_start === room.quiet_end) return { quiet: false, secondsLeft: 0 };
+  const { h, m, s } = localClock(room.tz || 'Asia/Seoul', now);
+  const start = room.quiet_start;
+  const end = room.quiet_end;
+  const quiet = start < end ? h >= start && h < end : h >= start || h < end;
+  if (!quiet) return { quiet: false, secondsLeft: 0 };
+  const nowSec = h * 3600 + m * 60 + s;
+  let left = end * 3600 - nowSec;
+  if (left <= 0) left += 24 * 3600;
+  return { quiet: true, secondsLeft: left };
+}
+
+export const quietLabel = (room: RoomRow) => `${pad2(room.quiet_start)}:00~${pad2(room.quiet_end)}:00`;
 
 type RelayRow = Pick<MessageRow, 'id' | 'author_id' | 'created_at' | 'text'>;
 
@@ -92,9 +124,39 @@ export class AgentSession {
 
   /** 지금 어떻게 행동할지 한 줄 안내 */
   hint(freeTalk = this.freeTalk): string {
-    return freeTalk
-      ? '[자동대화 ON] 멈추지 말고 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 방장 질문에는 차례대로 한 명씩 답해요.'
-      : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 계속 기다리세요(보내도 서버가 막아요).`;
+    const talk = freeTalk
+      ? '[자동대화 ON] 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 방장 질문에는 차례대로 한 명씩 답해요.'
+      : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 기다리세요(보내도 서버가 막아요).`;
+    const every = this.room.check_interval_min;
+    const interval = every > 0
+      ? ` [확인 간격 ${every}분] 방은 ${every}분마다 확인하세요(방장이 새 글을 쓰면 그 전에도 돼요). 예약 기능이 있으면 ${every}분 뒤로 예약하고 대화를 마쳐도 돼요.`
+      : ' [확인 간격 실시간]';
+    const quiet = this.room.quiet_enabled === 1 ? ` [매너타임 ${quietLabel(this.room)}] 이 시간에는 확인도 말도 하지 마세요(방장이 이름을 부르면 예외).` : '';
+    return talk + interval + quiet;
+  }
+
+  /**
+   * 방 확인(읽기·기다리기) 전에 확인 간격과 매너타임을 지켜요.
+   * - 매너타임: 방장이 내 이름을 부른 새 글이 있을 때만 확인할 수 있어요.
+   * - 확인 간격: 지난번 확인 뒤 간격이 안 지났으면, 방장이 새 글을 썼을 때만 확인할 수 있어요.
+   */
+  async gateCheck(): Promise<AgentError | null> {
+    const now = Date.now();
+    const q = quietState(this.room, now);
+    const every = this.room.check_interval_min * 60_000;
+    const early = every > 0 && this.me.last_check !== null && now - this.me.last_check < every;
+    if (q.quiet || early) {
+      const owner = await this.rooms.ownerMessagesAfter(this.room.id, this.me.read_cursor);
+      if (q.quiet && !owner.some((m) => mentions(m.text, this.me.name))) {
+        return fail('quiet_hours', `지금은 매너타임(${quietLabel(this.room)})이에요. ${pad2(this.room.quiet_end)}:00 이후에 다시 확인하세요.`, q.secondsLeft);
+      }
+      if (!q.quiet && early && owner.length === 0) {
+        const left = Math.ceil((this.me.last_check! + every - now) / 1000);
+        return fail('too_early', `확인 간격은 ${this.room.check_interval_min}분이에요. ${Math.ceil(left / 60)}분 뒤에 다시 확인하세요.`, left);
+      }
+    }
+    await this.rooms.markChecked(this.me.id);
+    return null;
   }
 
   /** 메시지 읽기. after를 안 주면 서버가 기억한 위치부터 읽어요. */
@@ -113,6 +175,13 @@ export class AgentSession {
     const last = await this.rooms.lastMessageBy(this.room.id, this.me.id);
     if (last && normalize(last.text) === normalize(text)) {
       return fail('duplicate', '방금 보낸 것과 같은 내용이라 보내지 않았어요. 다른 말을 하거나 기다리세요.');
+    }
+    const q = quietState(this.room);
+    if (q.quiet) {
+      const since = await this.rooms.messagesSinceMine(this.room.id, this.me.id);
+      if (!since.some((m) => m.author_id === OWNER_ID && mentions(m.text, this.me.name))) {
+        return fail('quiet_hours', `지금은 매너타임(${quietLabel(this.room)})이라 말할 수 없어요. 방장이 이름을 부르면 답할 수 있어요.`, q.secondsLeft);
+      }
     }
     if (!this.freeTalk) {
       const since = await this.rooms.messagesSinceMine(this.room.id, this.me.id);
@@ -149,6 +218,15 @@ export class AgentSession {
    */
   async wait(after: number | null | undefined, timeoutSec: number, pollMs: number) {
     const from = after ?? this.me.read_cursor;
+    // 확인 간격이 있으면 오래 붙잡고 기다리지 않고, 지금 새 글만 보여주고 끝내요(다음 확인은 간격 뒤에).
+    if (this.room.check_interval_min > 0) {
+      const rows = (await this.rooms.messages(this.room.id, from, 200)).filter((m) => m.author_id !== this.me.id);
+      if (!rows.length) return { idle: true as const, lastId: from, freeTalk: this.freeTalk };
+      const lastId = rows[rows.length - 1].id;
+      await this.rooms.setCursor(this.me.id, lastId);
+      const relay = relayState(await this.rooms.relayRows(this.room.id), await this.rooms.members(this.room.id), this.me, this.freeTalk, Date.now());
+      return { rows: rows.slice(-30), lastId, freeTalk: this.freeTalk, replyTo: relay?.waitingFor ? null : (relay?.questionId ?? null) };
+    }
     const deadline = Date.now() + timeoutSec * 1000;
     const members = await this.rooms.members(this.room.id);
     let polls = 0;

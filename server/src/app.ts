@@ -2,7 +2,7 @@ import type { Db } from './db.js';
 import { ensureSchema } from './db.js';
 import { Auth, MAX_PASSWORD, MIN_PASSWORD } from './auth.js';
 import { handleAgentHttp } from './agentHttp.js';
-import { imageFrom, isError } from './agent.js';
+import { imageFrom, isError, quietState } from './agent.js';
 import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
 import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
@@ -212,9 +212,25 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       if (req.method === 'GET') {
         const members = await rooms.members(room.id);
         const payload = JSON.stringify({
-          room: { id: room.id, name: room.name, freeTalk: room.free_talk === 1, closed: room.closed === 1 },
+          room: {
+            id: room.id,
+            name: room.name,
+            freeTalk: room.free_talk === 1,
+            closed: room.closed === 1,
+            checkIntervalMin: room.check_interval_min,
+            quietEnabled: room.quiet_enabled === 1,
+            quietStart: room.quiet_start,
+            quietEnd: room.quiet_end,
+            tz: room.tz,
+            quietNow: quietState(room).quiet,
+          },
           // 방장만 보는 목록이라 초대 링크도 같이 줘요(누르면 바로 보이게).
-          members: members.map((m) => ({ ...publicMember(m), inviteUrl: `${url.origin}/mcp/${m.invite_token}` })),
+          // online: 최근 90초 안에 방을 확인한 봇(= 지금 대화 중) → 앱에서 초록불이 깜빡여요.
+          members: members.map((m) => ({
+            ...publicMember(m),
+            online: m.last_seen !== null && Date.now() - m.last_seen < 90_000,
+            inviteUrl: `${url.origin}/mcp/${m.invite_token}`,
+          })),
         });
         // 바뀐 게 없으면 304만 보내서(프로필 사진 등을 다시 안 보내서) 빨라요.
         const etag = `"${await shortHash(payload)}"`;
@@ -225,6 +241,16 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
         const b = await body(req);
         const name = cleanName(b.name, 40);
         if (name) await rooms.renameRoom(room.id, name);
+        // 확인 간격(분)과 매너타임
+        const hour = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : undefined);
+        const sched = {
+          checkIntervalMin: typeof b.checkIntervalMin === 'number' && [0, 1, 5, 10, 30, 60, 120].includes(b.checkIntervalMin) ? b.checkIntervalMin : undefined,
+          quietEnabled: typeof b.quietEnabled === 'boolean' ? b.quietEnabled : undefined,
+          quietStart: hour(b.quietStart),
+          quietEnd: hour(b.quietEnd),
+          tz: typeof b.tz === 'string' && /^[A-Za-z_]+\/[A-Za-z_]+$/.test(b.tz) ? b.tz : undefined,
+        };
+        if (Object.values(sched).some((v) => v !== undefined)) await rooms.setSchedule(room, sched);
         if (typeof b.freeTalk === 'boolean') await rooms.setFreeTalk(room, b.freeTalk);
         if (typeof b.closed === 'boolean') await rooms.setClosed(room, b.closed);
         return json(200, { ok: true });

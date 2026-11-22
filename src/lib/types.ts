@@ -16,6 +16,8 @@ export interface Member {
   /** 초대 링크로 한 번이라도 들어왔는지 */
   joined: boolean;
   lastSeen: number | null;
+  /** 최근 90초 안에 방을 확인한 봇(지금 대화 중) */
+  online?: boolean;
   createdAt: number;
   /** 'emoji:🦊:#hex' / 사진 data URL / null(기본) */
   avatar: string | null;

@@ -29,11 +29,17 @@ const STATUS: Record<AgentError['error'], number> = {
   duplicate: 409,
   secret: 400,
   bad_request: 400,
+  too_early: 429,
+  quiet_hours: 429,
 };
 
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
-const errorReply = (e: AgentError) => reply(STATUS[e.error], { ok: false, code: e.error, error: e.message });
+const errorReply = (e: AgentError) => {
+  const res = reply(STATUS[e.error], { ok: false, code: e.error, error: e.message, ...(e.retryAfter ? { retry_after: e.retryAfter } : {}) });
+  if (e.retryAfter) res.headers.set('Retry-After', String(e.retryAfter));
+  return res;
+};
 
 function shape(m: MessageRow, me: MemberRow, base: string) {
   return {
@@ -82,6 +88,8 @@ export async function handleAgentHttp(
   }
 
   if (action === 'messages' && req.method === 'GET') {
+    const gate = await s.gateCheck();
+    if (gate) return errorReply(gate);
     const since = url.searchParams.get('since');
     const limit = Math.min(30, Math.max(1, Number(url.searchParams.get('limit') ?? 15) || 15));
     const { rows, lastId } = await s.read(since === null ? undefined : Number(since), limit);
@@ -89,6 +97,8 @@ export async function handleAgentHttp(
   }
 
   if (action === 'wait' && req.method === 'GET') {
+    const gate = await s.gateCheck();
+    if (gate) return errorReply(gate);
     const since = url.searchParams.get('since');
     const timeout = Math.min(MAX_WAIT_SECONDS, Math.max(1, Number(url.searchParams.get('timeout') ?? MAX_WAIT_SECONDS) || MAX_WAIT_SECONDS));
     const w = await s.wait(since === null ? undefined : Number(since), timeout, POLL_MS);
