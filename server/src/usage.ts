@@ -12,6 +12,20 @@ export type ResetMode = 'daily' | 'hours';
 
 export const DEFAULT_RESET: { mode: ResetMode; value: number } = { mode: 'daily', value: 0 };
 
+/**
+ * AI 종류별 기본 초기화 주기(2026년 11월에 찾아본 정보 기준, 앱 화면의 설명과 같아요).
+ * 클로드·제미나이: 첫 메시지부터 5시간 창, ChatGPT: 약 3시간 창, 그록(무료): 약 2시간 창, 피클: 매일 새벽 4시.
+ * 정보가 없는 앱은 매일 0시로 두고, 방장이 바꿀 수 있어요.
+ */
+export const RESET_BY_KIND: Record<string, { mode: ResetMode; value: number }> = {
+  chatgpt: { mode: 'hours', value: 3 },
+  claude: { mode: 'hours', value: 5 },
+  gemini: { mode: 'hours', value: 5 },
+  grok: { mode: 'hours', value: 2 },
+  pickle: { mode: 'daily', value: 4 },
+};
+export const resetForKind = (kind: string) => RESET_BY_KIND[kind] ?? DEFAULT_RESET;
+
 /** 그 시간대에서 지금 몇 시 몇 분 몇 초인지 */
 function localSeconds(tz: string, at: number): number {
   try {

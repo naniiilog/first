@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '../components/ui';
 import { api, type UsageInfo, type UsageMember } from '../lib/api';
-import { aiOf } from '../lib/ais';
+import { aiOf, limitOf } from '../lib/ais';
 import { lookOf } from '../lib/avatar';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
@@ -76,6 +76,17 @@ function BotCard({ m, max, now, onReset, onClear }: {
       <Text style={{ color: t.subtext, fontSize: 11 }}>
         읽은 양 약 {fmt(tokIn)} · 쓴 양 약 {fmt(tokOut)} 토큰 {u.since ? `· ${clock(u.since)}부터` : '· 이번 주기 사용 없음'}
       </Text>
+
+      {/* 그 AI 앱의 한도가 다시 차는 방식 */}
+      <View style={[styles.limit, { borderColor: t.border }]}>
+        <Text style={{ color: t.text, fontSize: 12, fontWeight: '700' }}>
+          📘 {ai.name} 한도{' '}
+          <Text style={{ color: t.subtext, fontWeight: '500' }}>
+            ({limitOf(m.kind).basis === 'official' ? '회사 안내' : limitOf(m.kind).basis === 'reported' ? '기사·사용자 보고' : '확인 안 됨'})
+          </Text>
+        </Text>
+        <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 17 }}>{limitOf(m.kind).text}</Text>
+      </View>
 
       {/* 초기화 */}
       <Pressable onPress={() => setEditing((v) => !v)} style={[styles.resetRow, { backgroundColor: t.input }]}>
@@ -212,8 +223,8 @@ export default function UsageScreen() {
     <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16, gap: 24, paddingBottom: 48 }}>
       <View style={[styles.note, { backgroundColor: t.accentSoft }]}>
         <Text style={{ color: t.text, fontSize: 12, lineHeight: 18 }}>
-          다봇에서 주고받은 양만 세요. 토큰은 글자 수로 어림잡은 값이고, 각 AI 앱의 실제 남은 한도는 그 앱에서만 볼 수 있어요. 초기화 주기는 그 앱의 한도가 다시
-          차는 때에 맞춰 두면 편해요.
+          숫자는 다봇에서 쓴 양이에요(토큰은 글자 수로 어림잡은 값). 초기화 주기는 각 AI 앱의 한도가 다시 차는 방식에 맞춰 미리 넣어 뒀어요(2026년 11월 기준). 요금제마다 다를 수 있어서, 다르면
+          “바꾸기”로 고쳐 주세요.
         </Text>
       </View>
       {list.length === 0 ? <Text style={{ color: t.subtext }}>채팅방이 없어요.</Text> : null}
@@ -234,6 +245,7 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 8 },
   barBg: { height: 8, borderRadius: 4, overflow: 'hidden' },
   bar: { height: 8, borderRadius: 4 },
+  limit: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 10, gap: 3 },
   resetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   choice: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },

@@ -1,3 +1,4 @@
+import { resetForKind } from './usage.js';
 import type { Db } from './db.js';
 
 export const OWNER_ID = 'owner';
@@ -262,12 +263,12 @@ export class Rooms {
       use_sent: 0,
       use_in: 0,
       use_out: 0,
-      reset_mode: 'daily',
-      reset_value: 0,
+      reset_mode: resetForKind(kind).mode,
+      reset_value: resetForKind(kind).value,
     };
     await this.db.run(
-      'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      m.id, m.room_id, m.kind, m.name, m.invite_token, m.active, m.created_at,
+      'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at, reset_mode, reset_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      m.id, m.room_id, m.kind, m.name, m.invite_token, m.active, m.created_at, m.reset_mode, m.reset_value,
     );
     await this.post(roomId, SYSTEM_ID, '안내', `${name} 님을 초대했어요.`);
     return m;
