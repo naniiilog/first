@@ -6,6 +6,8 @@ export interface AiKind {
   color: string;
   /** 그 앱에서 초대 링크를 커넥터로 넣는 방법 */
   howTo: string;
+  /** '다시 부르기'로 열 그 앱 주소(문구를 미리 넣어 주는 앱은 문구 포함) */
+  appLink?: (text: string) => string;
 }
 
 const GENERIC = '이 에이전트가 "MCP 커넥터"나 "원격 MCP 서버"를 지원하면, 그 설정에 초대 링크를 붙여넣어요(인증 없음).';
@@ -16,6 +18,7 @@ export const AI_KINDS: AiKind[] = [
     name: 'ChatGPT',
     emoji: '🤖',
     color: '#10A37F',
+    appLink: (q) => `https://chatgpt.com/?q=${encodeURIComponent(q)}`,
     howTo: 'ChatGPT 웹 → 설정 → 앱 및 커넥터 → 고급 설정에서 개발자 모드 켜기 → 만들기 → 초대 링크를 URL에 붙여넣고 인증 "없음". (유료 요금제에서만 돼요)',
   },
   {
@@ -23,6 +26,7 @@ export const AI_KINDS: AiKind[] = [
     name: '제미나이',
     emoji: '✨',
     color: '#4285F4',
+    appLink: () => 'https://gemini.google.com/app',
     howTo:
       '휴대폰 브라우저로 gemini.google.com 열기 → 설정 → 커넥터(또는 연결된 앱) → + 맞춤(Custom, 맞춤 앱 추가) → 초대 링크를 URL에 붙여넣기 → 인증 "없음". 앱이 아니라 웹에서 추가해야 하고, 추가하면 앱에서도 써요. 제미나이 Tasks(구 Spark)에서 쓰는 기능이라 계정·지역에 따라 아직 안 보일 수 있어요. 활동 기록(Keep Activity)이 켜져 있어야 해요.',
   },
@@ -31,10 +35,11 @@ export const AI_KINDS: AiKind[] = [
     name: '클로드',
     emoji: '🧠',
     color: '#D97757',
+    appLink: (q) => `https://claude.ai/new?q=${encodeURIComponent(q)}`,
     howTo: '클로드 → 설정(맞춤 설정) → 커넥터 → 사용자 지정 커넥터 추가 → 초대 링크를 URL에 붙여넣기. (무료 요금제는 1개까지)',
   },
   { id: 'muse', name: '뮤즈', emoji: '🎨', color: '#0866FF', howTo: GENERIC },
-  { id: 'grok', name: '그록봇', emoji: '⚡', color: '#6B6B6B', howTo: GENERIC },
+  { id: 'grok', name: '그록봇', emoji: '⚡', color: '#6B6B6B', howTo: GENERIC, appLink: (q) => `https://grok.com/?q=${encodeURIComponent(q)}` },
   { id: 'pickle', name: '피클', emoji: '🥒', color: '#5FA83A', howTo: GENERIC },
   { id: 'buoy', name: '부이', emoji: '🛟', color: '#E8603C', howTo: GENERIC },
   { id: 'keyring', name: '키링', emoji: '🔑', color: '#D4A017', howTo: GENERIC },
@@ -49,6 +54,10 @@ export const aiOf = (id: string): AiKind => AI_BY_ID[id] ?? AI_BY_ID.other;
 /** 에이전트에게 처음 시킬 말(복사해서 그 앱에 붙여넣기) */
 export const KICKOFF_PROMPT =
   '다봇 커넥터로 채팅방에 들어가서 room_info와 read_messages로 상황을 보고 대화에 참여해줘. 그다음 wait_for_messages로 기다렸다가 짧게 답하는 걸 계속 반복해줘. 도구 결과에 나오는 [자동대화] 안내를 따르고, 참가를 멈췄다는 안내가 나오기 전까지는 스스로 멈추지 마.';
+
+/** 멈춘 봇을 다시 부를 때 그 AI 앱에 보낼 말 */
+export const rejoinText = (name: string) =>
+  `다봇 커넥터로 채팅방에 다시 들어가서(방에서 내 이름: ${name}) room_info와 read_messages로 밀린 대화를 보고 이어서 참여해줘. 그다음 wait_for_messages로 기다렸다가 짧게 답하는 걸 계속 반복하고, 참가를 멈췄다는 안내가 나오기 전까지는 스스로 멈추지 마.`;
 
 /**
  * MCP 커넥터가 없는 에이전트에게 보낼 '연결 문구'.

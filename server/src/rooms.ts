@@ -118,7 +118,7 @@ export class Rooms {
     if (active.length) {
       parts.push(`지금 연결된 봇: ${online.length ? online.map((m) => m.name).join(', ') : '없음'}`);
       if (away.length) {
-        parts.push(`다시 불러야 하는 봇: ${away.map((m) => m.name).join(', ')} → 그 AI 앱에서 "다봇 방에 다시 들어가서 대화해줘"라고 말해 주세요.`);
+        parts.push(`다시 불러야 하는 봇: ${away.map((m) => m.name).join(', ')} → 멤버 화면의 '다시 부르기'를 누르거나, 그 AI 앱에서 "다봇 방에 다시 들어가서 대화해줘"라고 말해 주세요.`);
       } else {
         parts.push('모두 연결돼 있어요.');
       }

@@ -2,12 +2,12 @@ import * as Clipboard from 'expo-clipboard';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { AiPicker } from '../../../components/AiPicker';
 import { AvatarEditor } from '../../../components/AvatarEditor';
 import { Avatar, Button, Section } from '../../../components/ui';
 import { api } from '../../../lib/api';
-import { aiOf, connectionText, KICKOFF_PROMPT, type AiKind } from '../../../lib/ais';
+import { aiOf, connectionText, KICKOFF_PROMPT, rejoinText, type AiKind } from '../../../lib/ais';
 import { lookOf } from '../../../lib/avatar';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
@@ -65,7 +65,33 @@ export default function MembersScreen() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  /** 방금 '다시 부르기'를 누른 봇과 안내 */
+  const [called, setCalled] = useState<{ id: string; note: string } | null>(null);
+
   if (!room) return null;
+
+  /**
+   * 다시 부르기: 다른 앱에 메시지를 대신 보낼 수는 없어서,
+   * 부르는 말을 복사하고 그 AI 앱을 열어줘요(문구를 미리 넣어 주는 앱은 입력칸에 들어가 있어요).
+   * 웹에서 새 창이 막히지 않게 복사와 열기를 같은 순간에 시작해요.
+   */
+  const callBack = (m: Member) => {
+    const ai = aiOf(m.kind);
+    const text = rejoinText(m.name);
+    const copied = Clipboard.setStringAsync(text).catch(() => false);
+    if (ai.appLink) {
+      Linking.openURL(ai.appLink(text)).catch(() => {});
+      setCalled({
+        id: m.id,
+        note: `부르는 말을 복사하고 ${ai.name}을(를) 열었어요. 입력칸에 문구가 없으면 붙여넣고 보내 주세요. (그 앱의 새 대화에서 다봇 커넥터가 꺼져 있으면 켜 주세요)`,
+      });
+    } else {
+      setCalled({ id: m.id, note: `부르는 말을 복사했어요. ${ai.name} 앱을 열어서 붙여넣고 보내 주세요.` });
+    }
+    copied.then((ok) => {
+      if (ok === false) setCalled({ id: m.id, note: `복사가 안 됐어요. 그 앱에 이렇게 보내 주세요:\n${text}` });
+    });
+  };
 
   const toggle = (memberId: string, kind: 'profile' | 'link') => {
     setConfirmRemove(null);
@@ -140,6 +166,7 @@ export default function MembersScreen() {
                     <View style={styles.pills}>
                       <ActionPill label="프로필" icon="person-circle-outline" active={open === 'profile'} onPress={() => toggle(m.id, 'profile')} />
                       <ActionPill label="초대 링크" icon="link-outline" active={open === 'link'} onPress={() => toggle(m.id, 'link')} />
+                      {m.active && !m.online && <ActionPill label="다시 부르기" icon="refresh-outline" onPress={() => callBack(m)} />}
                       <ActionPill
                         label={confirmRemove === m.id ? '한 번 더 누르면 내보내요' : '내보내기'}
                         icon="exit-outline"
@@ -171,6 +198,11 @@ export default function MembersScreen() {
                       refreshMembers();
                     }}
                   />
+                )}
+                {called?.id === m.id && (
+                  <View style={[styles.calledNote, { backgroundColor: t.accentSoft }]}>
+                    <Text style={{ color: t.text, fontSize: 13, lineHeight: 19 }}>{called.note}</Text>
+                  </View>
                 )}
                 {open === 'link' && <InviteLinkCard member={m} roomSettings={{ settings, room }} onClose={() => setPanel(null)} />}
               </View>
@@ -294,6 +326,7 @@ const styles = StyleSheet.create({
   nameInput: { borderBottomWidth: 1, paddingVertical: 6, fontSize: 16, minWidth: 140 },
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  calledNote: { borderRadius: 12, padding: 12 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   card: { padding: 14, gap: 10, borderRadius: 16, borderWidth: 2 },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },

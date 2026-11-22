@@ -78,6 +78,8 @@ export default function RoomScreen() {
     );
   }
 
+  /** 참가 중인데 지금 연결이 안 된 봇 수 */
+  const away = members.filter((m) => m.active && m.joined && !m.online).length;
   const openSettings = () => room && router.push({ pathname: '/room/[id]/settings', params: { id: room.id } });
   const openMembers = () => router.push({ pathname: '/room/[id]/members', params: { id: room.id } });
   /** 버튼 동작은 화면을 먼저 바꾸고(바로 반응), 실패하면 되돌린 뒤 이유를 보여줘요. */
@@ -258,6 +260,12 @@ export default function RoomScreen() {
           <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1, flex: 1 }} numberOfLines={1}>
             {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 이름을 부를 때만 답해요'}
           </Text>
+          {/* 멈춘 봇이 있으면 다시 부르기(멤버 화면으로) */}
+          {freeTalk && away > 0 && (
+            <Pressable onPress={openMembers} hitSlop={6} style={[styles.schedPill, { backgroundColor: t.accent }]}>
+              <Text style={{ color: t.accentText, fontSize: 11, fontWeight: '700' }}>다시 부르기 {away}</Text>
+            </Pressable>
+          )}
           {/* 확인 간격·매너타임: 누르면 방 설정으로 */}
           <Pressable onPress={openSettings} hitSlop={6} style={[styles.schedPill, { backgroundColor: roomInfo?.quietNow ? t.accentSoft : t.input }]}>
             <Text style={{ color: roomInfo?.quietNow ? t.accentPurple : t.subtext, fontSize: 11, fontWeight: '700' }}>

@@ -12,13 +12,21 @@ export interface Look {
 /** 프로필을 따로 정하지 않은 에이전트의 기본 프로필(회색 로봇) */
 export const DEFAULT_AVATAR: ImageSourcePropType = require('../../assets/default-avatar.png');
 
-/** AI 종류별 기본 프로필(그 앱 아이콘). 아이콘이 없는 종류는 회색 로봇이에요. 출처: @lobehub/icons (MIT) */
+/**
+ * AI 종류별 기본 프로필(그 앱 아이콘, 모두 256px). 아이콘이 없는 종류는 회색 로봇이에요.
+ * ChatGPT·클로드·제미나이는 @lobehub/icons(MIT), 나머지는 방장 휴대폰의 앱 아이콘을 잘라 썼어요.
+ */
 const AI_ICONS: Record<string, ImageSourcePropType> = {
   chatgpt: require('../../assets/ai/chatgpt.png'),
   claude: require('../../assets/ai/claude.png'),
   gemini: require('../../assets/ai/gemini.png'),
   grok: require('../../assets/ai/grok.png'),
   muse: require('../../assets/ai/muse.png'),
+  pickle: require('../../assets/ai/pickle.png'),
+  buoy: require('../../assets/ai/buoy.png'),
+  keyring: require('../../assets/ai/keyring.png'),
+  q: require('../../assets/ai/q.png'),
+  instinct: require('../../assets/ai/instinct.png'),
 };
 export const hasAppIcon = (kind: string) => kind in AI_ICONS;
 export const defaultAvatarOf = (kind: string): ImageSourcePropType => AI_ICONS[kind] ?? DEFAULT_AVATAR;
