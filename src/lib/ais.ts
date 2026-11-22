@@ -49,27 +49,6 @@ export const AI_KINDS: AiKind[] = [
   { id: 'other', name: '다른 에이전트', emoji: '🛸', color: '#607D8B', howTo: GENERIC },
 ];
 
-/**
- * 각 AI 앱의 사용량 한도가 다시 차는 방식(2026년 11월에 찾아본 정보).
- * 요금제와 시기에 따라 바뀌어요. 정확한 건 그 앱의 설정 → 사용량 화면이에요.
- */
-export interface LimitInfo {
-  /** 대시보드에 보여줄 한 줄 설명 */
-  text: string;
-  /** official: 회사 안내 · reported: 기사·사용자 보고 · unknown: 공개된 정보 없음 */
-  basis: 'official' | 'reported' | 'unknown';
-}
-export const LIMITS: Record<string, LimitInfo> = {
-  chatgpt: { text: '첫 메시지부터 약 3시간마다 다시 차요(Plus 기준, 무료는 약 5시간). Work·Codex는 5시간 + 주간 한도.', basis: 'reported' },
-  claude: { text: '첫 메시지부터 5시간마다 다시 차요. 유료는 7일마다 도는 주간 한도도 있어요(계정마다 시각이 달라요).', basis: 'official' },
-  gemini: { text: '2026년 5월부터 5시간마다 다시 차는 한도 + 주간 한도로 바뀌었어요.', basis: 'official' },
-  grok: { text: '무료는 약 2시간마다 다시 찬다는 보고가 많아요(공식 발표 없음). 유료는 주간 한도예요.', basis: 'reported' },
-  muse: { text: '무료 한도가 다시 차는 주기는 공개되지 않았어요(하루 단위라는 안내도 있어요). 유료는 주간 한도예요.', basis: 'unknown' },
-  pickle: { text: '하루 사용량이 매일 새벽 4시에 다시 차요.', basis: 'reported' },
-};
-export const limitOf = (kind: string): LimitInfo =>
-  LIMITS[kind] ?? { text: '공개된 한도 정보를 찾지 못했어요. 그 앱의 설정에서 확인하고 아래 초기화 주기를 맞춰 주세요.', basis: 'unknown' };
-
 export const AI_BY_ID: Record<string, AiKind> = Object.fromEntries(AI_KINDS.map((a) => [a.id, a]));
 export const aiOf = (id: string): AiKind => AI_BY_ID[id] ?? AI_BY_ID.other;
 
