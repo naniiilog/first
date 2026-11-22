@@ -74,6 +74,16 @@ export async function handleAgentHttp(
   const base = `${url.origin}/a${keyInPath ? `/${key}` : ''}`;
   const list = (rows: MessageRow[]) => rows.map((m) => shape(m, s.me, base));
 
+  // 사용량: 봇에게 준 글자 수(JSON)와 봇이 보낸 글자·메시지 수를 세요.
+  const used = { out: 0, sent: 0 };
+  const res = await route(s);
+  if ((res.headers.get('content-type') ?? '').includes('json')) {
+    await s.track((await res.clone().text()).length, used.out, used.sent);
+  }
+  return res;
+
+  async function route(s: AgentSession): Promise<Response> {
+
   if (action === 'info' && req.method === 'GET') {
     const members = await s.roster();
     return reply(200, {
@@ -128,6 +138,8 @@ export async function handleAgentHttp(
       image,
     });
     if (isError(sent)) return errorReply(sent);
+    used.out = typeof b?.text === 'string' ? b.text.length : 0;
+    used.sent = 1;
     return reply(200, { ok: true, id: sent.id, rule: s.hint() });
   }
 
@@ -142,6 +154,8 @@ export async function handleAgentHttp(
     const caption = decodeURIComponent(req.headers.get('x-dabot-text') ?? '').slice(0, MAX_TEXT);
     const sent = await s.send(caption, { image });
     if (isError(sent)) return errorReply(sent);
+    used.out = caption.length;
+    used.sent = 1;
     return reply(200, { ok: true, id: sent.id });
   }
 
@@ -154,4 +168,5 @@ export async function handleAgentHttp(
   }
 
   return reply(404, { ok: false, code: 'not_found', error: '없는 주소예요. /a/info, /a/messages, /a/wait, /a/send 를 써 보세요.' });
+  }
 }

@@ -37,6 +37,15 @@ export interface MemberRow {
   read_cursor: number;
   /** 마지막으로 방을 확인한 시각(확인 간격 계산용) */
   last_check: number | null;
+  /** 이번 사용 주기 시작 시각과 그동안 센 양 */
+  use_start: number | null;
+  use_calls: number;
+  use_sent: number;
+  use_in: number;
+  use_out: number;
+  /** 초기화 주기: 'daily'(매일 reset_value시) | 'hours'(reset_value시간마다) */
+  reset_mode: string;
+  reset_value: number;
 }
 
 export interface MessageRow {
@@ -145,6 +154,34 @@ export class Rooms {
   }
 
   /** 확인 간격 계산용으로 '마지막 확인 시각'을 남겨요. */
+  /** 사용량 더하기. fresh면 새 주기를 start부터 시작해요. */
+  addUsage(memberId: string, fresh: boolean, start: number, u: { inChars: number; outChars: number; sent: number }) {
+    if (fresh) {
+      return this.db.run(
+        'UPDATE members SET use_start = ?, use_calls = 1, use_in = ?, use_out = ?, use_sent = ? WHERE id = ?',
+        start, u.inChars, u.outChars, u.sent, memberId,
+      );
+    }
+    return this.db.run(
+      'UPDATE members SET use_calls = use_calls + 1, use_in = use_in + ?, use_out = use_out + ?, use_sent = use_sent + ? WHERE id = ?',
+      u.inChars, u.outChars, u.sent, memberId,
+    );
+  }
+
+  setReset(memberId: string, mode: string, value: number) {
+    return this.db.run('UPDATE members SET reset_mode = ?, reset_value = ? WHERE id = ?', mode, value, memberId);
+  }
+
+  /** 지금 바로 0으로 */
+  clearUsage(memberId: string) {
+    return this.db.run('UPDATE members SET use_start = NULL, use_calls = 0, use_in = 0, use_out = 0, use_sent = 0 WHERE id = ?', memberId);
+  }
+
+  /** 봇별 누적 메시지 수 */
+  messageCounts(roomId: string) {
+    return this.db.all<{ author_id: string; n: number }>('SELECT author_id, COUNT(*) AS n FROM messages WHERE room_id = ? GROUP BY author_id', roomId);
+  }
+
   markChecked(memberId: string) {
     return this.db.run('UPDATE members SET last_check = ? WHERE id = ?', Date.now(), memberId);
   }
@@ -220,6 +257,13 @@ export class Rooms {
       avatar: null,
       read_cursor: 0,
       last_check: null,
+      use_start: null,
+      use_calls: 0,
+      use_sent: 0,
+      use_in: 0,
+      use_out: 0,
+      reset_mode: 'daily',
+      reset_value: 0,
     };
     await this.db.run(
       'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

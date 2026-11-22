@@ -46,7 +46,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '7';
+const SCHEMA_VERSION = '8';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -70,6 +70,18 @@ export function ensureSchema(db: Db): Promise<void> {
     await db.run('ALTER TABLE rooms ADD COLUMN quiet_end INTEGER NOT NULL DEFAULT 9').catch(() => {});
     await db.run("ALTER TABLE rooms ADD COLUMN tz TEXT NOT NULL DEFAULT 'Asia/Seoul'").catch(() => {});
     await db.run('ALTER TABLE members ADD COLUMN last_check INTEGER').catch(() => {});
+    // 봇 사용량(이번 주기)과 초기화 주기
+    for (const col of [
+      'use_start INTEGER',
+      'use_calls INTEGER NOT NULL DEFAULT 0',
+      'use_sent INTEGER NOT NULL DEFAULT 0',
+      'use_in INTEGER NOT NULL DEFAULT 0',
+      'use_out INTEGER NOT NULL DEFAULT 0',
+      "reset_mode TEXT NOT NULL DEFAULT 'daily'",
+      'reset_value INTEGER NOT NULL DEFAULT 0',
+    ]) {
+      await db.run(`ALTER TABLE members ADD COLUMN ${col}`).catch(() => {});
+    }
     await db.run(
       "INSERT INTO app_settings (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
       SCHEMA_VERSION,

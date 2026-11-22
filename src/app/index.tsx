@@ -74,6 +74,7 @@ export default function RoomsScreen() {
           headerTitleStyle: { fontSize: 22, fontWeight: '800' },
           headerRight: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 8 }}>
+              <HeaderIcon name="stats-chart-outline" label="봇 사용량" onPress={() => router.push('/usage')} />
               <HeaderIcon name="add" label="새 채팅방" onPress={() => router.push('/room/new')} />
               <HeaderIcon name="settings-outline" label="설정" onPress={() => router.push('/settings')} />
             </View>

@@ -6,6 +6,7 @@ import { imageFrom, isError, quietState } from './agent.js';
 import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
 import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
+import { cleanReset, windowEnd } from './usage.js';
 
 /**
  * 다봇 서버 (Node와 Cloudflare Worker가 같이 써요)
@@ -24,6 +25,8 @@ import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.
  *   POST   /api/rooms/:id/members             { kind, name }      → { member, inviteUrl }
  *   GET    /api/rooms/:id/members/:mid/invite                     → { inviteUrl }
  *   PATCH  /api/rooms/:id/members/:mid        { name?, active?, avatar? }
+ *   POST   /api/rooms/:id/members/:mid/reset-usage           사용량 지금 0으로
+ *   GET    /api/rooms/:id/usage                              봇 사용량
  *   DELETE /api/rooms/:id/members/:mid
  *
  * AI 에이전트용 MCP 입구 — 초대 링크 자체가 열쇠예요
@@ -261,6 +264,38 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       }
     }
 
+    // 봇 사용량 대시보드: 이번 주기 사용량, 다음 초기화 시각, 누적 메시지 수
+    if (sub === 'usage' && req.method === 'GET') {
+      const [members, counts] = await Promise.all([rooms.members(room.id), rooms.messageCounts(room.id)]);
+      const now = Date.now();
+      const tz = room.tz || 'Asia/Seoul';
+      const total = new Map(counts.map((c) => [c.author_id, c.n]));
+      return json(200, {
+        now,
+        tz,
+        members: members.map((m) => {
+          const end = m.use_start === null ? null : windowEnd(m.use_start, m.reset_mode, m.reset_value, tz);
+          const live = end !== null && now < end;
+          return {
+            ...publicMember(m),
+            online: m.last_seen !== null && now - m.last_seen < 90_000,
+            lastSeen: m.last_seen,
+            totalMessages: total.get(m.id) ?? 0,
+            reset: { mode: m.reset_mode, value: m.reset_value },
+            usage: {
+              since: live ? m.use_start : null,
+              // 주기가 끝났으면 0이에요. 매일 방식은 다음 초기화 시각을 미리 알려줘요.
+              resetAt: live ? end : m.reset_mode === 'daily' ? windowEnd(now, 'daily', m.reset_value, tz) : null,
+              calls: live ? m.use_calls : 0,
+              sent: live ? m.use_sent : 0,
+              inChars: live ? m.use_in : 0,
+              outChars: live ? m.use_out : 0,
+            },
+          };
+        }),
+      });
+    }
+
     if (sub === 'messages') {
       if (req.method === 'GET') {
         const after = url.searchParams.get('after');
@@ -294,6 +329,10 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       const m = parts[4] ? await rooms.member(room.id, parts[4]) : null;
       if (!m) throw new HttpError(404, '멤버를 찾을 수 없어요.');
       if (parts[5] === 'invite' && req.method === 'GET') return json(200, { inviteUrl: inviteUrl(m.invite_token) });
+      if (parts[5] === 'reset-usage' && req.method === 'POST') {
+        await rooms.clearUsage(m.id);
+        return json(200, { ok: true });
+      }
       if (req.method === 'PATCH') {
         const b = await body(req);
         await rooms.updateMember(m, {
@@ -301,6 +340,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
           active: typeof b.active === 'boolean' ? b.active : undefined,
           avatar: cleanAvatar(b.avatar),
         });
+        const reset = cleanReset(b.resetMode, b.resetValue);
+        if (reset) await rooms.setReset(m.id, reset.mode, reset.value);
         return json(200, { ok: true });
       }
       if (req.method === 'DELETE') {

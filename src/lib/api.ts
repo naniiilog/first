@@ -57,6 +57,26 @@ export interface RoomInfo {
 }
 const roomCache = new Map<string, { etag: string; data: RoomInfo }>();
 
+/** 봇 사용량 대시보드 응답 */
+export interface UsageMember {
+  id: string;
+  kind: string;
+  name: string;
+  avatar: string | null;
+  active: boolean;
+  joined: boolean;
+  online: boolean;
+  lastSeen: number | null;
+  totalMessages: number;
+  reset: { mode: 'daily' | 'hours'; value: number };
+  usage: { since: number | null; resetAt: number | null; calls: number; sent: number; inChars: number; outChars: number };
+}
+export interface UsageInfo {
+  now: number;
+  tz: string;
+  members: UsageMember[];
+}
+
 export const api = {
   authStatus: (s: Settings) => call<AuthStatus>(s, '/api/auth'),
   setupPassword: (s: Settings, password: string) => call(s, '/api/auth/setup', { method: 'POST', body: { password } }),
@@ -127,6 +147,17 @@ export const api = {
 
   updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
+
+  /** 봇 사용량(이번 주기) */
+  usage: (s: Settings, r: LocalRoom) => call<UsageInfo>(s, `/api/rooms/${r.id}/usage`, { ownerToken: r.ownerToken }),
+
+  /** 초기화 주기 바꾸기: 매일 N시(daily) 또는 N시간마다(hours) */
+  setReset: (s: Settings, r: LocalRoom, memberId: string, mode: 'daily' | 'hours', value: number) =>
+    call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: { resetMode: mode, resetValue: value }, ownerToken: r.ownerToken }),
+
+  /** 사용량 지금 0으로 */
+  resetUsage: (s: Settings, r: LocalRoom, memberId: string) =>
+    call(s, `/api/rooms/${r.id}/members/${memberId}/reset-usage`, { method: 'POST', ownerToken: r.ownerToken }),
 
   removeMember: (s: Settings, r: LocalRoom, memberId: string) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'DELETE', ownerToken: r.ownerToken }),

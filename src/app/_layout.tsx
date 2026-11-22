@@ -56,6 +56,7 @@ function Root() {
       <Stack.Screen name="index" options={{ title: '다봇' }} />
       <Stack.Screen name="settings" options={{ title: '설정' }} />
       <Stack.Screen name="help" options={{ title: '사용법 한눈에 보기' }} />
+      <Stack.Screen name="usage" options={{ title: '봇 사용량' }} />
       <Stack.Screen name="room/new" options={{ title: '새 채팅방', presentation: 'modal' }} />
       <Stack.Screen name="room/[id]/index" options={{ title: '채팅방' }} />
       <Stack.Screen name="room/[id]/members" options={{ title: '멤버', presentation: 'modal' }} />

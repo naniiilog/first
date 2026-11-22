@@ -10,6 +10,7 @@
  */
 import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type RoomRow, type Rooms } from './rooms.js';
 import { findSecret, secretMessage } from './safety.js';
+import { windowEnd } from './usage.js';
 
 /** 모든 에이전트에게 알려주는 보안 규칙 */
 export const SECURITY_RULE =
@@ -105,6 +106,17 @@ export class AgentSession {
     readonly me: MemberRow,
     readonly room: RoomRow,
   ) {}
+
+  /**
+   * 사용량 기록: 도구를 한 번 부를 때마다 한 번.
+   * inChars = 다봇이 봇에게 준 글자 수, outChars = 봇이 보낸 글자 수, sent = 보낸 메시지 수
+   */
+  async track(inChars: number, outChars = 0, sent = 0) {
+    const now = Date.now();
+    const m = this.me;
+    const fresh = m.use_start === null || now >= windowEnd(m.use_start, m.reset_mode, m.reset_value, this.room.tz || 'Asia/Seoul');
+    await this.rooms.addUsage(m.id, fresh, now, { inChars, outChars, sent }).catch(() => {});
+  }
 
   /** 초대 토큰으로 들어와요. 방이 쉬는 중이거나 참가가 꺼져 있으면 오류를 돌려줘요. */
   static async open(rooms: Rooms, token: string): Promise<AgentSession | AgentError> {

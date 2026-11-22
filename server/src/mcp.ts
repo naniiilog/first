@@ -52,7 +52,22 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     },
   );
 
-  const session = async () => AgentSession.open(rooms, inviteToken);
+  // 이 요청에서 쓴 사용량(서버는 요청마다 새로 만들어져서 요청 하나에 하나예요)
+  const used: { s: AgentSession | null; out: number; sent: number } = { s: null, out: 0, sent: 0 };
+  const session = async () => {
+    const s = await AgentSession.open(rooms, inviteToken);
+    if (!isError(s)) used.s = s;
+    return s;
+  };
+  /** 도구 결과를 돌려주기 전에 사용량을 기록해요. */
+  const counted =
+    <A,>(fn: (args: A) => Promise<{ content: Content[]; isError?: boolean }>) =>
+    async (args: A) => {
+      const r = await fn(args);
+      const chars = r.content.reduce((n, c) => n + (c.type === 'text' ? c.text.length : 0), 0);
+      await used.s?.track(chars, used.out, used.sent);
+      return r;
+    };
 
   server.registerTool(
     'room_info',
@@ -62,7 +77,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
-    async () => {
+    counted(async () => {
       const s = await session();
       if (isError(s)) return errorResult(s);
       const members = await s.roster();
@@ -78,7 +93,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
           s.hint(),
         ].join('\n'),
       );
-    },
+    }),
   );
 
   server.registerTool(
@@ -92,7 +107,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ after_id, limit }) => {
+    counted(async ({ after_id, limit }) => {
       const s = await session();
       if (isError(s)) return errorResult(s);
       const gate = await s.gateCheck();
@@ -100,7 +115,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const { rows, lastId } = await s.read(after_id, limit ?? DEFAULT_READ);
       if (rows.length === 0) return result(`새 메시지가 없어요. (마지막 번호: ${lastId})\n${s.hint()}`);
       return result(`${rows.map((m) => formatLine(m, s.me)).join('\n')}\n(마지막 번호: ${lastId})\n${s.hint()}`, rows);
-    },
+    }),
   );
 
   server.registerTool(
@@ -115,15 +130,17 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         image_type: z.enum(['image/png', 'image/jpeg', 'image/webp']).optional(),
       }),
     },
-    async ({ text: body, reply_to, image_base64, image_type }) => {
+    counted(async ({ text: body, reply_to, image_base64, image_type }) => {
       const s = await session();
       if (isError(s)) return errorResult(s);
       const image = imageFrom(image_base64, image_type);
       if (isError(image)) return errorResult(image);
       const sent = await s.send(body, { replyTo: reply_to ?? null, image });
       if (isError(sent)) return errorResult(sent);
+      used.out = body.length;
+      used.sent = 1;
       return result(`보냈어요 (#${sent.id}). 이어서 wait_for_messages로 다음 메시지를 기다리세요.\n${s.hint()}`);
-    },
+    }),
   );
 
   server.registerTool(
@@ -137,7 +154,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ after_id, timeout_seconds }) => {
+    counted(async ({ after_id, timeout_seconds }) => {
       const s = await session();
       if (isError(s)) return errorResult(s);
       const gate = await s.gateCheck();
@@ -152,7 +169,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       }
       const relay = w.replyTo ? `\n지금 내 차례: 방장 질문 #${w.replyTo}에 앞 답들을 참고해서 답하세요(reply_to=${w.replyTo}).` : '';
       return result(`${w.rows.map((m) => formatLine(m, s.me)).join('\n')}\n(마지막 번호: ${w.lastId})${relay}\n${s.hint(w.freeTalk)}`, w.rows);
-    },
+    }),
   );
 
   return server;
