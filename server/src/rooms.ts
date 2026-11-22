@@ -277,8 +277,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number; closed: number }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }

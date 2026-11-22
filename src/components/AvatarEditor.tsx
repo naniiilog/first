@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { aiOf } from '../lib/ais';
-import { AVATAR_COLORS, AVATAR_EMOJIS, emojiAvatar, lookOf } from '../lib/avatar';
+import { AVATAR_COLORS, AVATAR_EMOJIS, emojiAvatar, hasAppIcon, ICON_BG_COLORS, iconAvatar, lookOf } from '../lib/avatar';
 import { pickPhoto } from '../lib/photo';
 import { useTheme } from '../lib/theme';
 import { Avatar, Button } from './ui';
@@ -76,6 +76,26 @@ export function AvatarEditor({
           </Pressable>
         </View>
       </View>
+
+      {/* 같은 AI 봇이 여럿일 때: 앱 아이콘은 그대로 두고 배경색만 바꿔서 구분해요 */}
+      {hasAppIcon(kind) && (
+        <>
+          <Text style={[styles.label, { color: t.subtext }]}>앱 아이콘 배경색 (같은 봇 여럿 구분용)</Text>
+          <View style={styles.wrap}>
+            {ICON_BG_COLORS.map((c) => {
+              const on = c === '#FFFFFF' ? draft === null : draft === iconAvatar(c);
+              return (
+                <Pressable
+                  key={c}
+                  accessibilityLabel={c === '#FFFFFF' ? '기본(흰색)' : `배경색 ${c}`}
+                  onPress={() => setDraft(c === '#FFFFFF' ? null : iconAvatar(c))}
+                  style={[styles.swatch, { backgroundColor: c, borderColor: on ? t.text : c === '#FFFFFF' ? t.border : 'transparent' }]}
+                />
+              );
+            })}
+          </View>
+        </>
+      )}
 
       <Text style={[styles.label, { color: t.subtext }]}>이모지</Text>
       <View style={styles.wrap}>

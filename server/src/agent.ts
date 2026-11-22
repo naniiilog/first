@@ -139,35 +139,31 @@ export class AgentSession {
     const talk = freeTalk
       ? '[자동대화 ON] 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 방장 질문에는 차례대로 한 명씩 답해요.'
       : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 기다리세요(보내도 서버가 막아요).`;
+    // 지금 설정을 매번 분명히 알려줘요(예전 안내를 기억하고 있어도 최신 안내를 따르게).
     const every = this.room.check_interval_min;
-    const interval = every > 0
-      ? ` [확인 간격 ${every}분] 방은 ${every}분마다 확인하세요(방장이 새 글을 쓰면 그 전에도 돼요). 예약 기능이 있으면 ${every}분 뒤로 예약하고 대화를 마쳐도 돼요.`
-      : ' [확인 간격 실시간]';
-    const quiet = this.room.quiet_enabled === 1 ? ` [매너타임 ${quietLabel(this.room)}] 이 시간에는 확인도 말도 하지 마세요(방장이 이름을 부르면 예외).` : '';
+    const interval =
+      every > 0
+        ? ` [확인 간격 ${every}분] 서버가 새 글을 ${every}분마다 모아서 전해줘요. 그 사이에는 대화를 마치지 말고 wait_for_messages를 계속 다시 호출하며 기다리세요.`
+        : ' [확인 간격 실시간] 새 글이 오면 바로 전해줘요.';
+    const quiet =
+      this.room.quiet_enabled === 1
+        ? ` [매너타임 ${quietLabel(this.room)}] 이 시간이 되면 대화를 마치세요(방장이 이름을 부르면 예외).`
+        : ' [매너타임 없음] 시간과 상관없이 대화해도 돼요. 예전에 들은 매너타임 안내는 무시하세요.';
     return talk + interval + quiet;
   }
 
   /**
-   * 방 확인(읽기·기다리기) 전에 확인 간격과 매너타임을 지켜요.
-   * - 매너타임: 방장이 내 이름을 부른 새 글이 있을 때만 확인할 수 있어요.
-   * - 확인 간격: 지난번 확인 뒤 간격이 안 지났으면, 방장이 새 글을 썼을 때만 확인할 수 있어요.
+   * 방 확인(읽기·기다리기) 전에 매너타임만 확인해요.
+   * 확인 간격은 여기서 막지 않고(막으면 채팅 앱 봇이 대화를 끝내 버려서) wait()가 새 글을 간격마다 모아서 전해줘요.
    */
   async gateCheck(): Promise<AgentError | null> {
-    const now = Date.now();
-    const q = quietState(this.room, now);
-    const every = this.room.check_interval_min * 60_000;
-    const early = every > 0 && this.me.last_check !== null && now - this.me.last_check < every;
-    if (q.quiet || early) {
+    const q = quietState(this.room, Date.now());
+    if (q.quiet) {
       const owner = await this.rooms.ownerMessagesAfter(this.room.id, this.me.read_cursor);
-      if (q.quiet && !owner.some((m) => mentions(m.text, this.me.name))) {
-        return fail('quiet_hours', `지금은 매너타임(${quietLabel(this.room)})이에요. ${pad2(this.room.quiet_end)}:00 이후에 다시 확인하세요.`, q.secondsLeft);
-      }
-      if (!q.quiet && early && owner.length === 0) {
-        const left = Math.ceil((this.me.last_check! + every - now) / 1000);
-        return fail('too_early', `확인 간격은 ${this.room.check_interval_min}분이에요. ${Math.ceil(left / 60)}분 뒤에 다시 확인하세요.`, left);
+      if (!owner.some((m) => mentions(m.text, this.me.name))) {
+        return fail('quiet_hours', `지금은 매너타임(${quietLabel(this.room)})이에요. 오늘 대화는 여기서 마치세요. 방장이 다시 부르면 이어서 해요.`, q.secondsLeft);
       }
     }
-    await this.rooms.markChecked(this.me.id);
     return null;
   }
 
@@ -176,7 +172,10 @@ export class AgentSession {
     const from = after ?? (this.me.read_cursor > 0 ? this.me.read_cursor : null);
     const rows = await this.rooms.messages(this.room.id, from, limit);
     const lastId = rows.length ? rows[rows.length - 1].id : (from ?? 0);
-    if (rows.length) await this.rooms.setCursor(this.me.id, lastId);
+    if (rows.length) {
+      await this.rooms.setCursor(this.me.id, lastId);
+      await this.rooms.markChecked(this.me.id);
+    }
     return { rows, lastId };
   }
 
@@ -240,15 +239,6 @@ export class AgentSession {
    */
   async wait(after: number | null | undefined, timeoutSec: number, pollMs: number) {
     const from = after ?? this.me.read_cursor;
-    // 확인 간격이 있으면 오래 붙잡고 기다리지 않고, 지금 새 글만 보여주고 끝내요(다음 확인은 간격 뒤에).
-    if (this.room.check_interval_min > 0) {
-      const rows = (await this.rooms.messages(this.room.id, from, 200)).filter((m) => m.author_id !== this.me.id);
-      if (!rows.length) return { idle: true as const, lastId: from, freeTalk: this.freeTalk };
-      const lastId = rows[rows.length - 1].id;
-      await this.rooms.setCursor(this.me.id, lastId);
-      const relay = relayState(await this.rooms.relayRows(this.room.id), await this.rooms.members(this.room.id), this.me, this.freeTalk, Date.now());
-      return { rows: rows.slice(-30), lastId, freeTalk: this.freeTalk, replyTo: relay?.waitingFor ? null : (relay?.questionId ?? null) };
-    }
     const deadline = Date.now() + timeoutSec * 1000;
     const members = await this.rooms.members(this.room.id);
     let polls = 0;
@@ -261,10 +251,27 @@ export class AgentSession {
       if (status.closed === 1) return RESTING;
       if (status.active !== 1) return PAUSED;
       freeTalk = status.free_talk === 1;
+      // 기다리는 중에 방장이 설정을 바꾸면 바로 따라요.
+      Object.assign(this.room, {
+        free_talk: status.free_talk,
+        check_interval_min: status.check_interval_min,
+        quiet_enabled: status.quiet_enabled,
+        quiet_start: status.quiet_start,
+        quiet_end: status.quiet_end,
+      });
+      if (quietState(this.room).quiet) {
+        const owner = await this.rooms.ownerMessagesAfter(this.room.id, from);
+        if (!owner.some((m) => mentions(m.text, this.me.name))) {
+          return fail('quiet_hours', `매너타임(${quietLabel(this.room)})이 됐어요. 오늘 대화는 여기서 마치세요. 방장이 다시 부르면 이어서 해요.`);
+        }
+      }
       const rows = (await this.rooms.messages(this.room.id, from, 200)).filter((m) => m.author_id !== this.me.id);
+      // 확인 간격: 지난번에 전해준 뒤 간격이 안 지났으면, 방장 글이 없는 한 더 모아요.
+      const every = this.room.check_interval_min * 60_000;
+      const holding = every > 0 && this.me.last_check !== null && Date.now() - this.me.last_check < every && !rows.some((m) => m.author_id === OWNER_ID);
       // 안내 글(입장·초대 알림 등)은 부른 것으로 치지 않아요.
       const talk = rows.filter((m) => m.author_id !== SYSTEM_ID);
-      const called = freeTalk ? talk.length > 0 : talk.some((m) => mentions(m.text, this.me.name));
+      const called = !holding && (freeTalk ? talk.length > 0 : talk.some((m) => mentions(m.text, this.me.name)));
       if (called && (rows.length !== lastRelayCheckCount || polls % 3 === 0)) {
         lastRelayCheckCount = rows.length;
         const relay = relayState(await this.rooms.relayRows(this.room.id), members, this.me, freeTalk, Date.now());
@@ -272,6 +279,7 @@ export class AgentSession {
           const shown = rows.slice(-30);
           const lastId = rows[rows.length - 1].id;
           await this.rooms.setCursor(this.me.id, lastId);
+          await this.rooms.markChecked(this.me.id);
           return { rows: shown, lastId, freeTalk, replyTo: relay?.questionId ?? null };
         }
       }

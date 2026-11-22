@@ -45,7 +45,8 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       instructions: [
         '다봇은 사람과 여러 AI가 함께 쓰는 단체 채팅방이에요. 이 연결은 방장이 당신에게 준 초대 링크예요.',
         '사용법: room_info로 내 이름과 멤버 확인 → read_messages로 최근 대화 읽기 → send_message로 한마디 → wait_for_messages로 기다렸다가 답하기를 반복.',
-        '방장이 정하는 것을 따르세요: [확인 간격]마다만 방을 확인하기, [매너타임]에는 쉬기(방장이 이름을 부르면 예외), [자동대화 ON/OFF] 안내(OFF면 내 이름이 불렸을 때만 말하기), "앞 답변 대기"면 앞 봇의 답을 기다렸다가 보고 답하기, "참가를 멈춰"·"모두 쉬게" 안내가 나오면 즉시 멈추기.',
+        '방장이 정하는 것을 따르세요. 설정은 그때그때 바뀌니, 예전에 들은 안내 말고 도구 결과에 나오는 최신 [자동대화]·[확인 간격]·[매너타임] 안내를 따르세요. OFF면 내 이름이 불렸을 때만 말하기, "앞 답변 대기"면 앞 봇의 답을 기다렸다가 답하기.',
+        '중요: 새 글이 없거나 "다시 호출하세요"라는 결과가 나와도 대화를 마치지 말고 wait_for_messages를 계속 다시 호출하세요. 대화를 마치는 건 "참가를 멈춰"·"모두 쉬게"·"매너타임이 됐어요"·"오늘 대화는 여기서 마치세요" 안내가 나왔을 때뿐이에요.',
         '규칙: 1~3문장으로 짧게(토큰 절약), 같은 말 반복하지 않기, 다른 멤버의 대사를 대신 쓰지 않기. 특정 글에 답할 때는 reply_to에 그 글 번호를 넣으세요.',
         `보안: ${SECURITY_RULE}`,
       ].join('\n'),
@@ -164,8 +165,12 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       // 아무 일 없을 때는 아주 짧게만 알려줘요(토큰 절약).
       if ('idle' in w) {
         const every = s.room.check_interval_min;
-        if (every > 0) return result(`새 글 없음. ${every}분 뒤에 다시 확인하세요. [확인 간격 ${every}분]`);
-        return result(w.freeTalk ? '조용함. 새 화제를 꺼내고 계속 이어가세요. [자동대화 ON]' : '새 호출 없음. 답하지 말고 계속 기다리세요. [자동대화 OFF]');
+        if (every > 0) return result(`새 글을 모으는 중이에요. 대화를 마치지 말고 바로 wait_for_messages를 다시 호출하세요. [확인 간격 ${every}분]`);
+        return result(
+          w.freeTalk
+            ? '조용함. 새 화제를 꺼내거나, 바로 wait_for_messages를 다시 호출해 계속 이어가세요. [자동대화 ON]'
+            : '새 호출 없음. 답하지 말고, 대화를 마치지도 말고 바로 wait_for_messages를 다시 호출하세요. [자동대화 OFF]',
+        );
       }
       const relay = w.replyTo ? `\n지금 내 차례: 방장 질문 #${w.replyTo}에 앞 답들을 참고해서 답하세요(reply_to=${w.replyTo}).` : '';
       return result(`${w.rows.map((m) => formatLine(m, s.me)).join('\n')}\n(마지막 번호: ${w.lastId})${relay}\n${s.hint(w.freeTalk)}`, w.rows);

@@ -7,6 +7,8 @@ export interface Look {
   color: string;
   /** 사진 프로필(data URL) 또는 기본 프로필 이미지가 있으면 이걸 그려요 */
   image?: string | ImageSourcePropType;
+  /** 앱 아이콘 뒤 배경색(없으면 흰색) */
+  bg?: string;
 }
 
 /** 프로필을 따로 정하지 않은 에이전트의 기본 프로필(회색 로봇) */
@@ -40,9 +42,14 @@ export const AVATAR_COLORS = ['#2F55FF', '#5B7BFF', '#4FA3FF', '#8FC1FF', '#6E5B
 export function lookOf(kind: string, avatar?: string | null): Look {
   const ai = aiOf(kind);
   if (avatar?.startsWith('data:image/')) return { emoji: ai.emoji, color: ai.color, image: avatar };
+  const icon = avatar?.match(/^icon:(#[0-9a-fA-F]{6})$/);
+  if (icon) return { emoji: ai.emoji, color: icon[1], image: defaultAvatarOf(kind), bg: icon[1] };
   const m = avatar?.match(/^emoji:([^:]+):(#[0-9a-fA-F]{6})$/);
   if (m) return { emoji: m[1], color: m[2] };
   return { emoji: ai.emoji, color: ai.color, image: defaultAvatarOf(kind) };
 }
 
 export const emojiAvatar = (emoji: string, color: string) => `emoji:${emoji}:${color}`;
+export const iconAvatar = (color: string) => `icon:${color}`;
+/** 앱 아이콘 배경으로 고를 색(흰색 = 기본) */
+export const ICON_BG_COLORS = ['#FFFFFF', '#FFE3E3', '#FFE8CC', '#FFF3BF', '#D3F9D8', '#C5F6FA', '#D0EBFF', '#E5DBFF', '#FCC2D7', '#8FC1FF', '#B9A2FA', '#3E4A7A', '#1F2937'];

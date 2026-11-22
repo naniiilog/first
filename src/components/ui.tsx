@@ -12,7 +12,7 @@ export function Avatar({ bot, size = 40, dim }: { bot: Look; size?: number; dim?
         width: size,
         height: size,
         borderRadius: radius,
-        backgroundColor: bot.image ? '#EEF1F7' : bot.color + '40',
+        backgroundColor: bot.image ? (bot.bg ?? '#FFFFFF') : bot.color + '40',
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: 'rgba(20,26,51,0.12)',
         alignItems: 'center',

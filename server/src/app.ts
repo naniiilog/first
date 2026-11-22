@@ -100,10 +100,15 @@ const MAX_BODY_CHARS = 1_000_000;
 const MAX_AVATAR_CHARS = 100_000;
 
 /** 프로필 값 검사: null(기본), 'emoji:<이모지>:#rrggbb', 또는 작은 data:image 사진 */
+/** 같은 AI 봇을 또 초대할 때 차례로 쓰는 아이콘 배경색(앱의 ICON_BG_COLORS와 같은 색) */
+const SAME_KIND_COLORS = ['#D0EBFF', '#FFE8CC', '#D3F9D8', '#E5DBFF', '#FFE3E3', '#FFF3BF', '#C5F6FA', '#FCC2D7'];
+
 function cleanAvatar(v: unknown): string | null | undefined {
   if (v === null) return null;
   if (typeof v !== 'string') return undefined;
   if (/^emoji:[^:]{1,16}:#[0-9a-fA-F]{6}$/.test(v)) return v;
+  // 기본 앱 아이콘 + 배경색(같은 봇이 여럿일 때 구분용)
+  if (/^icon:#[0-9a-fA-F]{6}$/.test(v)) return v;
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= MAX_AVATAR_CHARS) return v;
   throw new HttpError(400, '프로필 이미지가 너무 크거나 형식이 맞지 않아요.');
 }
@@ -371,7 +376,14 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
         const b = await body(req);
         const kind = cleanName(b.kind, 20) || 'other';
         const name = cleanName(b.name) || cleanName(b.defaultName) || 'AI';
+        const same = (await rooms.members(room.id)).filter((x) => x.kind === kind).length;
         const m = await rooms.addMember(room.id, kind, name);
+        // 같은 AI 봇이 이미 있으면 아이콘 배경색을 다르게 줘서 바로 구분돼요(나중에 프로필에서 바꿀 수 있어요).
+        if (same > 0) {
+          const avatar = `icon:${SAME_KIND_COLORS[(same - 1) % SAME_KIND_COLORS.length]}`;
+          await rooms.updateMember(m, { avatar });
+          m.avatar = avatar;
+        }
         return json(200, { member: publicMember(m), inviteUrl: inviteUrl(m.invite_token) });
       }
       const m = parts[4] ? await rooms.member(room.id, parts[4]) : null;
