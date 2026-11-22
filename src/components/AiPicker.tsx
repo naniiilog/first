@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AI_KINDS, type AiKind } from '../lib/ais';
+import { hasAppIcon, lookOf } from '../lib/avatar';
+import { Avatar } from './ui';
 import { useTheme } from '../lib/theme';
 
 /** 초대할 AI 에이전트 종류를 고르는 격자 */
@@ -22,7 +24,8 @@ export function AiPicker({ selected, onPick }: { selected?: string; onPick: (ai:
               },
             ]}
           >
-            <Text style={{ fontSize: 24 }}>{ai.emoji}</Text>
+            {/* 앱 아이콘이 있으면 아이콘, 없으면 이모지 */}
+            {hasAppIcon(ai.id) ? <Avatar bot={lookOf(ai.id)} size={30} /> : <Text style={{ fontSize: 24 }}>{ai.emoji}</Text>}
             <Text style={{ color: t.text, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
               {ai.name}
             </Text>

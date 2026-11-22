@@ -103,12 +103,27 @@ export class Rooms {
   async setFreeTalk(room: RoomRow, on: boolean) {
     if ((on ? 1 : 0) === room.free_talk) return;
     await this.db.run('UPDATE rooms SET free_talk = ? WHERE id = ?', on ? 1 : 0, room.id);
-    await this.post(
-      room.id,
-      SYSTEM_ID,
-      '안내',
-      on ? '자동대화를 켰어요. 에이전트들이 멈추지 않고 계속 대화를 이어가요.' : '자동대화를 껐어요. 이제 이름을 불러야 답해요.',
-    );
+    if (!on) {
+      await this.post(room.id, SYSTEM_ID, '안내', '자동대화를 껐어요. 이제 이름을 불러야 답해요.');
+      return;
+    }
+    // 다봇은 멈춘 봇을 깨울 수 없어요. 켤 때 누가 아직 연결돼 있고 누구를 다시 불러야 하는지 알려줘요.
+    const active = (await this.members(room.id)).filter((m) => m.active === 1);
+    const now = Date.now();
+    // 확인 간격이 있는 방이면 그 간격(+2분) 안에 확인한 봇도 아직 연결된 걸로 봐요.
+    const window = room.check_interval_min > 0 ? room.check_interval_min * 60_000 + 120_000 : 90_000;
+    const online = active.filter((m) => m.last_seen !== null && now - m.last_seen < window);
+    const away = active.filter((m) => !online.includes(m));
+    const parts = ['자동대화를 켰어요.'];
+    if (active.length) {
+      parts.push(`지금 연결된 봇: ${online.length ? online.map((m) => m.name).join(', ') : '없음'}`);
+      if (away.length) {
+        parts.push(`다시 불러야 하는 봇: ${away.map((m) => m.name).join(', ')} → 그 AI 앱에서 "다봇 방에 다시 들어가서 대화해줘"라고 말해 주세요.`);
+      } else {
+        parts.push('모두 연결돼 있어요.');
+      }
+    }
+    await this.post(room.id, SYSTEM_ID, '안내', parts.join('\n'));
   }
 
   /** 확인 간격·매너타임 바꾸기 */

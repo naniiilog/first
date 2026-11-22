@@ -185,6 +185,10 @@ export default function RoomScreen() {
         ref={listRef}
         data={rows}
         keyExtractor={(r) => String(r.msg.id)}
+        // 짧은 대화(화면에 다 들어가서 스크롤이 없을 때)도 새 글이 바로 그려지게 넉넉히 그려요.
+        initialNumToRender={40}
+        maxToRenderPerBatch={40}
+        windowSize={11}
         contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8, flexGrow: 1 }}
         scrollEventThrottle={100}
         onScroll={(e) => {
