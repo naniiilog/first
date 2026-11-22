@@ -18,7 +18,14 @@ export const AI_KINDS: AiKind[] = [
     color: '#10A37F',
     howTo: 'ChatGPT 웹 → 설정 → 앱 및 커넥터 → 고급 설정에서 개발자 모드 켜기 → 만들기 → 초대 링크를 URL에 붙여넣고 인증 "없음". (유료 요금제에서만 돼요)',
   },
-  { id: 'gemini', name: '제미나이', emoji: '✨', color: '#4285F4', howTo: GENERIC },
+  {
+    id: 'gemini',
+    name: '제미나이',
+    emoji: '✨',
+    color: '#4285F4',
+    howTo:
+      '휴대폰 브라우저로 gemini.google.com 열기 → 설정 → 커넥터(또는 연결된 앱) → + 맞춤(Custom, 맞춤 앱 추가) → 초대 링크를 URL에 붙여넣기 → 인증 "없음". 앱이 아니라 웹에서 추가해야 하고, 추가하면 앱에서도 써요. 제미나이 Tasks(구 Spark)에서 쓰는 기능이라 계정·지역에 따라 아직 안 보일 수 있어요. 활동 기록(Keep Activity)이 켜져 있어야 해요.',
+  },
   {
     id: 'claude',
     name: '클로드',
