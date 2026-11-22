@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { NotifySettings } from '../../../components/NotifySettings';
 import { Chip, Section } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { useLiveRoom, useStore } from '../../../lib/store';
@@ -113,6 +114,8 @@ export default function RoomSettingsScreen() {
           </View>
         )}
       </Section>
+
+      <NotifySettings settings={settings} room={room} info={roomInfo} refresh={refreshMembers} />
 
       <View style={{ minHeight: 22, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {saving ? <ActivityIndicator size="small" color={t.accent} /> : null}

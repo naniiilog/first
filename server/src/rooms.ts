@@ -21,6 +21,17 @@ export interface RoomRow {
   quiet_end: number;
   /** 매너타임을 계산할 시간대 */
   tz: string;
+  /** 휴대폰 알림: off · mentions · batch · each */
+  notify_mode: string;
+  /** 1이면 알림을 소리·진동 없이 */
+  notify_silent: number;
+  /** '나한테 하는 말'을 알아볼 방장 이름 */
+  notify_name: string | null;
+  /** 마지막 알림 시각과 그때 글 번호(묶어서 보내기용) */
+  notify_last: number | null;
+  notify_last_id: number | null;
+  /** 방장이 이 방을 마지막으로 보고 있던 시각(보고 있으면 알림 안 보내요) */
+  owner_seen: number | null;
 }
 
 export interface MemberRow {
@@ -99,8 +110,40 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 export class Rooms {
   constructor(private db: Db) {}
 
+  /** 봇이 말했을 때 부를 함수(알림 보내기). app.ts가 요청마다 넣어줘요. */
+  notifier?: (room: RoomRow, msg: MessageRow) => void;
+
+  /** 알림 설정 */
+  async setNotify(roomId: string, patch: { mode?: string; silent?: boolean; name?: string }) {
+    // 조건을 바꾸면 '묶어서' 3분 간격도 새로 시작해요.
+    if (patch.mode !== undefined) await this.db.run('UPDATE rooms SET notify_mode = ?, notify_last = NULL WHERE id = ?', patch.mode, roomId);
+    if (patch.silent !== undefined) await this.db.run('UPDATE rooms SET notify_silent = ? WHERE id = ?', patch.silent ? 1 : 0, roomId);
+    if (patch.name !== undefined) await this.db.run('UPDATE rooms SET notify_name = ? WHERE id = ?', patch.name, roomId);
+  }
+
+  /** 이 기기의 알림 구독 넣기/빼기 */
+  addPushSub(roomId: string, s: { endpoint: string; p256dh: string; auth: string }) {
+    return this.db.run(
+      'INSERT INTO push_subs (endpoint, room_id, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(endpoint, room_id) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth',
+      s.endpoint, roomId, s.p256dh, s.auth, Date.now(),
+    );
+  }
+  removePushSub(roomId: string, endpoint: string) {
+    return this.db.run('DELETE FROM push_subs WHERE room_id = ? AND endpoint = ?', roomId, endpoint);
+  }
+  async hasPushSub(roomId: string, endpoint: string) {
+    return !!(await this.db.first('SELECT 1 AS x FROM push_subs WHERE room_id = ? AND endpoint = ?', roomId, endpoint));
+  }
+
+  /** 방장이 이 방을 보고 있다고 기록(15초에 한 번만 써요) */
+  async ownerSeen(room: RoomRow) {
+    const now = Date.now();
+    if (room.owner_seen && now - room.owner_seen < 15_000) return;
+    await this.db.run('UPDATE rooms SET owner_seen = ? WHERE id = ?', now, room.id);
+  }
+
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 30, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul' };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 30, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null };
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at) VALUES (?, ?, ?, ?)', room.id, room.name, room.owner_token, room.created_at);
     return room;
   }
@@ -220,6 +263,7 @@ export class Rooms {
   async deleteRoom(id: string) {
     await this.db.run('DELETE FROM messages WHERE room_id = ?', id);
     await this.db.run('DELETE FROM members WHERE room_id = ?', id);
+    await this.db.run('DELETE FROM push_subs WHERE room_id = ?', id);
     await this.db.run('DELETE FROM rooms WHERE id = ?', id);
   }
 

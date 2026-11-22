@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { LockScreen } from '../components/LockScreen';
 import { api } from '../lib/api';
+import { registerServiceWorker } from '../lib/push';
 import { StoreProvider, useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 
@@ -60,12 +61,16 @@ function Root() {
       <Stack.Screen name="room/new" options={{ title: '새 채팅방', presentation: 'modal' }} />
       <Stack.Screen name="room/[id]/index" options={{ title: '채팅방' }} />
       <Stack.Screen name="room/[id]/members" options={{ title: '멤버', presentation: 'modal' }} />
-      <Stack.Screen name="room/[id]/settings" options={{ title: '방 설정', presentation: 'modal' }} />
+      <Stack.Screen name="room/[id]/settings" options={{ title: '방 설정 · 알림', presentation: 'modal' }} />
     </Stack>
   );
 }
 
 export default function Layout() {
+  // 웹에서는 앱을 열 때 알림 담당(서비스 워커)을 등록해 둬요(알림을 누르면 채팅방이 열리게).
+  useEffect(() => {
+    registerServiceWorker()?.catch(() => {});
+  }, []);
   return (
     <StoreProvider>
       <StatusBar style="auto" />

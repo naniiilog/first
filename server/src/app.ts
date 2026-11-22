@@ -7,6 +7,7 @@ import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
 import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
 import { cleanReset, windowEnd } from './usage.js';
+import { NOTIFY_MODES, notifyBotMessage, sendTest, vapid } from './push.js';
 
 /**
  * 다봇 서버 (Node와 Cloudflare Worker가 같이 써요)
@@ -28,6 +29,9 @@ import { cleanReset, windowEnd } from './usage.js';
  *   POST   /api/rooms/:id/members/:mid/reset-usage           사용량 지금 0으로
  *   GET    /api/rooms/:id/usage                              봇 사용량
  *   DELETE /api/rooms/:id/members/:mid
+ *   GET    /api/push/key                                     알림 공개 열쇠
+ *   POST/DELETE/GET /api/rooms/:id/push                       이 기기 알림 구독
+ *   POST   /api/rooms/:id/push/test                          시험 알림
  *
  * AI 에이전트용 MCP 입구 — 초대 링크 자체가 열쇠예요
  *   POST   /mcp/:inviteToken
@@ -128,7 +132,7 @@ async function shortHash(text: string): Promise<string> {
 
 const cleanName = (v: unknown, max = 30) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-export async function handle(req: Request, env: Env, db: Db, clientIp: string): Promise<Response> {
+export async function handle(req: Request, env: Env, db: Db, clientIp: string, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   try {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     const url = new URL(req.url);
@@ -137,6 +141,11 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
 
     await ensureSchema(db);
     const rooms = new Rooms(db);
+    // 봇이 말하면 방장 휴대폰으로 알림(응답을 늦추지 않게 뒤에서 보내요)
+    rooms.notifier = (room, msg) => {
+      const job = notifyBotMessage(db, room, msg, url.origin).catch((e) => console.error('[push]', e));
+      if (waitUntil) waitUntil(job);
+    };
 
     // ── AI 에이전트 입구 ──
     if (parts[0] === 'mcp' && parts[1]) {
@@ -192,6 +201,11 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       throw new HttpError(401, '앱 비밀번호가 맞지 않아요.');
     }
 
+    // 알림 구독에 쓸 공개 열쇠
+    if (parts[1] === 'push' && parts[2] === 'key' && req.method === 'GET') {
+      return json(200, { publicKey: (await vapid(db)).publicKey });
+    }
+
     if (parts[1] !== 'rooms') throw new HttpError(404, 'Not found');
 
     // ── 방 만들기 ──
@@ -226,6 +240,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
             quietEnd: room.quiet_end,
             tz: room.tz,
             quietNow: quietState(room).quiet,
+            notifyMode: room.notify_mode || 'off',
+            notifySilent: room.notify_silent === 1,
           },
           // 방장만 보는 목록이라 초대 링크도 같이 줘요(누르면 바로 보이게).
           // online: 최근 90초 안에 방을 확인한 봇(= 지금 대화 중) → 앱에서 초록불이 깜빡여요.
@@ -254,6 +270,13 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
           tz: typeof b.tz === 'string' && /^[A-Za-z_]+\/[A-Za-z_]+$/.test(b.tz) ? b.tz : undefined,
         };
         if (Object.values(sched).some((v) => v !== undefined)) await rooms.setSchedule(room, sched);
+        // 휴대폰 알림 설정
+        const notifyMode = typeof b.notifyMode === 'string' && (NOTIFY_MODES as string[]).includes(b.notifyMode) ? b.notifyMode : undefined;
+        const notifySilent = typeof b.notifySilent === 'boolean' ? b.notifySilent : undefined;
+        const notifyName = typeof b.notifyName === 'string' ? cleanName(b.notifyName) : undefined;
+        if (notifyMode !== undefined || notifySilent !== undefined || notifyName !== undefined) {
+          await rooms.setNotify(room.id, { mode: notifyMode, silent: notifySilent, name: notifyName });
+        }
         if (typeof b.freeTalk === 'boolean') await rooms.setFreeTalk(room, b.freeTalk);
         if (typeof b.closed === 'boolean') await rooms.setClosed(room, b.closed);
         return json(200, { ok: true });
@@ -296,9 +319,34 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
       });
     }
 
+    // 이 기기 알림 구독: POST {subscription}, DELETE {endpoint}, GET ?endpoint= (구독돼 있나), POST /push/test
+    if (sub === 'push') {
+      if (parts[4] === 'test' && req.method === 'POST') return json(200, await sendTest(db, room, url.origin));
+      if (req.method === 'GET') {
+        const endpoint = url.searchParams.get('endpoint') ?? '';
+        return json(200, { subscribed: endpoint ? await rooms.hasPushSub(room.id, endpoint) : false });
+      }
+      const b = await body(req);
+      if (req.method === 'POST') {
+        const s = b.subscription;
+        const ok =
+          s && typeof s.endpoint === 'string' && /^https:\/\//.test(s.endpoint) && s.endpoint.length < 1000 &&
+          typeof s.keys?.p256dh === 'string' && s.keys.p256dh.length < 200 && typeof s.keys?.auth === 'string' && s.keys.auth.length < 100;
+        if (!ok) throw new HttpError(400, '알림 구독 정보가 올바르지 않아요.');
+        await rooms.addPushSub(room.id, { endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth });
+        return json(200, { ok: true });
+      }
+      if (req.method === 'DELETE') {
+        if (typeof b.endpoint === 'string') await rooms.removePushSub(room.id, b.endpoint);
+        return json(200, { ok: true });
+      }
+    }
+
     if (sub === 'messages') {
       if (req.method === 'GET') {
         const after = url.searchParams.get('after');
+        // 방 화면이 새 글을 확인하는 중이면 '방장이 보고 있음'(알림 안 보내요)
+        if (after) await rooms.ownerSeen(room);
         const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') ?? (after ? 200 : 100)) || 100));
         const rows = await rooms.messages(room.id, after ? Number(after) : null, limit);
         return json(200, { messages: rows.map(publicMessage) });

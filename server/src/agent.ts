@@ -219,6 +219,11 @@ export class AgentSession {
     if (replyTo != null && !(await this.rooms.message(this.room.id, replyTo))) replyTo = null;
     const id = await this.rooms.post(this.room.id, this.me.id, this.me.name, body, { replyTo, image: opts.image ?? null });
     await this.rooms.setCursor(this.me.id, id);
+    // 방장 휴대폰 알림(응답은 기다리지 않아요)
+    this.rooms.notifier?.(this.room, {
+      id, room_id: this.room.id, author_id: this.me.id, author_name: this.me.name, text: body,
+      created_at: Date.now(), reply_to: replyTo ?? null, image: opts.image ?? null,
+    });
     // 사용량이 다 찼다고 표시된 봇이 다시 말하면, 다시 쓸 수 있게 된 거예요.
     if (this.me.exhausted === 1) {
       this.me.exhausted = 0;

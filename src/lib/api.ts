@@ -52,10 +52,15 @@ export interface RoomInfo {
     tz?: string;
     /** 지금 매너타임인지 */
     quietNow?: boolean;
+    notifyMode?: NotifyMode;
+    notifySilent?: boolean;
   };
   members: Member[];
 }
 const roomCache = new Map<string, { etag: string; data: RoomInfo }>();
+
+/** 휴대폰 알림 조건: 끔 · 나한테 하는 말만 · 모든 글(묶어서) · 모든 글(하나하나) */
+export type NotifyMode = 'off' | 'mentions' | 'batch' | 'each';
 
 /** 봇 사용량 대시보드 응답 */
 export interface UsageMember {
@@ -148,6 +153,19 @@ export const api = {
 
   updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
+
+  /** 휴대폰 알림 */
+  pushKey: (s: Settings) => call<{ publicKey: string }>(s, '/api/push/key'),
+  pushStatus: (s: Settings, r: LocalRoom, endpoint: string) =>
+    call<{ subscribed: boolean }>(s, `/api/rooms/${r.id}/push?endpoint=${encodeURIComponent(endpoint)}`, { ownerToken: r.ownerToken }),
+  pushSubscribe: (s: Settings, r: LocalRoom, subscription: unknown) =>
+    call(s, `/api/rooms/${r.id}/push`, { method: 'POST', body: { subscription }, ownerToken: r.ownerToken }),
+  pushUnsubscribe: (s: Settings, r: LocalRoom, endpoint: string) =>
+    call(s, `/api/rooms/${r.id}/push`, { method: 'DELETE', body: { endpoint }, ownerToken: r.ownerToken }),
+  pushTest: (s: Settings, r: LocalRoom) => call<{ sent: number; failed: number }>(s, `/api/rooms/${r.id}/push/test`, { method: 'POST', ownerToken: r.ownerToken }),
+  /** 알림 조건·소리 */
+  setNotify: (s: Settings, r: LocalRoom, patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string }) =>
+    call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 사용량(오늘 0시부터) */
   usage: (s: Settings, r: LocalRoom) => call<UsageInfo>(s, `/api/rooms/${r.id}/usage`, { ownerToken: r.ownerToken }),

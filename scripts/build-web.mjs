@@ -10,6 +10,9 @@ const out = join(root, 'server', 'web-dist');
 execSync(`npx expo export --platform web --output-dir "${out}"`, { cwd: root, stdio: 'inherit' });
 
 copyFileSync(join(root, 'assets', 'icon.png'), join(out, 'icon-1024.png'));
+// 휴대폰 알림용: 서비스 워커와 작은 아이콘
+copyFileSync(join(root, 'scripts', 'sw.js'), join(out, 'sw.js'));
+copyFileSync(join(root, 'assets', 'icon-192.png'), join(out, 'icon-192.png'));
 
 writeFileSync(
   join(out, 'manifest.webmanifest'),

@@ -307,7 +307,7 @@ export default function RoomScreen() {
         onClose={() => setMenuOpen(false)}
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
-          { icon: 'time-outline', label: '확인 간격 · 매너타임', onPress: openSettings },
+          { icon: 'notifications-outline', label: '확인 간격 · 매너타임 · 알림', onPress: openSettings },
           { icon: 'stats-chart-outline', label: '봇 사용량', onPress: () => router.push({ pathname: '/usage', params: { room: room.id } }) },
           closed
             ? { icon: 'sunny-outline', label: '봇 다시 부르기', onPress: () => run(live.setRoomClosed(false)) }

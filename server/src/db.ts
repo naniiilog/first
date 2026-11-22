@@ -39,6 +39,16 @@ const SCHEMA = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS messages_room ON messages(room_id, id)`,
+  // 휴대폰 알림 구독(기기 × 방)
+  `CREATE TABLE IF NOT EXISTS push_subs (
+    endpoint TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (endpoint, room_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS push_subs_room ON push_subs(room_id)`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -46,7 +56,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '9';
+const SCHEMA_VERSION = '10';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -83,6 +93,17 @@ export function ensureSchema(db: Db): Promise<void> {
       'exhausted INTEGER NOT NULL DEFAULT 0',
     ]) {
       await db.run(`ALTER TABLE members ADD COLUMN ${col}`).catch(() => {});
+    }
+    // 휴대폰 알림 설정(방마다)
+    for (const col of [
+      "notify_mode TEXT NOT NULL DEFAULT 'off'",
+      'notify_silent INTEGER NOT NULL DEFAULT 0',
+      'notify_name TEXT',
+      'notify_last INTEGER',
+      'notify_last_id INTEGER',
+      'owner_seen INTEGER',
+    ]) {
+      await db.run(`ALTER TABLE rooms ADD COLUMN ${col}`).catch(() => {});
     }
     await db.run(
       "INSERT INTO app_settings (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
