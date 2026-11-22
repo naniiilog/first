@@ -247,7 +247,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
         // 확인 간격(분)과 매너타임
         const hour = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : undefined);
         const sched = {
-          checkIntervalMin: typeof b.checkIntervalMin === 'number' && [0, 1, 5, 10, 30, 60, 120].includes(b.checkIntervalMin) ? b.checkIntervalMin : undefined,
+          checkIntervalMin: typeof b.checkIntervalMin === 'number' && [0, 1, 5, 10, 15, 20, 30, 40, 60, 120].includes(b.checkIntervalMin) ? b.checkIntervalMin : undefined,
           quietEnabled: typeof b.quietEnabled === 'boolean' ? b.quietEnabled : undefined,
           quietStart: hour(b.quietStart),
           quietEnd: hour(b.quietEnd),

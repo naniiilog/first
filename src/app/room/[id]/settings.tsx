@@ -7,7 +7,7 @@ import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
 
 /** 봇이 방을 확인하는 간격(분). 0은 실시간. */
-const INTERVALS = [0, 1, 5, 10, 30, 60, 120];
+const INTERVALS = [0, 1, 5, 10, 15, 20, 30, 40, 60, 120];
 const intervalLabel = (n: number) => (n === 0 ? '실시간' : n >= 60 ? `${n / 60}시간` : `${n}분`);
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const pad2 = (n: number) => String(n).padStart(2, '0');
