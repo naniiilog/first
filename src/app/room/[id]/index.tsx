@@ -32,6 +32,9 @@ function toRows(messages: ChatMessage[]): Row[] {
   });
 }
 
+/** 한 번에 그리는 메시지 수 */
+const PAGE = 150;
+
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings, forgetRoom } = useStore();
@@ -49,6 +52,8 @@ export default function RoomScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   /** 크게 보는 사진 */
   const [viewing, setViewing] = useState<string | null>(null);
+  /** 화면에 그리는 최근 메시지 수. 위의 '이전 대화 더 보기'로 늘려요. */
+  const [showCount, setShowCount] = useState(PAGE);
 
   /** 맨 아래를 보고 있는지. 위에서 읽는 중이면 새 메시지가 와도 끌어내리지 않아요. */
   const atBottom = useRef(true);
@@ -66,6 +71,8 @@ export default function RoomScreen() {
   const goBottom = (animated: boolean) => {
     autoScrollUntil.current = Date.now() + (animated ? 700 : 250);
     listRef.current?.scrollToEnd({ animated });
+    // 웹에서는 마지막 말풍선 높이가 한 박자 늦게 정해져서 끝까지 안 내려갈 때가 있어요. 한 번 더 내려요.
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), animated ? 400 : 80);
     atBottom.current = true;
     setSeenCount(messages.length);
   };
@@ -129,7 +136,8 @@ export default function RoomScreen() {
 
   const openMenu = () => setMenuOpen(true);
 
-  const rows = toRows(messages);
+  const hidden = Math.max(0, messages.length - showCount);
+  const rows = toRows(hidden ? messages.slice(hidden) : messages);
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
   const messageById = new Map(messages.map((m) => [m.id, m]));
   const nameOf = (m: ChatMessage) => (m.authorId === OWNER_ID ? settings.userName : (memberById[m.authorId]?.name ?? m.authorName));
@@ -187,10 +195,16 @@ export default function RoomScreen() {
         ref={listRef}
         data={rows}
         keyExtractor={(r) => String(r.msg.id)}
-        // 짧은 대화(화면에 다 들어가서 스크롤이 없을 때)도 새 글이 바로 그려지게 넉넉히 그려요.
-        initialNumToRender={40}
-        maxToRenderPerBatch={40}
-        windowSize={11}
+        // 웹에서 목록을 나눠 그리다 멈추면 새 메시지가 안 보여요. 최근 메시지만 모두 그려요(나머지는 '이전 대화 더 보기').
+        disableVirtualization
+        initialNumToRender={showCount}
+        ListHeaderComponent={
+          hidden > 0 ? (
+            <Pressable onPress={() => setShowCount((n) => n + PAGE)} style={[styles.morePill, { backgroundColor: t.card, borderColor: t.border }]}>
+              <Text style={{ color: t.accent, fontWeight: '700', fontSize: 13 }}>이전 대화 더 보기 ({hidden}개)</Text>
+            </Pressable>
+          ) : undefined
+        }
         contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8, flexGrow: 1 }}
         scrollEventThrottle={100}
         onScroll={(e) => {
@@ -550,6 +564,7 @@ const styles = StyleSheet.create({
   viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   memberBar: { paddingTop: 2, paddingBottom: 6, paddingHorizontal: 10, gap: 4 },
+  morePill: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },
   memberWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
