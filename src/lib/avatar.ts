@@ -14,7 +14,7 @@ export const DEFAULT_AVATAR: ImageSourcePropType = require('../../assets/default
 
 /**
  * AI 종류별 기본 프로필(그 앱 아이콘, 모두 256px). 아이콘이 없는 종류는 회색 로봇이에요.
- * ChatGPT·클로드·제미나이는 @lobehub/icons(MIT), 나머지는 방장 휴대폰의 앱 아이콘을 잘라 썼어요.
+ * ChatGPT·클로드·제미나이·그록·뮤즈는 @lobehub/icons(MIT), 나머지는 방장 휴대폰의 앱 아이콘을 잘라 썼어요.
  */
 const AI_ICONS: Record<string, ImageSourcePropType> = {
   chatgpt: require('../../assets/ai/chatgpt.png'),
