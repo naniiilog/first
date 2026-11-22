@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,10 +50,25 @@ export default function RoomScreen() {
   /** 크게 보는 사진 */
   const [viewing, setViewing] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-    return () => clearTimeout(timer);
-  }, [messages.length]);
+  /** 맨 아래를 보고 있는지. 위에서 읽는 중이면 새 메시지가 와도 끌어내리지 않아요. */
+  const atBottom = useRef(true);
+  /** 다음 내용 변화 때 무조건 맨 아래로(처음 열 때, 내가 보낼 때) */
+  const forceBottom = useRef(true);
+  /** 마지막으로 처리한 내용 높이. 새 메시지로 길어진 순간의 스크롤 이벤트를 '사용자가 위로 올림'으로 오해하지 않게 해요. */
+  const contentH = useRef(0);
+  /** 맨 아래에서 본 메시지 수. 그 뒤에 온 건 '새 메시지'로 세요. */
+  const [seenCount, setSeenCount] = useState(0);
+  const unread = Math.max(0, messages.length - seenCount);
+
+  /** 앱이 스스로 내리는 동안에는 스크롤 이벤트로 '위로 올림'을 판단하지 않아요. */
+  const autoScrollUntil = useRef(0);
+
+  const goBottom = (animated: boolean) => {
+    autoScrollUntil.current = Date.now() + (animated ? 700 : 250);
+    listRef.current?.scrollToEnd({ animated });
+    atBottom.current = true;
+    setSeenCount(messages.length);
+  };
 
   if (!room) {
     return (
@@ -73,7 +88,8 @@ export default function RoomScreen() {
   const send = () => {
     const body = text.trim();
     if (!body && !photo) return;
-    // 입력창은 바로 비우고, 메시지도 바로 화면에 보여줘요.
+    // 입력창은 바로 비우고, 메시지도 바로 화면에 보여줘요(내 메시지는 맨 아래로 내려가서 보여줘요).
+    forceBottom.current = true;
     setText('');
     setPhoto(null);
     const target = replyTo;
@@ -158,11 +174,29 @@ export default function RoomScreen() {
         </Text>
       )}
 
+      <View style={{ flex: 1 }}>
       <FlatList
         ref={listRef}
         data={rows}
         keyExtractor={(r) => String(r.msg.id)}
         contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8, flexGrow: 1 }}
+        scrollEventThrottle={100}
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          if (Date.now() < autoScrollUntil.current) return;
+          const height = contentH.current || contentSize.height;
+          const fromBottom = height - (contentOffset.y + layoutMeasurement.height);
+          atBottom.current = fromBottom < 80;
+          if (atBottom.current && seenCount !== messages.length) setSeenCount(messages.length);
+        }}
+        onContentSizeChange={(_w, h) => {
+          contentH.current = h;
+          // 새 메시지로 내용이 길어졌을 때: 맨 아래를 보고 있었으면 따라 내려가고, 위에서 읽는 중이면 그대로 둬요.
+          if (forceBottom.current || atBottom.current) {
+            forceBottom.current = false;
+            goBottom(false);
+          }
+        }}
         ListEmptyComponent={
           <View style={styles.center}>
             <Text style={[styles.systemPill, { color: t.systemText, backgroundColor: t.systemPill, lineHeight: 20, textAlign: 'center' }]}>
@@ -183,6 +217,12 @@ export default function RoomScreen() {
           />
         )}
       />
+      {unread > 0 && (
+        <Pressable onPress={() => goBottom(true)} style={[styles.newPill, { backgroundColor: t.accent }]} accessibilityLabel="새 메시지 보기">
+          <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>새 메시지 {unread}개 ↓</Text>
+        </Pressable>
+      )}
+      </View>
 
       {closed ? (
         /* 봇 모두 쉬는 중: 봇들이 대화를 멈춰서 토큰을 안 써요. 대화 내용은 그대로예요 */
@@ -440,6 +480,19 @@ function MessageRow({
 }
 
 const styles = StyleSheet.create({
+  newPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
   quote: { borderLeftWidth: 3, paddingLeft: 8, marginBottom: 6 },
   photo: { width: 200, height: 200, borderRadius: 10, marginBottom: 4 },
   composeExtra: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
