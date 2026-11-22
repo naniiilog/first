@@ -81,7 +81,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       const s = await session();
       if (isError(s)) return errorResult(s);
       const members = await s.roster();
-      const lines = members.map((m) => `- ${m.name}${m.id === s.me.id ? ' (나)' : ''} · ${m.active ? '참가 중' : '쉬는 중'}${m.last_seen ? '' : ' · 아직 안 들어옴'}`);
+      const lines = members.map((m) => `- ${m.name}${m.id === s.me.id ? ' (나)' : ''} · ${!m.active ? '쉬는 중' : m.exhausted ? '사용량 소진(답 기다리지 않기)' : '참가 중'}${m.last_seen ? '' : ' · 아직 안 들어옴'}`);
       return result(
         [
           `방 이름: ${s.room.name}`,

@@ -90,7 +90,7 @@ export async function handleAgentHttp(
       ok: true,
       room: s.room.name,
       you: s.me.name,
-      members: members.map((m) => ({ name: m.name, active: m.active === 1, me: m.id === s.me.id })),
+      members: members.map((m) => ({ name: m.name, active: m.active === 1, exhausted: m.exhausted === 1, me: m.id === s.me.id })),
       free_talk: s.freeTalk,
       rule: s.hint(),
       security: SECURITY_RULE,

@@ -22,16 +22,19 @@ function ActionPill({
   icon,
   active,
   danger,
+  tint,
   onPress,
 }: {
   label: string;
   icon: ComponentProps<typeof Ionicons>['name'];
   active?: boolean;
   danger?: boolean;
+  /** 버튼 색을 따로 정할 때(사용량 소진은 주황) */
+  tint?: string;
   onPress: () => void;
 }) {
   const t = useTheme();
-  const color = danger ? t.danger : t.accent;
+  const color = tint ?? (danger ? t.danger : t.accent);
   return (
     <Pressable
       onPress={onPress}
@@ -56,7 +59,7 @@ export default function MembersScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings } = useStore();
   // 멤버 화면에서는 메시지를 확인할 필요가 없어서 멤버만 받아와요(더 빨라요).
-  const { room, members, membersLoaded, setMembers, refreshMembers, error, toggleMember } = useLiveRoom(id, { messages: false });
+  const { room, members, membersLoaded, setMembers, refreshMembers, error, toggleMember, toggleExhausted } = useLiveRoom(id, { messages: false });
   const t = useTheme();
   const [kind, setKind] = useState<AiKind | null>(null);
   const [name, setName] = useState('');
@@ -161,12 +164,23 @@ export default function MembersScreen() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{m.name}</Text>
                     <Text style={{ color: t.subtext, fontSize: 12 }}>
-                      {ai.name} · {m.joined ? '들어옴' : '아직 안 들어옴'} · {!m.active ? '쉬는 중' : m.online ? '🟢 대화 중' : '참가 중'}
+                      {ai.name} · {m.joined ? '들어옴' : '아직 안 들어옴'} · {!m.active ? '쉬는 중' : m.exhausted ? '🟠 사용량 소진' : m.online ? '🟢 대화 중' : '참가 중'}
                     </Text>
                     <View style={styles.pills}>
                       <ActionPill label="프로필" icon="person-circle-outline" active={open === 'profile'} onPress={() => toggle(m.id, 'profile')} />
                       <ActionPill label="초대 링크" icon="link-outline" active={open === 'link'} onPress={() => toggle(m.id, 'link')} />
-                      {m.active && !m.online && <ActionPill label="다시 부르기" icon="refresh-outline" onPress={() => callBack(m)} />}
+                      {m.active && !m.online && !m.exhausted && <ActionPill label="다시 부르기" icon="refresh-outline" onPress={() => callBack(m)} />}
+                      <ActionPill
+                        label={m.exhausted ? '사용량 소진 중' : '사용량 소진'}
+                        icon="battery-dead-outline"
+                        tint="#F59E0B"
+                        active={!!m.exhausted}
+                        onPress={() => {
+                          toggleExhausted(m).then((err) => {
+                            if (err) setActionError(err);
+                          });
+                        }}
+                      />
                       <ActionPill
                         label={confirmRemove === m.id ? '한 번 더 누르면 내보내요' : '내보내기'}
                         icon="exit-outline"

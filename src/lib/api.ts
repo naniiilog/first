@@ -64,6 +64,7 @@ export interface UsageMember {
   name: string;
   avatar: string | null;
   active: boolean;
+  exhausted: boolean;
   joined: boolean;
   online: boolean;
   lastSeen: number | null;
@@ -145,7 +146,7 @@ export const api = {
   inviteUrl: (s: Settings, r: LocalRoom, memberId: string) =>
     call<{ inviteUrl: string }>(s, `/api/rooms/${r.id}/members/${memberId}/invite`, { ownerToken: r.ownerToken }),
 
-  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null }) =>
+  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 사용량(오늘 0시부터) */

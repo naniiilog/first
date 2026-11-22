@@ -47,6 +47,8 @@ export interface MemberRow {
   /** 초기화 주기: 'daily'(매일 reset_value시) | 'hours'(reset_value시간마다) */
   reset_mode: string;
   reset_value: number;
+  /** 1이면 사용량이 다 차서 못 쓰는 중(주황불). 그 봇이 다시 말하면 저절로 꺼져요. */
+  exhausted: number;
 }
 
 export interface MessageRow {
@@ -74,6 +76,7 @@ export const publicMember = (m: MemberRow) => ({
   kind: m.kind,
   name: m.name,
   active: m.active === 1,
+  exhausted: m.exhausted === 1,
   joined: m.last_seen !== null,
   avatar: m.avatar ?? null,
   // 분 단위로만 알려줘요(에이전트가 확인할 때마다 값이 바뀌면 '바뀐 게 없으면 304'가 안 먹혀서).
@@ -167,6 +170,11 @@ export class Rooms {
       'UPDATE members SET use_calls = use_calls + 1, use_in = use_in + ?, use_out = use_out + ?, use_sent = use_sent + ? WHERE id = ?',
       u.inChars, u.outChars, u.sent, memberId,
     );
+  }
+
+  /** 사용량이 다시 찬 봇이 말하면 주황불을 꺼요. */
+  clearExhausted(memberId: string) {
+    return this.db.run('UPDATE members SET exhausted = 0 WHERE id = ?', memberId);
   }
 
   setReset(memberId: string, mode: string, value: number) {
@@ -265,6 +273,7 @@ export class Rooms {
       use_out: 0,
       reset_mode: resetForKind(kind).mode,
       reset_value: resetForKind(kind).value,
+      exhausted: 0,
     };
     await this.db.run(
       'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at, reset_mode, reset_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -274,7 +283,17 @@ export class Rooms {
     return m;
   }
 
-  async updateMember(m: MemberRow, patch: { name?: string; active?: boolean; avatar?: string | null }) {
+  async updateMember(m: MemberRow, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean }) {
+    if (patch.exhausted !== undefined && (patch.exhausted ? 1 : 0) !== m.exhausted) {
+      await this.db.run('UPDATE members SET exhausted = ? WHERE id = ?', patch.exhausted ? 1 : 0, m.id);
+      const name = patch.name ?? m.name;
+      await this.post(
+        m.room_id,
+        SYSTEM_ID,
+        '안내',
+        patch.exhausted ? `${name} 님은 사용량이 다 차서 잠시 쉬어요. 다른 봇은 ${name} 님의 답을 기다리지 마세요.` : `${name} 님의 사용량이 다시 찼어요.`,
+      );
+    }
     if (patch.name !== undefined) await this.db.run('UPDATE members SET name = ? WHERE id = ?', patch.name, m.id);
     if (patch.avatar !== undefined) await this.db.run('UPDATE members SET avatar = ? WHERE id = ?', patch.avatar, m.id);
     if (patch.active !== undefined && (patch.active ? 1 : 0) !== m.active) {

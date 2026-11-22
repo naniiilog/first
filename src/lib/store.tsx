@@ -168,6 +168,16 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
       () => api.updateMember(settings, room!, m.id, { active: !m.active }),
     );
 
+  /** 사용량 소진(주황불) 켜고 끄기 */
+  const toggleExhausted = (m: Member) =>
+    optimistic(
+      () => {
+        setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, exhausted: !m.exhausted } : x)));
+        return () => setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, exhausted: m.exhausted } : x)));
+      },
+      () => api.updateMember(settings, room!, m.id, { exhausted: !m.exhausted }),
+    );
+
   const toggleFreeTalk = () => {
     const before = freeTalk;
     return optimistic(
@@ -232,6 +242,7 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
     refreshMessages,
     refreshMembers,
     toggleMember,
+    toggleExhausted,
     toggleFreeTalk,
     setRoomClosed,
     sendMessage,

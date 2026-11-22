@@ -22,7 +22,13 @@ function BotCard({ m, max }: { m: UsageMember; max: number }) {
   const tok = tokIn + tokOut;
   const share = max > 0 ? tok / max : 0;
   const ai = aiOf(m.kind);
-  const status = !m.active ? { c: '#EF4444', t: '쉬는 중' } : m.online ? { c: '#22C55E', t: '대화 중' } : { c: '#9CA3AF', t: '대기' };
+  const status = !m.active
+    ? { c: '#EF4444', t: '쉬는 중' }
+    : m.exhausted
+      ? { c: '#F59E0B', t: '사용량 소진' }
+      : m.online
+        ? { c: '#22C55E', t: '대화 중' }
+        : { c: '#9CA3AF', t: '대기' };
 
   return (
     <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>

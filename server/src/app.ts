@@ -24,7 +24,7 @@ import { cleanReset, windowEnd } from './usage.js';
  *   POST   /api/rooms/:id/messages            { text, authorName }
  *   POST   /api/rooms/:id/members             { kind, name }      → { member, inviteUrl }
  *   GET    /api/rooms/:id/members/:mid/invite                     → { inviteUrl }
- *   PATCH  /api/rooms/:id/members/:mid        { name?, active?, avatar? }
+ *   PATCH  /api/rooms/:id/members/:mid        { name?, active?, avatar?, exhausted? }
  *   POST   /api/rooms/:id/members/:mid/reset-usage           사용량 지금 0으로
  *   GET    /api/rooms/:id/usage                              봇 사용량
  *   DELETE /api/rooms/:id/members/:mid
@@ -339,6 +339,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
           name: cleanName(b.name) || undefined,
           active: typeof b.active === 'boolean' ? b.active : undefined,
           avatar: cleanAvatar(b.avatar),
+          exhausted: typeof b.exhausted === 'boolean' ? b.exhausted : undefined,
         });
         const reset = cleanReset(b.resetMode, b.resetValue);
         if (reset) await rooms.setReset(m.id, reset.mode, reset.value);

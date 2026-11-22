@@ -91,7 +91,7 @@ export function relayState(rows: RelayRow[], members: MemberRow[], me: MemberRow
   const after = rows.slice(1).filter((r) => r.author_id !== SYSTEM_ID);
   const answered = new Set(after.map((r) => r.author_id));
   const present = (m: MemberRow) => m.id === me.id || (m.last_seen !== null && now - m.last_seen < PRESENT_MS);
-  const eligible = members.filter((m) => m.active === 1 && present(m) && (freeTalk || mentions(q.text, m.name)));
+  const eligible = members.filter((m) => m.active === 1 && (m.exhausted !== 1 || m.id === me.id) && present(m) && (freeTalk || mentions(q.text, m.name)));
   const idx = eligible.findIndex((m) => m.id === me.id);
   if (idx < 0 || answered.has(me.id)) return null;
   const pending = eligible.slice(0, idx).filter((m) => !answered.has(m.id));
@@ -219,6 +219,11 @@ export class AgentSession {
     if (replyTo != null && !(await this.rooms.message(this.room.id, replyTo))) replyTo = null;
     const id = await this.rooms.post(this.room.id, this.me.id, this.me.name, body, { replyTo, image: opts.image ?? null });
     await this.rooms.setCursor(this.me.id, id);
+    // 사용량이 다 찼다고 표시된 봇이 다시 말하면, 다시 쓸 수 있게 된 거예요.
+    if (this.me.exhausted === 1) {
+      this.me.exhausted = 0;
+      await this.rooms.clearExhausted(this.me.id);
+    }
     return { id };
   }
 

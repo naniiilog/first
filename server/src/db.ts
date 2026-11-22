@@ -46,7 +46,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '8';
+const SCHEMA_VERSION = '9';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -79,6 +79,8 @@ export function ensureSchema(db: Db): Promise<void> {
       'use_out INTEGER NOT NULL DEFAULT 0',
       "reset_mode TEXT NOT NULL DEFAULT 'daily'",
       'reset_value INTEGER NOT NULL DEFAULT 0',
+      // 그 AI 앱의 사용량이 다 차서 못 쓰는 중(방장이 켜요, 주황불)
+      'exhausted INTEGER NOT NULL DEFAULT 0',
     ]) {
       await db.run(`ALTER TABLE members ADD COLUMN ${col}`).catch(() => {});
     }

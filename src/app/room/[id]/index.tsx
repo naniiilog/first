@@ -86,7 +86,7 @@ export default function RoomScreen() {
   }
 
   /** 참가 중인데 지금 연결이 안 된 봇 수 */
-  const away = members.filter((m) => m.active && m.joined && !m.online).length;
+  const away = members.filter((m) => m.active && !m.exhausted && m.joined && !m.online).length;
   const openSettings = () => room && router.push({ pathname: '/room/[id]/settings', params: { id: room.id } });
   const openMembers = () => router.push({ pathname: '/room/[id]/members', params: { id: room.id } });
   /** 버튼 동작은 화면을 먼저 바꾸고(바로 반응), 실패하면 되돌린 뒤 이유를 보여줘요. */
@@ -171,12 +171,13 @@ export default function RoomScreen() {
       {/* 봇이 많아도 한눈에 보이게: 옆으로 밀지 않고 여러 줄로 작게 보여줘요(너무 많으면 이 칸만 위아래로 밀어요). */}
       <View style={styles.memberBar}>
         <Text style={[styles.memberSummary, { color: t.chatTime }]}>
-          참가 {members.filter((m) => m.active).length} · 대화 중 {members.filter((m) => m.active && m.online).length} · 쉬는 중{' '}
+          참가 {members.filter((m) => m.active).length} · 대화 중 {members.filter((m) => m.active && !m.exhausted && m.online).length}
+          {members.some((m) => m.active && m.exhausted) ? ` · 소진 ${members.filter((m) => m.active && m.exhausted).length}` : ''} · 쉬는 중{' '}
           {members.filter((m) => !m.active).length}
         </Text>
         <ScrollView style={{ maxHeight: 96 }} contentContainerStyle={styles.memberWrap} showsVerticalScrollIndicator={false}>
           {members.map((m) => (
-            <MemberChip key={m.id} member={m} onPress={() => run(live.toggleMember(m))} />
+            <MemberChip key={m.id} member={m} onPress={() => run(live.toggleMember(m))} onLongPress={() => run(live.toggleExhausted(m))} />
           ))}
           <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
             <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
@@ -205,7 +206,8 @@ export default function RoomScreen() {
             </Pressable>
           ) : undefined
         }
-        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8, flexGrow: 1 }}
+        // 빈 방일 때만 안내를 가운데 두려고 늘려요(글이 있을 때 늘리면 짧은 대화에서 새 글이 와도 높이가 안 바뀌어 '새 메시지' 표시가 잘못 떠요).
+        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8, flexGrow: rows.length ? 0 : 1 }}
         scrollEventThrottle={100}
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -384,23 +386,28 @@ function BlinkDot() {
 }
 
 /**
- * 위쪽 멤버 칩: 누르면 참가를 켜고 꺼요.
- * 대화 중(최근 확인)이면 초록불이 깜빡이고, 참가 중이면 초록불, 쉬는 중이면 빨간불.
+ * 위쪽 멤버 칩: 누르면 참가를 켜고 꺼요. 길게 누르면 '사용량 소진'(주황불)을 켜고 꺼요.
+ * 쉬는 중 빨간불 · 사용량 소진 주황불 · 대화 중 깜빡이는 초록불 · 참가 중 초록불
  */
-function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
+function MemberChip({ member, onPress, onLongPress }: { member: Member; onPress: () => void; onLongPress: () => void }) {
   const t = useTheme();
-  const talking = member.active && member.online;
+  const talking = member.active && !member.exhausted && member.online;
+  const state = !member.active ? '쉬는 중' : member.exhausted ? '사용량 소진' : talking ? '대화 중' : '참가 중';
+  const color = !member.active ? '#EF4444' : member.exhausted ? '#F59E0B' : '#22C55E';
   return (
     <Pressable
       onPress={onPress}
-      accessibilityLabel={`${member.name} ${!member.active ? '쉬는 중' : talking ? '대화 중' : '참가 중'}`}
+      onLongPress={onLongPress}
+      delayLongPress={450}
+      accessibilityLabel={`${member.name} ${state}`}
+      accessibilityHint="누르면 참가를 켜고 꺼요. 길게 누르면 사용량 소진 표시를 켜고 꺼요."
       style={({ pressed }) => [styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff, opacity: pressed ? 0.6 : 1 }]}
     >
-      <Avatar bot={lookOf(member.kind, member.avatar)} size={18} dim={!member.active} />
-      <Text style={{ color: member.active ? t.text : t.subtext, fontWeight: '600', fontSize: 11 }} numberOfLines={1}>
+      <Avatar bot={lookOf(member.kind, member.avatar)} size={18} dim={!member.active || !!member.exhausted} />
+      <Text style={{ color: member.active && !member.exhausted ? t.text : t.subtext, fontWeight: '600', fontSize: 11 }} numberOfLines={1}>
         {member.name}
       </Text>
-      {talking ? <BlinkDot /> : <View style={[styles.dot, { backgroundColor: member.active ? '#22C55E' : '#EF4444' }]} />}
+      {talking ? <BlinkDot /> : <View style={[styles.dot, { backgroundColor: color }]} />}
     </Pressable>
   );
 }
