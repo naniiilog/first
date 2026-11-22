@@ -56,7 +56,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '10';
+const SCHEMA_VERSION = '11';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -102,6 +102,8 @@ export function ensureSchema(db: Db): Promise<void> {
       'notify_last INTEGER',
       'notify_last_id INTEGER',
       'owner_seen INTEGER',
+      // 기다리는 방식: stay(계속 기다리기) · away(확인 간격 동안 쉬었다 오기)
+      "wait_mode TEXT NOT NULL DEFAULT 'stay'",
     ]) {
       await db.run(`ALTER TABLE rooms ADD COLUMN ${col}`).catch(() => {});
     }

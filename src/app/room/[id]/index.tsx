@@ -288,7 +288,7 @@ export default function RoomScreen() {
           {/* 확인 간격·매너타임: 누르면 방 설정으로 */}
           <Pressable onPress={openSettings} hitSlop={6} style={[styles.schedPill, { backgroundColor: roomInfo?.quietNow ? t.accentSoft : t.input }]}>
             <Text style={{ color: roomInfo?.quietNow ? t.accentPurple : t.subtext, fontSize: 11, fontWeight: '700' }}>
-              {roomInfo?.quietNow ? '🌙 매너타임' : `⏱ ${scheduleLabel(roomInfo?.checkIntervalMin ?? 30)}`}
+              {roomInfo?.quietNow ? '🌙 매너타임' : `⏱ ${scheduleLabel(roomInfo?.checkIntervalMin ?? 30)}${roomInfo?.waitMode === 'away' && (roomInfo?.checkIntervalMin ?? 0) > 0 ? ' · 쉬었다 오기' : ''}`}
             </Text>
           </Pressable>
         </Pressable>

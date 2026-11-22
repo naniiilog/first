@@ -134,6 +134,11 @@ export class AgentSession {
     return this.room.free_talk === 1;
   }
 
+  /** 확인 간격 동안 봇이 쉬었다 오는 방식인지(토큰 절약, 대신 채팅 앱 봇은 끊길 수 있어요) */
+  get away() {
+    return this.room.wait_mode === 'away' && this.room.check_interval_min > 0;
+  }
+
   /** 지금 어떻게 행동할지 한 줄 안내 */
   hint(freeTalk = this.freeTalk): string {
     const talk = freeTalk
@@ -142,9 +147,11 @@ export class AgentSession {
     // 지금 설정을 매번 분명히 알려줘요(예전 안내를 기억하고 있어도 최신 안내를 따르게).
     const every = this.room.check_interval_min;
     const interval =
-      every > 0
-        ? ` [확인 간격 ${every}분] 서버가 새 글을 ${every}분마다 모아서 전해줘요. 그 사이에는 대화를 마치지 말고 wait_for_messages를 계속 다시 호출하며 기다리세요.`
-        : ' [확인 간격 실시간] 새 글이 오면 바로 전해줘요.';
+      every === 0
+        ? ' [확인 간격 실시간] 새 글이 오면 바로 전해줘요.'
+        : this.away
+          ? ` [확인 간격 ${every}분 · 쉬었다 오기] 방은 ${every}분마다 확인하세요(방장이 새 글을 쓰면 그 전에도 돼요). 예약 기능이 있으면 ${every}분 뒤로 예약하고 대화를 마쳐도 돼요.`
+          : ` [확인 간격 ${every}분] 서버가 새 글을 ${every}분마다 모아서 전해줘요. 그 사이에는 대화를 마치지 말고 wait_for_messages를 계속 다시 호출하며 기다리세요.`;
     const quiet =
       this.room.quiet_enabled === 1
         ? ` [매너타임 ${quietLabel(this.room)}] 이 시간이 되면 대화를 마치세요(방장이 이름을 부르면 예외).`
@@ -157,13 +164,22 @@ export class AgentSession {
    * 확인 간격은 여기서 막지 않고(막으면 채팅 앱 봇이 대화를 끝내 버려서) wait()가 새 글을 간격마다 모아서 전해줘요.
    */
   async gateCheck(): Promise<AgentError | null> {
-    const q = quietState(this.room, Date.now());
-    if (q.quiet) {
+    const now = Date.now();
+    const q = quietState(this.room, now);
+    const every = this.room.check_interval_min * 60_000;
+    // '쉬었다 오기'에서만 간격보다 일찍 온 봇을 돌려보내요(방장이 새 글을 썼으면 통과).
+    const early = this.away && this.me.last_check !== null && now - this.me.last_check < every;
+    if (q.quiet || early) {
       const owner = await this.rooms.ownerMessagesAfter(this.room.id, this.me.read_cursor);
-      if (!owner.some((m) => mentions(m.text, this.me.name))) {
+      if (q.quiet && !owner.some((m) => mentions(m.text, this.me.name))) {
         return fail('quiet_hours', `지금은 매너타임(${quietLabel(this.room)})이에요. 오늘 대화는 여기서 마치세요. 방장이 다시 부르면 이어서 해요.`, q.secondsLeft);
       }
+      if (!q.quiet && early && owner.length === 0) {
+        const left = Math.ceil((this.me.last_check! + every - now) / 1000);
+        return fail('too_early', `확인 간격은 ${this.room.check_interval_min}분이에요. ${Math.ceil(left / 60)}분 뒤에 다시 확인하세요.`, left);
+      }
     }
+    if (this.away) await this.rooms.markChecked(this.me.id);
     return null;
   }
 
@@ -239,6 +255,15 @@ export class AgentSession {
    */
   async wait(after: number | null | undefined, timeoutSec: number, pollMs: number) {
     const from = after ?? this.me.read_cursor;
+    // 쉬었다 오기: 오래 붙잡지 않고 지금 새 글만 보여주고 끝내요(다음 확인은 간격 뒤에).
+    if (this.away) {
+      const rows = (await this.rooms.messages(this.room.id, from, 200)).filter((m) => m.author_id !== this.me.id);
+      if (!rows.length) return { idle: true as const, lastId: from, freeTalk: this.freeTalk };
+      const lastId = rows[rows.length - 1].id;
+      await this.rooms.setCursor(this.me.id, lastId);
+      const relay = relayState(await this.rooms.relayRows(this.room.id), await this.rooms.members(this.room.id), this.me, this.freeTalk, Date.now());
+      return { rows: rows.slice(-30), lastId, freeTalk: this.freeTalk, replyTo: relay?.waitingFor ? null : (relay?.questionId ?? null) };
+    }
     const deadline = Date.now() + timeoutSec * 1000;
     const members = await this.rooms.members(this.room.id);
     let polls = 0;
@@ -258,6 +283,7 @@ export class AgentSession {
         quiet_enabled: status.quiet_enabled,
         quiet_start: status.quiet_start,
         quiet_end: status.quiet_end,
+        wait_mode: status.wait_mode,
       });
       if (quietState(this.room).quiet) {
         const owner = await this.rooms.ownerMessagesAfter(this.room.id, from);

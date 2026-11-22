@@ -11,6 +11,11 @@ import { useTheme } from '../../../lib/theme';
 const INTERVALS = [0, 1, 5, 10, 15, 20, 30, 40, 60, 120];
 const intervalLabel = (n: number) => (n === 0 ? '실시간' : n >= 60 ? `${n / 60}시간` : `${n}분`);
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+/** 확인 간격 동안 봇이 어떻게 지낼지 */
+const WAIT_MODES: { key: 'stay' | 'away'; label: string; hint: string }[] = [
+  { key: 'stay', label: '계속 기다리기 (안 끊겨요)', hint: '방에 남아 90초마다 들러요. 설정이 바로 먹히고 잘 안 끊기지만, 들를 때마다 토큰을 써요.' },
+  { key: 'away', label: '쉬었다 오기 (토큰 아껴요)', hint: '간격 동안 아예 안 들러요. 토큰을 거의 안 쓰지만, 채팅 앱 봇은 끊길 수 있어서 다시 불러야 할 수 있어요.' },
+];
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 /** 이 휴대폰의 시간대(예: Asia/Seoul). 모르면 한국 시간. */
@@ -47,7 +52,7 @@ export default function RoomSettingsScreen() {
   const { room, roomInfo, refreshMembers } = useLiveRoom(id, { messages: false });
   const t = useTheme();
   /** 저장 중에는 누른 값을 먼저 보여줘요(버튼 반응을 바로 보이게). */
-  const [draft, setDraft] = useState<{ checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number }>({});
+  const [draft, setDraft] = useState<{ checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; waitMode?: 'stay' | 'away' }>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -55,6 +60,7 @@ export default function RoomSettingsScreen() {
   if (!roomInfo) return <ActivityIndicator style={{ marginTop: 40 }} color={t.accent} />;
 
   const interval = draft.checkIntervalMin ?? roomInfo.checkIntervalMin ?? 30;
+  const waitMode = draft.waitMode ?? roomInfo.waitMode ?? 'stay';
   const quietEnabled = draft.quietEnabled ?? roomInfo.quietEnabled ?? true;
   const quietStart = draft.quietStart ?? roomInfo.quietStart ?? 0;
   const quietEnd = draft.quietEnd ?? roomInfo.quietEnd ?? 9;
@@ -78,13 +84,33 @@ export default function RoomSettingsScreen() {
     <ScrollView contentContainerStyle={{ padding: 18, gap: 26 }}>
       <Section title="봇 확인 간격">
         <Text style={{ color: t.subtext, fontSize: 13, lineHeight: 19 }}>
-          봇이 방을 몇 분마다 확인할지 정해요. 간격이 길수록 봇 토큰을 아껴요. 내가 새 글을 쓰면 간격과 상관없이 바로 확인할 수 있어요.
+          새 글을 봇에게 몇 분마다 모아서 전할지 정해요. 내가 새 글을 쓰면 간격과 상관없이 바로 전해요.
         </Text>
         <View style={styles.row}>
           {INTERVALS.map((n) => (
             <Chip key={n} label={intervalLabel(n)} selected={interval === n} onPress={() => save({ checkIntervalMin: n })} />
           ))}
         </View>
+        {interval > 0 && (
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: t.text, fontWeight: '600' }}>간격 동안 봇은</Text>
+            {WAIT_MODES.map((w) => (
+              <Pressable
+                key={w.key}
+                onPress={() => save({ waitMode: w.key })}
+                style={[styles.option, { borderColor: waitMode === w.key ? t.accent : t.border, backgroundColor: waitMode === w.key ? t.accentSoft : t.card }]}
+              >
+                <View style={[styles.radio, { borderColor: waitMode === w.key ? t.accent : t.subtext }]}>
+                  {waitMode === w.key ? <View style={[styles.radioDot, { backgroundColor: t.accent }]} /> : null}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }}>{w.label}</Text>
+                  <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 17 }}>{w.hint}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </Section>
 
       <Section title="매너타임">
@@ -127,6 +153,9 @@ export default function RoomSettingsScreen() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
   hour: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
 });

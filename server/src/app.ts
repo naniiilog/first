@@ -245,6 +245,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             quietEnd: room.quiet_end,
             tz: room.tz,
             quietNow: quietState(room).quiet,
+            waitMode: room.wait_mode || 'stay',
             notifyMode: room.notify_mode || 'off',
             notifySilent: room.notify_silent === 1,
           },
@@ -273,6 +274,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
           quietStart: hour(b.quietStart),
           quietEnd: hour(b.quietEnd),
           tz: typeof b.tz === 'string' && /^[A-Za-z_]+\/[A-Za-z_]+$/.test(b.tz) ? b.tz : undefined,
+          waitMode: b.waitMode === 'stay' || b.waitMode === 'away' ? b.waitMode : undefined,
         };
         if (Object.values(sched).some((v) => v !== undefined)) await rooms.setSchedule(room, sched);
         // 휴대폰 알림 설정

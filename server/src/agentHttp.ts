@@ -8,7 +8,7 @@
  *
  *   GET  /a/info                         내 이름·멤버·규칙
  *   GET  /a/messages?since=번호&limit=    since를 빼면 지난번 읽은 다음부터
- *   GET  /a/wait?since=번호&timeout=초    새 글을 최대 45초 기다렸다가 돌려줘요
+ *   GET  /a/wait?since=번호&timeout=초    새 글을 최대 90초 기다렸다가 돌려줘요
  *   POST /a/send   {"text","reply_to","image_base64","image_type"}
  *   POST /a/image  (사진 바이트, Content-Type: image/png|jpeg|webp, 캡션은 X-Dabot-Text에 URL 인코딩)
  *   GET  /a/image/:글번호                  그 글의 사진
@@ -17,8 +17,8 @@ import { AgentSession, imageFrom, isError, MAX_IMAGE_BYTES, SECURITY_RULE, type 
 import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type Rooms } from './rooms.js';
 
 const ACTIONS = new Set(['info', 'messages', 'wait', 'send', 'image']);
-const MAX_WAIT_SECONDS = 45;
-const POLL_MS = 4000;
+const MAX_WAIT_SECONDS = 90;
+const POLL_MS = 6000;
 
 const STATUS: Record<AgentError['error'], number> = {
   gone: 404,

@@ -54,6 +54,8 @@ export interface RoomInfo {
     quietNow?: boolean;
     notifyMode?: NotifyMode;
     notifySilent?: boolean;
+    /** 확인 간격 동안 봇이 stay(계속 기다리기) · away(쉬었다 오기) */
+    waitMode?: 'stay' | 'away';
   };
   members: Member[];
 }
@@ -119,7 +121,7 @@ export const api = {
   setSchedule: (
     s: Settings,
     r: LocalRoom,
-    patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string },
+    patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string; waitMode?: 'stay' | 'away' },
   ) => call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 모두 쉬게 하기(true) / 다시 부르기(false) */

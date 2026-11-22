@@ -32,6 +32,8 @@ export interface RoomRow {
   notify_last_id: number | null;
   /** 방장이 이 방을 마지막으로 보고 있던 시각(보고 있으면 알림 안 보내요) */
   owner_seen: number | null;
+  /** 확인 간격 동안 봇이 stay(계속 기다리기) · away(쉬었다 오기) */
+  wait_mode: string;
 }
 
 export interface MemberRow {
@@ -143,7 +145,7 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 30, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 30, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay' };
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at) VALUES (?, ?, ?, ?)', room.id, room.name, room.owner_token, room.created_at);
     return room;
   }
@@ -183,19 +185,23 @@ export class Rooms {
   }
 
   /** 확인 간격·매너타임 바꾸기 */
-  async setSchedule(room: RoomRow, patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string }) {
+  async setSchedule(room: RoomRow, patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string; waitMode?: string }) {
     const next = {
       check_interval_min: patch.checkIntervalMin ?? room.check_interval_min,
       quiet_enabled: patch.quietEnabled === undefined ? room.quiet_enabled : patch.quietEnabled ? 1 : 0,
       quiet_start: patch.quietStart ?? room.quiet_start,
       quiet_end: patch.quietEnd ?? room.quiet_end,
       tz: patch.tz ?? room.tz,
+      wait_mode: patch.waitMode ?? room.wait_mode ?? 'stay',
     };
     await this.db.run(
-      'UPDATE rooms SET check_interval_min = ?, quiet_enabled = ?, quiet_start = ?, quiet_end = ?, tz = ? WHERE id = ?',
-      next.check_interval_min, next.quiet_enabled, next.quiet_start, next.quiet_end, next.tz, room.id,
+      'UPDATE rooms SET check_interval_min = ?, quiet_enabled = ?, quiet_start = ?, quiet_end = ?, tz = ?, wait_mode = ? WHERE id = ?',
+      next.check_interval_min, next.quiet_enabled, next.quiet_start, next.quiet_end, next.tz, next.wait_mode, room.id,
     );
-    const interval = next.check_interval_min === 0 ? '실시간' : `${next.check_interval_min}분마다`;
+    const interval =
+      next.check_interval_min === 0
+        ? '실시간'
+        : `${next.check_interval_min}분마다(${next.wait_mode === 'away' ? '쉬었다 오기' : '계속 기다리기'})`;
     const quiet = next.quiet_enabled ? `매너타임 ${pad2(next.quiet_start)}:00~${pad2(next.quiet_end)}:00` : '매너타임 없음';
     await this.post(room.id, SYSTEM_ID, '안내', `방 설정을 바꿨어요. 봇 확인: ${interval} · ${quiet}`);
   }
@@ -277,8 +283,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }
