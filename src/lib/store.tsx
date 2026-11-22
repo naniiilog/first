@@ -168,6 +168,20 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
       () => api.updateMember(settings, room!, m.id, { active: !m.active }),
     );
 
+  /** 봇 상태를 한 번에 정하기: 참가(초록) · 사용량 소진(주황) · 쉬기(빨강) */
+  const setMemberState = (m: Member, next: { active: boolean; exhausted: boolean }) =>
+    optimistic(
+      () => {
+        setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, ...next } : x)));
+        return () => setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, active: m.active, exhausted: m.exhausted } : x)));
+      },
+      () =>
+        api.updateMember(settings, room!, m.id, {
+          ...(next.active !== m.active ? { active: next.active } : {}),
+          ...(next.exhausted !== !!m.exhausted ? { exhausted: next.exhausted } : {}),
+        }),
+    );
+
   /** 사용량 소진(주황불) 켜고 끄기 */
   const toggleExhausted = (m: Member) =>
     optimistic(
@@ -243,6 +257,7 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
     refreshMembers,
     toggleMember,
     toggleExhausted,
+    setMemberState,
     toggleFreeTalk,
     setRoomClosed,
     sendMessage,

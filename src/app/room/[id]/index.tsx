@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
@@ -52,6 +53,8 @@ export default function RoomScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   /** 크게 보는 사진 */
   const [viewing, setViewing] = useState<string | null>(null);
+  /** 위쪽에서 누른 봇(상태 고르기 창) */
+  const [chipMenu, setChipMenu] = useState<string | null>(null);
   /** 화면에 그리는 최근 메시지 수. 위의 '이전 대화 더 보기'로 늘려요. */
   const [showCount, setShowCount] = useState(PAGE);
 
@@ -177,7 +180,7 @@ export default function RoomScreen() {
         </Text>
         <ScrollView style={{ maxHeight: 96 }} contentContainerStyle={styles.memberWrap} showsVerticalScrollIndicator={false}>
           {members.map((m) => (
-            <MemberChip key={m.id} member={m} onPress={() => run(live.toggleMember(m))} onLongPress={() => run(live.toggleExhausted(m))} />
+            <MemberChip key={m.id} member={m} onPress={() => setChipMenu(m.id)} />
           ))}
           <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
             <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
@@ -228,7 +231,7 @@ export default function RoomScreen() {
         ListEmptyComponent={
           <View style={styles.center}>
             <Text style={[styles.systemPill, { color: t.systemText, backgroundColor: t.systemPill, lineHeight: 20, textAlign: 'center' }]}>
-              위의 ＋ 초대에서 에이전트 초대 링크를 만들어 보세요.{'\n'}에이전트를 누르면 대화 참가를 껐다 켤 수 있어요.{'\n'}아래 자동대화를 켜면 멈추지 않고 계속 수다를 떨어요.
+              위의 ＋ 초대에서 에이전트 초대 링크를 만들어 보세요.{'\n'}에이전트를 누르면 참가 · 사용량 소진 · 쉬게 하기를 고를 수 있어요.{'\n'}아래 자동대화를 켜면 멈추지 않고 계속 수다를 떨어요.
             </Text>
           </View>
         }
@@ -290,6 +293,14 @@ export default function RoomScreen() {
           </Pressable>
         </Pressable>
       )}
+
+      <BotStateSheet
+        member={members.find((m) => m.id === chipMenu) ?? null}
+        onClose={() => setChipMenu(null)}
+        onProfile={openMembers}
+        // 쉬게 하기는 소진 표시를 그대로 둬요(그래야 '사용량이 다시 찼어요'라고 잘못 알리지 않아요).
+        onPick={(m, state) => run(live.setMemberState(m, { active: state !== 'off', exhausted: state === 'off' ? !!m.exhausted : state === 'exhausted' }))}
+      />
 
       <RoomMenu
         visible={menuOpen}
@@ -386,10 +397,10 @@ function BlinkDot() {
 }
 
 /**
- * 위쪽 멤버 칩: 누르면 참가를 켜고 꺼요. 길게 누르면 '사용량 소진'(주황불)을 켜고 꺼요.
+ * 위쪽 멤버 칩: 누르면 상태 고르기 창(참가 · 사용량 소진 · 쉬게 하기)이 열려요.
  * 쉬는 중 빨간불 · 사용량 소진 주황불 · 대화 중 깜빡이는 초록불 · 참가 중 초록불
  */
-function MemberChip({ member, onPress, onLongPress }: { member: Member; onPress: () => void; onLongPress: () => void }) {
+function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
   const t = useTheme();
   const talking = member.active && !member.exhausted && member.online;
   const state = !member.active ? '쉬는 중' : member.exhausted ? '사용량 소진' : talking ? '대화 중' : '참가 중';
@@ -397,10 +408,8 @@ function MemberChip({ member, onPress, onLongPress }: { member: Member; onPress:
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={450}
       accessibilityLabel={`${member.name} ${state}`}
-      accessibilityHint="누르면 참가를 켜고 꺼요. 길게 누르면 사용량 소진 표시를 켜고 꺼요."
+      accessibilityHint="누르면 참가 · 사용량 소진 · 쉬게 하기를 고를 수 있어요."
       style={({ pressed }) => [styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff, opacity: pressed ? 0.6 : 1 }]}
     >
       <Avatar bot={lookOf(member.kind, member.avatar)} size={18} dim={!member.active || !!member.exhausted} />
