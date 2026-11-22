@@ -27,6 +27,7 @@ const AI_ICONS: Record<string, ImageSourcePropType> = {
   keyring: require('../../assets/ai/keyring.png'),
   q: require('../../assets/ai/q.png'),
   instinct: require('../../assets/ai/instinct.png'),
+  hark: require('../../assets/ai/hark.png'),
 };
 export const hasAppIcon = (kind: string) => kind in AI_ICONS;
 export const defaultAvatarOf = (kind: string): ImageSourcePropType => AI_ICONS[kind] ?? DEFAULT_AVATAR;

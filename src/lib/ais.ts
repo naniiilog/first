@@ -45,6 +45,7 @@ export const AI_KINDS: AiKind[] = [
   { id: 'keyring', name: '키링', emoji: '🔑', color: '#D4A017', howTo: GENERIC },
   { id: 'q', name: '큐', emoji: '❓', color: '#8E44AD', howTo: GENERIC },
   { id: 'instinct', name: '인스팅트', emoji: '🎯', color: '#C0392B', howTo: GENERIC },
+  { id: 'hark', name: '하크', emoji: '⛵', color: '#1F1F1F', howTo: GENERIC },
   { id: 'other', name: '다른 에이전트', emoji: '🛸', color: '#607D8B', howTo: GENERIC },
 ];
 
