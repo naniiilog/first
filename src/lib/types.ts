@@ -19,6 +19,8 @@ export interface Member {
   createdAt: number;
   /** 'emoji:🦊:#hex' / 사진 data URL / null(기본) */
   avatar: string | null;
+  /** 초대 링크(방장에게만 와요) */
+  inviteUrl?: string;
 }
 
 export interface ChatMessage {

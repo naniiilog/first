@@ -56,7 +56,8 @@ export const publicMember = (m: MemberRow) => ({
   active: m.active === 1,
   joined: m.last_seen !== null,
   avatar: m.avatar ?? null,
-  lastSeen: m.last_seen,
+  // 분 단위로만 알려줘요(에이전트가 확인할 때마다 값이 바뀌면 '바뀐 게 없으면 304'가 안 먹혀서).
+  lastSeen: m.last_seen === null ? null : Math.floor(m.last_seen / 60_000) * 60_000,
   createdAt: m.created_at,
 });
 

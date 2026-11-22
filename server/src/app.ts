@@ -118,6 +118,11 @@ function cleanPassword(v: unknown): string {
   return v;
 }
 
+async function shortHash(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf).slice(0, 10), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 const cleanName = (v: unknown, max = 30) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 export async function handle(req: Request, env: Env, db: Db, clientIp: string): Promise<Response> {
@@ -206,10 +211,15 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string): 
     if (!sub) {
       if (req.method === 'GET') {
         const members = await rooms.members(room.id);
-        return json(200, {
+        const payload = JSON.stringify({
           room: { id: room.id, name: room.name, freeTalk: room.free_talk === 1, closed: room.closed === 1 },
-          members: members.map(publicMember),
+          // 방장만 보는 목록이라 초대 링크도 같이 줘요(누르면 바로 보이게).
+          members: members.map((m) => ({ ...publicMember(m), inviteUrl: `${url.origin}/mcp/${m.invite_token}` })),
         });
+        // 바뀐 게 없으면 304만 보내서(프로필 사진 등을 다시 안 보내서) 빨라요.
+        const etag = `"${await shortHash(payload)}"`;
+        if (req.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers: { ...CORS, ETag: etag } });
+        return new Response(payload, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ETag: etag } });
       }
       if (req.method === 'PATCH') {
         const b = await body(req);

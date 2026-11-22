@@ -62,13 +62,17 @@ export function useStore(): Store {
 }
 
 /** 열려 있는 방의 메시지와 멤버를 서버에서 주기적으로 받아와요. */
-export function useLiveRoom(roomId: string | undefined) {
+export function useLiveRoom(roomId: string | undefined, opts: { messages?: boolean } = {}) {
+  const watchMessages = opts.messages ?? true;
   const { rooms, settings, setRoomName } = useStore();
   const room = rooms.find((r) => r.id === roomId);
+  // 전에 받아 둔 방 정보가 있으면 화면을 바로 그려요(서버 응답을 기다리지 않게).
+  const cached = roomId ? api.cachedRoom(roomId) : null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [freeTalk, setFreeTalk] = useState(false);
-  const [closed, setClosed] = useState(false);
+  const [members, setMembers] = useState<Member[]>(cached?.members ?? []);
+  const [membersLoaded, setMembersLoaded] = useState(!!cached);
+  const [freeTalk, setFreeTalk] = useState(cached?.room.freeTalk ?? false);
+  const [closed, setClosed] = useState(cached?.room.closed ?? false);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const lastId = useRef<number | null>(null);
@@ -84,6 +88,7 @@ export function useLiveRoom(roomId: string | undefined) {
       const res = await api.getRoom(settings, room);
       if (Date.now() < holdUntil.current) return;
       setMembers(res.members);
+      setMembersLoaded(true);
       setFreeTalk(res.room.freeTalk);
       setClosed(res.room.closed);
       if (res.room.name !== room.name) setRoomName(room.id, res.room.name);
@@ -116,17 +121,18 @@ export function useLiveRoom(roomId: string | undefined) {
   useEffect(() => {
     if (!room) return;
     const first = setTimeout(() => {
-      refreshMessages();
+      if (watchMessages) refreshMessages();
       refreshMembers();
     }, 0);
-    const m = setInterval(refreshMessages, 2000);
+    // 멤버 화면처럼 메시지가 필요 없는 곳에서는 메시지를 확인하지 않아요.
+    const m = watchMessages ? setInterval(refreshMessages, 2000) : undefined;
     const b = setInterval(refreshMembers, 5000);
     return () => {
       clearTimeout(first);
-      clearInterval(m);
+      if (m) clearInterval(m);
       clearInterval(b);
     };
-  }, [room, refreshMessages, refreshMembers]);
+  }, [room, refreshMessages, refreshMembers, watchMessages]);
 
   /**
    * 화면을 먼저 바꾸고 서버에 알려요. 서버가 실패하면 원래대로 되돌리고 오류를 돌려줘요.
@@ -140,7 +146,7 @@ export function useLiveRoom(roomId: string | undefined) {
         await request();
         holdUntil.current = 0;
         refreshMembers();
-        refreshMessages();
+        if (watchMessages) refreshMessages();
         return null;
       } catch (e) {
         holdUntil.current = 0;
@@ -148,7 +154,7 @@ export function useLiveRoom(roomId: string | undefined) {
         return e instanceof Error ? e.message : String(e);
       }
     },
-    [refreshMembers, refreshMessages],
+    [refreshMembers, refreshMessages, watchMessages],
   );
 
   const toggleMember = (m: Member) =>
@@ -214,6 +220,8 @@ export function useLiveRoom(roomId: string | undefined) {
     room,
     messages,
     members,
+    membersLoaded,
+    setMembers,
     freeTalk,
     closed,
     error,
