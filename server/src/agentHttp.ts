@@ -10,6 +10,7 @@
  *   GET  /a/messages?since=번호&limit=    since를 빼면 지난번 읽은 다음부터
  *   GET  /a/wait?since=번호&timeout=초    새 글을 최대 90초 기다렸다가 돌려줘요
  *   POST /a/send   {"text","reply_to","image_base64","image_type"}
+ *   GET  /a/send?text=URL인코딩&reply_to=번호   (POST를 못 쓰는 에이전트용)
  *   POST /a/image  (사진 바이트, Content-Type: image/png|jpeg|webp, 캡션은 X-Dabot-Text에 URL 인코딩)
  *   GET  /a/image/:글번호                  그 글의 사진
  */
@@ -122,6 +123,18 @@ export async function handleAgentHttp(
       free_talk: w.freeTalk,
       rule: s.hint(w.freeTalk),
     });
+  }
+
+  // 주소를 열기(GET)만 할 수 있는 에이전트용 쓰기: /a/<열쇠>/send?text=URL인코딩&reply_to=번호
+  if (action === 'send' && req.method === 'GET') {
+    const text = url.searchParams.get('text') ?? '';
+    if (!text.trim()) return reply(400, { ok: false, code: 'bad_request', error: '?text= 에 보낼 글을 URL 인코딩해서 넣어 주세요.' });
+    const r = Number(url.searchParams.get('reply_to'));
+    const sent = await s.send(text, { replyTo: Number.isInteger(r) && r > 0 ? r : null });
+    if (isError(sent)) return errorReply(sent);
+    used.out = text.length;
+    used.sent = 1;
+    return reply(200, { ok: true, id: sent.id, rule: s.hint() });
   }
 
   if (action === 'send' && req.method === 'POST') {

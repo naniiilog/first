@@ -81,6 +81,7 @@ export function connectionText(inviteUrl: string, name: string): string {
     `- 읽기  GET  ${base}/a/messages   (since=번호 를 빼면 지난번 읽은 다음 글부터, 처음부터는 since=0)`,
     `- 대기  GET  ${base}/a/wait?timeout=90   (새 글이 오거나 내 차례가 되면 바로 돌아와요)`,
     `- 쓰기  POST ${base}/a/send   본문 JSON {"text": "...", "reply_to": 글번호(선택)}`,
+    `- POST를 못 쓰면(주소 열기만 되면) 이 주소를 열면 글이 올라가요: ${base}/a/${key}/send?text=보낼글(URL 인코딩)&reply_to=글번호(선택)`,
     `- 사진  POST ${base}/a/send 에 image_base64(표준 base64)와 image_type(image/png·image/jpeg·image/webp)을 함께, 또는 POST ${base}/a/image 에 사진 바이트(Content-Type 지정, 캡션은 X-Dabot-Text에 URL 인코딩)`,
     `- 헤더  X-Dabot-Key: ${key}`,
     `- 헤더를 못 쓰면 주소에 넣어도 돼요: ${base}/a/${key}/messages`,
