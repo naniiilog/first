@@ -2,7 +2,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { NotifySettings } from '../../../components/NotifySettings';
-import { Chip, Section } from '../../../components/ui';
+import { Avatar, Chip, Section } from '../../../components/ui';
+import { lookOf } from '../../../lib/avatar';
 import { api } from '../../../lib/api';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
@@ -49,7 +50,7 @@ function HourPicker({ value, onChange }: { value: number; onChange: (h: number) 
 export default function RoomSettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings } = useStore();
-  const { room, roomInfo, refreshMembers } = useLiveRoom(id, { messages: false });
+  const { room, roomInfo, refreshMembers, members } = useLiveRoom(id, { messages: false });
   const t = useTheme();
   /** 저장 중에는 누른 값을 먼저 보여줘요(버튼 반응을 바로 보이게). */
   const [draft, setDraft] = useState<{ checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; waitMode?: 'stay' | 'away' }>({});
@@ -113,6 +114,38 @@ export default function RoomSettingsScreen() {
         )}
       </Section>
 
+      {/* 지금 어떤 봇이 몇 분 간격으로 도는지 간격별로 묶어서 보여줘요 */}
+      <Section title="봇별 확인 간격">
+        {members.length === 0 ? (
+          <Text style={{ color: t.subtext, fontSize: 13 }}>아직 초대한 봇이 없어요.</Text>
+        ) : (
+          [...new Set(members.map((m) => m.checkIntervalMin ?? interval))]
+            .sort((a, b) => a - b)
+            .map((min) => {
+              const group = members.filter((m) => (m.checkIntervalMin ?? interval) === min);
+              return (
+                <View key={min} style={[styles.group, { backgroundColor: t.card, borderColor: t.border }]}>
+                  <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>
+                    ⏱ {min === 0 ? '실시간' : `${intervalLabel(min)}마다`} <Text style={{ color: t.subtext, fontWeight: '500', fontSize: 12 }}>· {group.length}명</Text>
+                  </Text>
+                  <View style={styles.row}>
+                    {group.map((m) => (
+                      <View key={m.id} style={[styles.botChip, { backgroundColor: t.input, opacity: m.active ? 1 : 0.5 }]}>
+                        <Avatar bot={lookOf(m.kind, m.avatar)} size={20} />
+                        <Text style={{ color: t.text, fontSize: 12, fontWeight: '600' }}>{m.name}</Text>
+                        <Text style={{ color: m.checkIntervalMin != null ? t.accent : t.subtext, fontSize: 10, fontWeight: '700' }}>
+                          {m.checkIntervalMin != null ? '개별' : '전체'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            })
+        )}
+        <Text style={{ color: t.subtext, fontSize: 12 }}>봇마다 바꾸려면 채팅방 위쪽에서 그 봇을 누르세요. &apos;전체&apos;는 위의 방 간격을 따라요.</Text>
+      </Section>
+
       <Section title="매너타임">
         <View style={[styles.switchRow, { backgroundColor: t.card, borderColor: t.border }]}>
           <View style={{ flex: 1 }}>
@@ -153,6 +186,8 @@ export default function RoomSettingsScreen() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  group: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 8 },
+  botChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 3, paddingRight: 9, paddingVertical: 3, borderRadius: 999 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5 },
