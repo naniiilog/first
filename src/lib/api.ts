@@ -226,6 +226,9 @@ export const api = {
   updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean; checkIntervalMin?: number | null }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
+  /** 서버에 있는 내 방 전부(앱 비밀번호 필요) */
+  allRooms: (s: Settings) => call<{ rooms: LocalRoom[] }>(s, '/api/rooms'),
+
   /** 휴대폰 알림 */
   pushKey: (s: Settings) => call<{ publicKey: string }>(s, '/api/push/key'),
   pushStatus: (s: Settings, r: LocalRoom, endpoint: string) =>

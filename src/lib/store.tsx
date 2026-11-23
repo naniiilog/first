@@ -36,6 +36,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (ready) saveData({ rooms, settings });
   }, [ready, rooms, settings]);
 
+  // 앱 비밀번호가 맞으면 서버에 있는 방을 불러와 합쳐요(새로 설치한 앱·새 주소에서도 방이 그대로 보여요).
+  useEffect(() => {
+    if (!ready || !settings.appToken) return;
+    let alive = true;
+    api
+      .allRooms(settings)
+      .then((res) => {
+        if (!alive) return;
+        setRooms((prev) => {
+          const have = new Set(prev.map((r) => r.id));
+          const add = res.rooms.filter((r) => !have.has(r.id));
+          const server = new Set(res.rooms.map((r) => r.id));
+          // 서버에서 지워진 방은 목록에서도 빼요.
+          const kept = prev.filter((r) => server.has(r.id));
+          return add.length || kept.length !== prev.length ? [...kept, ...add].sort((a, b) => b.createdAt - a.createdAt) : prev;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [ready, settings]);
+
   const value: Store = {
     ready,
     rooms,

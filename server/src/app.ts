@@ -268,6 +268,12 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
 
     if (parts[1] !== 'rooms') throw new HttpError(404, 'Not found');
 
+    // ── 내 방 목록: 앱 비밀번호가 맞으면 서버에 있는 방을 모두 알려줘요(새 기기·새 주소에서도 방이 그대로 보이게) ──
+    if (parts.length === 2 && req.method === 'GET') {
+      const list = await rooms.allRooms();
+      return json(200, { rooms: list.map((r) => ({ id: r.id, name: r.name, ownerToken: r.owner_token, createdAt: r.created_at })) });
+    }
+
     // ── 방 만들기 ──
     if (parts.length === 2 && req.method === 'POST') {
       // 방 개수 제한은 없어요. 아주 빠른 반복(스크립트 장난)만 막아요.

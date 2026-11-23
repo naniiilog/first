@@ -7,7 +7,7 @@
     "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "dev": "node --env-file-if-exists=.env --watch --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "deploy": "npm --prefix .. run build:web && wrangler deploy",
+    "deploy": "npm --prefix .. run build:web && wrangler deploy && wrangler deploy --name botroom",
     "dev:worker": "wrangler dev"
   },
   "devDependencies": {

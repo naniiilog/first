@@ -1,4 +1,6 @@
-name = "botroom"
+# 서버 이름: dabot.<계정>.workers.dev
+# 예전 주소(botroom)도 같은 데이터베이스로 계속 띄워서, 예전 초대 링크가 그대로 돼요(npm run deploy가 둘 다 올려요).
+name = "dabot"
 main = "src/worker.ts"
 compatibility_date = "2026-11-01"
 compatibility_flags = ["nodejs_compat"]

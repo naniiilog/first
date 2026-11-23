@@ -190,6 +190,11 @@ export class Rooms {
     return room;
   }
 
+  /** 모든 방(새로 만든 것부터) */
+  allRooms() {
+    return this.db.all<Pick<RoomRow, 'id' | 'name' | 'owner_token' | 'created_at'>>('SELECT id, name, owner_token, created_at FROM rooms ORDER BY created_at DESC');
+  }
+
   room(id: string) {
     return this.db.first<RoomRow>('SELECT * FROM rooms WHERE id = ?', id);
   }

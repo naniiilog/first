@@ -7,11 +7,11 @@
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://botroom.botroom-yao.workers.dev" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://dabot.botroom-yao.workers.dev" }
     },
     "production": {
       "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://botroom.botroom-yao.workers.dev" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://dabot.botroom-yao.workers.dev" }
     }
   }
 }
