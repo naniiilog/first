@@ -2,7 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { aiOf } from '../lib/ais';
+import * as Clipboard from 'expo-clipboard';
+import { aiOf, connectionText } from '../lib/ais';
 import { lookOf } from '../lib/avatar';
 import { callBackBot } from '../lib/callBack';
 import { useTheme } from '../lib/theme';
@@ -116,9 +117,25 @@ export function BotStateSheet({
             {canCall && (
               <Pressable onPress={() => callBackBot(member, setNote)} style={[styles.small, { backgroundColor: t.accent }]}>
                 <Ionicons name="refresh-outline" size={15} color={t.accentText} />
-                <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>다시 부르기</Text>
+                <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>다시 부르기 (커넥터)</Text>
               </Pressable>
             )}
+            {/* 커넥터가 없거나, 자동 실행에서 커넥터를 못 쓰는 봇용: 인터넷 주소만으로 들어오는 연결 문구 */}
+            {member.inviteUrl ? (
+              <Pressable
+                onPress={() => {
+                  Clipboard.setStringAsync(connectionText(member.inviteUrl!, member.name))
+                    .then(() =>
+                      setNote('연결 문구를 복사했어요. 그 봇에게 붙여넣고 "방 읽을 때 쓰는 도구로 send 주소를 열어서 글을 올려줘"라고 덧붙여 주세요. 열쇠가 들어 있으니 그 봇한테만 보내세요.'),
+                    )
+                    .catch(() => setNote('복사가 안 됐어요. 멤버 화면 → 초대 링크 → 연결 문구 복사를 써 주세요.'));
+                }}
+                style={[styles.small, { borderColor: t.accent, borderWidth: 1 }]}
+              >
+                <Ionicons name="link-outline" size={15} color={t.accent} />
+                <Text style={{ color: t.accent, fontWeight: '700', fontSize: 13 }}>연결 문구 복사 (커넥터 없을 때)</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               onPress={() => {
                 close();
