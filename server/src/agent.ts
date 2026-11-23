@@ -49,7 +49,39 @@ export function imageFrom(b64: unknown, type: unknown): string | null | AgentErr
   const clean = b64.replace(/\s+/g, '');
   if (!/^[A-Za-z0-9+/]+=*$/.test(clean)) return fail('bad_request', 'image_base64가 올바른 base64가 아니에요.');
   if (clean.length * 0.75 > MAX_IMAGE_BYTES) return fail('bad_request', `사진이 너무 커요. ${Math.round(MAX_IMAGE_BYTES / 1024)}KB 이하로 줄여 주세요.`);
+  const whole = imageComplete(clean);
+  if (whole !== true) return fail('bad_request', `사진이 깨졌어요(${whole}). 보내는 중에 잘린 것 같아요. 크기를 줄여서(예: JPEG, 600KB 이하) 다시 보내 주세요.`);
   return `data:${type};base64,${clean}`;
+}
+
+/** base64 앞·뒤 몇 바이트만 풀어서 사진 파일이 끝까지 온전한지 봐요(중간에 잘린 사진을 막아요). */
+export function imageComplete(b64: string): true | string {
+  const bytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  if (b64.length % 4 !== 0) return '데이터가 중간에 끊겼어요';
+  let head: Uint8Array;
+  let tail: Uint8Array;
+  try {
+    head = bytes(b64.slice(0, 24));
+    const cut = Math.max(0, b64.length - 64);
+    tail = bytes(b64.slice(cut - (cut % 4)));
+  } catch {
+    return 'base64가 아니에요';
+  }
+  const at = (a: Uint8Array, i: number) => a[i] ?? -1;
+  const has = (a: Uint8Array, text: string) => new TextDecoder('latin1').decode(a).includes(text);
+  if (at(head, 0) === 0x89 && at(head, 1) === 0x50 && at(head, 2) === 0x4e && at(head, 3) === 0x47) {
+    return has(tail, 'IEND') ? true : 'PNG 끝부분이 없어요';
+  }
+  if (at(head, 0) === 0xff && at(head, 1) === 0xd8) {
+    for (let i = tail.length - 2; i >= 0; i--) if (tail[i] === 0xff && tail[i + 1] === 0xd9) return true;
+    return 'JPEG 끝부분이 없어요';
+  }
+  if (has(head.slice(0, 4), 'RIFF') && has(head.slice(8, 12), 'WEBP')) {
+    const size = head[4] | (head[5] << 8) | (head[6] << 16) | (head[7] << 24);
+    const real = Math.floor((b64.replace(/=+$/, '').length * 3) / 4);
+    return real >= size + 8 ? true : 'WebP가 끝까지 오지 않았어요';
+  }
+  return 'PNG·JPEG·WebP 사진이 아니에요';
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');

@@ -559,6 +559,23 @@ function Quote({ m, name, mine, t, onPress }: { m?: ChatMessage; name: (m: ChatM
   );
 }
 
+/** 채팅 사진. 깨진 사진(보내다 잘린 것 등)은 안내 글로 바꿔 보여줘요. */
+function Photo({ uri, mine, t, onOpen, onReply }: { uri: string; mine: boolean; t: Theme; onOpen: () => void; onReply: () => void }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <View style={[styles.brokenPhoto, { borderColor: mine ? 'rgba(255,255,255,0.5)' : t.border }]}>
+        <Text style={{ color: mine ? 'rgba(255,255,255,0.9)' : t.subtext, fontSize: 12 }}>🖼️ 사진이 깨졌어요 (보내다 잘린 것 같아요)</Text>
+      </View>
+    );
+  }
+  return (
+    <Pressable onPress={onOpen} onLongPress={onReply} delayLongPress={350}>
+      <Image source={{ uri }} style={styles.photo} resizeMode="cover" onError={() => setBroken(true)} />
+    </Pressable>
+  );
+}
+
 function Bubble({
   msg,
   mine,
@@ -595,11 +612,7 @@ function Bubble({
       ]}
     >
       <Quote m={quoted} name={quotedName} mine={mine} t={t} onPress={onQuote} />
-      {msg.image ? (
-        <Pressable onPress={() => onImage(msg.image!)} onLongPress={onReply} delayLongPress={350}>
-          <Image source={{ uri: msg.image }} style={styles.photo} resizeMode="cover" />
-        </Pressable>
-      ) : null}
+      {msg.image ? <Photo uri={msg.image} mine={mine} t={t} onOpen={() => onImage(msg.image!)} onReply={onReply} /> : null}
       {msg.text ? (
         <Text style={[styles.bubbleText, { color: mine ? t.myBubbleText : t.botBubbleText }]} selectable={Platform.OS !== 'web'}>
           {msg.text}
@@ -715,6 +728,7 @@ const styles = StyleSheet.create({
   viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   memberBar: { paddingTop: 2, paddingBottom: 6, paddingHorizontal: 10, gap: 4 },
+  brokenPhoto: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 14, marginBottom: 4 },
   morePill: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },
