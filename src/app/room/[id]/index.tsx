@@ -88,6 +88,11 @@ export default function RoomScreen() {
     );
   }
 
+  /** 봇들을 실제 확인 간격(봇 설정 ?? 방 설정)별로 묶기 */
+  const roomEvery = roomInfo?.checkIntervalMin ?? 30;
+  const groups = [...new Set(members.map((m) => m.checkIntervalMin ?? roomEvery))]
+    .sort((a, b) => a - b)
+    .map((min) => [min, members.filter((m) => (m.checkIntervalMin ?? roomEvery) === min)] as const);
   /** 참가 중인데 지금 연결이 안 된 봇 수 */
   const away = members.filter((m) => m.active && !m.exhausted && m.joined && !m.online).length;
   const openSettings = () => room && router.push({ pathname: '/room/[id]/settings', params: { id: room.id } });
@@ -178,13 +183,30 @@ export default function RoomScreen() {
           {members.some((m) => m.active && m.exhausted) ? ` · 소진 ${members.filter((m) => m.active && m.exhausted).length}` : ''} · 쉬는 중{' '}
           {members.filter((m) => !m.active).length}
         </Text>
-        <ScrollView style={{ maxHeight: 96 }} contentContainerStyle={styles.memberWrap} showsVerticalScrollIndicator={false}>
-          {members.map((m) => (
-            <MemberChip key={m.id} member={m} onPress={() => setChipMenu(m.id)} />
+        {/* 확인 간격별로 줄을 나눠 보여줘요(실시간 → 긴 간격 순). 봇을 누르면 상태·간격을 바꿔요. */}
+        <ScrollView style={{ maxHeight: 120 }} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
+          {groups.map(([min, list], i) => (
+            <View key={min} style={styles.groupRow}>
+              <View style={[styles.groupTag, { backgroundColor: t.input }]}>
+                <Text style={{ color: t.subtext, fontSize: 10, fontWeight: '800' }}>⏱ {intervalShort(min)}</Text>
+              </View>
+              <View style={[styles.memberWrap, { flex: 1 }]}>
+                {list.map((m) => (
+                  <MemberChip key={m.id} member={m} onPress={() => setChipMenu(m.id)} />
+                ))}
+                {i === groups.length - 1 && (
+                  <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
+                    <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
           ))}
-          <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
-            <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
-          </Pressable>
+          {groups.length === 0 && (
+            <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft, alignSelf: 'flex-start' }]}>
+              <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
+            </Pressable>
+          )}
         </ScrollView>
       </View>
 
@@ -380,6 +402,7 @@ export default function RoomScreen() {
   );
 }
 
+const intervalShort = (n: number) => (n === 0 ? '실시간' : n >= 60 ? `${n / 60}시간` : `${n}분`);
 const scheduleLabel = (n: number) => (n === 0 ? '실시간' : n >= 60 ? `${n / 60}시간마다` : `${n}분마다`);
 
 /** 지금 대화 중인 봇의 초록불: 깜빡깜빡 */
@@ -587,6 +610,8 @@ const styles = StyleSheet.create({
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },
   memberWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  groupRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  groupTag: { width: 52, alignItems: 'center', paddingVertical: 4, borderRadius: 8, marginTop: 1 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 3, paddingRight: 7, paddingVertical: 2, borderRadius: 999, maxWidth: 150 },
   dot: { width: 8, height: 8, borderRadius: 4, marginLeft: 1 },
   errorBar: { paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
