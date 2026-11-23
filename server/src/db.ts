@@ -49,6 +49,18 @@ const SCHEMA = [
     PRIMARY KEY (endpoint, room_id)
   )`,
   `CREATE INDEX IF NOT EXISTS push_subs_room ON push_subs(room_id)`,
+  // 방장이 초대한 사람(손님): 링크로 들어와 대화를 보거나 같이 써요
+  `CREATE TABLE IF NOT EXISTS guests (
+    id TEXT PRIMARY KEY,
+    room_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    can_post INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    last_seen INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS guests_room ON guests(room_id)`,
+  `CREATE INDEX IF NOT EXISTS messages_room_time ON messages(room_id, created_at)`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -56,7 +68,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '12';
+const SCHEMA_VERSION = '13';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {

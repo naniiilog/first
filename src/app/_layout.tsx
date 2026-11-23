@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -14,6 +14,8 @@ function Root() {
   const { ready, settings } = useStore();
   const t = useTheme();
   const [lock, setLock] = useState<Lock>({ state: 'checking' });
+  // 초대받은 사람(손님) 화면은 앱 비밀번호 없이 열려요(그 방 하나만 보여요).
+  const guest = usePathname().startsWith('/join/');
 
   // 앱을 열 때(그리고 비밀번호가 바뀔 때) 서버에 비밀번호가 맞는지 물어봐요.
   useEffect(() => {
@@ -28,7 +30,7 @@ function Root() {
     };
   }, [ready, settings]);
 
-  if (ready && (lock.state === 'setup' || lock.state === 'login')) {
+  if (!guest && ready && (lock.state === 'setup' || lock.state === 'login')) {
     return (
       <LockScreen
         key={lock.state}
@@ -38,7 +40,7 @@ function Root() {
       />
     );
   }
-  if (!ready || lock.state === 'checking') {
+  if (!guest && (!ready || lock.state === 'checking')) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.bg }}>
         <ActivityIndicator color={t.accent} />
@@ -61,6 +63,9 @@ function Root() {
       <Stack.Screen name="room/new" options={{ title: '새 채팅방', presentation: 'modal' }} />
       <Stack.Screen name="room/[id]/index" options={{ title: '채팅방' }} />
       <Stack.Screen name="room/[id]/members" options={{ title: '멤버', presentation: 'modal' }} />
+      <Stack.Screen name="join/[token]" options={{ title: "다봇 초대" }} />
+      <Stack.Screen name="room/[id]/album" options={{ title: '사진 앨범' }} />
+      <Stack.Screen name="room/[id]/timeline" options={{ title: '타임라인' }} />
       <Stack.Screen name="room/[id]/settings" options={{ title: '방 설정 · 알림', presentation: 'modal' }} />
     </Stack>
   );
@@ -70,6 +75,8 @@ export default function Layout() {
   // 웹에서는 앱을 열 때 알림 담당(서비스 워커)을 등록해 둬요(알림을 누르면 채팅방이 열리게).
   useEffect(() => {
     registerServiceWorker()?.catch(() => {});
+    // 앱 아이콘 배지(숫자·점)는 안 띄워요.
+    if (typeof navigator !== 'undefined') (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.().catch(() => {});
   }, []);
   return (
     <StoreProvider>

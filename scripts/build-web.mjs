@@ -13,6 +13,8 @@ copyFileSync(join(root, 'assets', 'icon.png'), join(out, 'icon-1024.png'));
 // 휴대폰 알림용: 서비스 워커와 작은 아이콘
 copyFileSync(join(root, 'scripts', 'sw.js'), join(out, 'sw.js'));
 copyFileSync(join(root, 'assets', 'icon-192.png'), join(out, 'icon-192.png'));
+// 잠금화면·상태 표시줄의 작은 알림 아이콘(흰색 모양 + 투명 배경이어야 네모로 안 보여요)
+copyFileSync(join(root, 'assets', 'badge-96.png'), join(out, 'badge-96.png'));
 
 writeFileSync(
   join(out, 'manifest.webmanifest'),

@@ -59,7 +59,7 @@ export default function RoomSettingsScreen() {
   if (!room) return <Text style={{ padding: 20, color: t.subtext }}>방을 찾을 수 없어요.</Text>;
   if (!roomInfo) return <ActivityIndicator style={{ marginTop: 40 }} color={t.accent} />;
 
-  const interval = draft.checkIntervalMin ?? roomInfo.checkIntervalMin ?? 30;
+  const interval = draft.checkIntervalMin ?? roomInfo.checkIntervalMin ?? 0;
   const waitMode = draft.waitMode ?? roomInfo.waitMode ?? 'stay';
   const quietEnabled = draft.quietEnabled ?? roomInfo.quietEnabled ?? true;
   const quietStart = draft.quietStart ?? roomInfo.quietStart ?? 0;

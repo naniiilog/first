@@ -44,7 +44,7 @@ function serveWeb(request: Request): Response {
 export default {
   fetch(request: Request, env: Env & { DB: Parameters<typeof d1Db>[0] }, ctx?: { waitUntil(p: Promise<unknown>): void }): Promise<Response> | Response {
     const { pathname } = new URL(request.url);
-    const isApi = pathname.startsWith('/api/') || pathname.startsWith('/mcp/') || pathname === '/a' || pathname.startsWith('/a/') || pathname === '/health';
+    const isApi = pathname.startsWith('/api/') || pathname.startsWith('/mcp/') || pathname === '/a' || pathname.startsWith('/a/') || pathname.startsWith('/img/') || pathname.startsWith('/g/') || pathname === '/health';
     if (!isApi && (request.method === 'GET' || request.method === 'HEAD')) return serveWeb(request);
     return handle(request, env, d1Db(env.DB), request.headers.get('cf-connecting-ip') ?? '', ctx ? (p) => ctx.waitUntil(p) : undefined);
   },

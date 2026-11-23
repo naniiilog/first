@@ -5,6 +5,7 @@ import { useEffect, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { AiPicker } from '../../../components/AiPicker';
 import { AvatarEditor } from '../../../components/AvatarEditor';
+import { GuestInvites } from '../../../components/GuestInvites';
 import { Avatar, Button, Section } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { aiOf, connectionText, KICKOFF_PROMPT, type AiKind } from '../../../lib/ais';
@@ -205,6 +206,8 @@ export default function MembersScreen() {
           })
         )}
       </Section>
+
+      <GuestInvites settings={settings} room={room} />
 
       <Section title="AI 에이전트 초대하기">
         <AiPicker selected={kind?.id} onPick={(ai) => setKind((k) => (k?.id === ai.id ? null : ai))} />

@@ -5,7 +5,7 @@ import { handleAgentHttp } from './agentHttp.js';
 import { imageFrom, isError, quietState } from './agent.js';
 import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
-import { MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms } from './rooms.js';
+import { imageSig, imageUrl, MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms, tzOffsetSec } from './rooms.js';
 import { cleanReset, windowEnd } from './usage.js';
 import { NOTIFY_MODES, notifyBotMessage, sendTest, vapid } from './push.js';
 
@@ -159,6 +159,57 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
     if (parts[0] === 'mcp' && parts[1]) {
       checkRate(`mcp:${parts[1]}`, Number(env.MCP_RATE_PER_MINUTE ?? 60));
       return withCors(await handleMcp(req, rooms, parts[1]));
+    }
+
+    // ── 사진 파일: /img/<방>/<글번호>/<서명> (앨범·타임라인·손님 화면에서 써요) ──
+    if (parts[0] === 'img' && req.method === 'GET' && parts.length === 4) {
+      const room = await rooms.room(parts[1]);
+      const id = Number(parts[2]);
+      if (!room || !Number.isInteger(id) || parts[3] !== (await imageSig(room, id))) throw new HttpError(404, '사진을 찾을 수 없어요.');
+      const row = await rooms.imageOf(room.id, id);
+      const m = row?.image?.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) throw new HttpError(404, '사진을 찾을 수 없어요.');
+      const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+      return new Response(bytes, { headers: { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=31536000, immutable', ...CORS } });
+    }
+
+    // ── 초대받은 사람(손님): /g/<초대 열쇠>/... (앱 비밀번호 없이, 그 방만) ──
+    if (parts[0] === 'g' && parts[1]) {
+      checkRate(`guest:${parts[1]}`, 240);
+      const g = await rooms.guestByToken(parts[1]);
+      if (!g) throw new HttpError(404, '초대가 없거나 거둬졌어요.');
+      const room = await rooms.room(g.room_id);
+      if (!room) throw new HttpError(404, '방이 없어졌어요.');
+      await rooms.touchGuest(g);
+      const withUrls = async (rows: Awaited<ReturnType<typeof rooms.messages>>) =>
+        Promise.all(rows.map(async (m) => ({ ...publicMessage(m), image: m.image ? await imageUrl(room, m.id) : null })));
+      if (!parts[2] && req.method === 'GET') {
+        const members = await rooms.members(room.id);
+        return json(200, {
+          room: { id: room.id, name: room.name, freeTalk: room.free_talk === 1 },
+          me: { id: `guest:${g.id}`, name: g.name, canPost: g.can_post === 1 },
+          members: members.map((m) => ({ ...publicMember(m), online: m.last_seen !== null && Date.now() - m.last_seen < 90_000 })),
+        });
+      }
+      if (parts[2] === 'messages' && req.method === 'GET') {
+        const after = url.searchParams.get('after');
+        const before = url.searchParams.get('before');
+        const rows = before ? await rooms.messagesBefore(room.id, Number(before), 100) : await rooms.messages(room.id, after ? Number(after) : null, after ? 200 : 100);
+        return json(200, { messages: await withUrls(rows) });
+      }
+      if (parts[2] === 'messages' && req.method === 'POST') {
+        if (g.can_post !== 1) throw new HttpError(403, '보기만 할 수 있는 초대예요.');
+        const b = await body(req);
+        const text = typeof b.text === 'string' ? b.text.trim() : '';
+        if (!text || text.length > MAX_TEXT) throw new HttpError(400, `메시지는 1~${MAX_TEXT}자로 써주세요.`);
+        const secret = findSecret(text);
+        if (secret) throw new HttpError(400, secretMessage(secret), undefined, 'secret');
+        let replyTo = typeof b.replyTo === 'number' ? b.replyTo : null;
+        if (replyTo !== null && !(await rooms.message(room.id, replyTo))) replyTo = null;
+        const id = await rooms.post(room.id, `guest:${g.id}`, g.name, text, { replyTo });
+        return json(200, { id });
+      }
+      throw new HttpError(404, 'Not found');
     }
 
     // ── 연결 문구용 입구(MCP 커넥터가 없는 에이전트) ──
@@ -327,6 +378,58 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
           };
         }),
       });
+    }
+
+    // 앨범: 사진 있는 글 목록(사진은 /img 주소로)
+    if (sub === 'images' && req.method === 'GET') {
+      const before = Number(url.searchParams.get('before')) || null;
+      const rows = await rooms.imageMessages(room.id, before, 60);
+      return json(200, {
+        images: await Promise.all(rows.map(async (m) => ({ id: m.id, authorId: m.author_id, authorName: m.author_name, text: m.text, createdAt: m.created_at, url: await imageUrl(room, m.id) }))),
+      });
+    }
+
+    // 그 글 앞뒤 대화(앨범에서 사진을 누르면 그때 무슨 얘기였는지)
+    if (sub === 'around' && req.method === 'GET') {
+      const r = await rooms.around(room.id, Number(url.searchParams.get('id')) || 0, 10);
+      return json(200, { before: r.before.map(publicMessage), after: r.after.map(publicMessage) });
+    }
+
+    // 달력: ?from=&to= (밀리초) 사이 날짜별 글 수(방 시간대)
+    if (sub === 'days' && req.method === 'GET') {
+      const from = Number(url.searchParams.get('from')) || 0;
+      const to = Number(url.searchParams.get('to')) || Date.now();
+      const off = tzOffsetSec(room.tz || 'Asia/Seoul');
+      return json(200, { offsetSec: off, days: await rooms.dayCounts(room.id, from, to, off) });
+    }
+
+    // 타임라인: ?from=&to= 사이 글(하루치), 사진은 주소로
+    if (sub === 'timeline' && req.method === 'GET') {
+      const from = Number(url.searchParams.get('from')) || 0;
+      const to = Number(url.searchParams.get('to')) || from + 86_400_000;
+      const rows = await rooms.messagesBetween(room.id, from, to, 2000);
+      return json(200, { messages: await Promise.all(rows.map(async (m) => ({ ...publicMessage(m), image: m.image ? await imageUrl(room, m.id) : null }))) });
+    }
+
+    // 사람 초대(손님): GET 목록 · POST {name, canPost} · DELETE /guests/<id>
+    if (sub === 'guests') {
+      const link = (token: string) => `${url.origin}/join/${token}`;
+      if (!parts[4] && req.method === 'GET') {
+        return json(200, {
+          guests: (await rooms.guests(room.id)).map((x) => ({ id: x.id, name: x.name, canPost: x.can_post === 1, joined: x.last_seen !== null, online: x.last_seen !== null && Date.now() - x.last_seen < 90_000, url: link(x.token) })),
+        });
+      }
+      if (!parts[4] && req.method === 'POST') {
+        const b = await body(req);
+        const name = cleanName(b.name);
+        if (!name) throw new HttpError(400, '초대할 사람 이름을 써 주세요.');
+        const x = await rooms.addGuest(room.id, name, b.canPost !== false);
+        return json(200, { guest: { id: x.id, name: x.name, canPost: x.can_post === 1, joined: false, url: link(x.token) } });
+      }
+      if (parts[4] && req.method === 'DELETE') {
+        await rooms.removeGuest(room.id, parts[4]);
+        return json(200, { ok: true });
+      }
     }
 
     // 이 기기 알림 구독: POST {subscription}, DELETE {endpoint}, GET ?endpoint= (구독돼 있나), POST /push/test

@@ -113,6 +113,37 @@ export const publicMessage = (m: MessageRow) => ({
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
+export interface GuestRow {
+  id: string;
+  room_id: string;
+  name: string;
+  token: string;
+  can_post: number;
+  created_at: number;
+  last_seen: number | null;
+}
+
+/** 사진 주소 서명: 방장 토큰을 아는 서버만 만들 수 있어요(주소에 비밀번호를 넣지 않으려고). */
+export async function imageSig(room: Pick<RoomRow, 'owner_token'>, messageId: number) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${room.owner_token}:img:${messageId}`));
+  return Array.from(new Uint8Array(buf).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+export const imageUrl = async (room: Pick<RoomRow, 'id' | 'owner_token'>, messageId: number) => `/img/${room.id}/${messageId}/${await imageSig(room, messageId)}`;
+
+/** 시간대의 지금 UTC와의 차이(초). 날짜별로 묶을 때 써요. */
+export function tzOffsetSec(tz: string, at = Date.now()) {
+  try {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' })
+        .formatToParts(new Date(at))
+        .map((x) => [x.type, Number(x.value)]),
+    );
+    return Math.round((Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(at / 1000) * 1000) / 1000);
+  } catch {
+    return 9 * 3600;
+  }
+}
+
 export class Rooms {
   constructor(private db: Db) {}
 
@@ -149,8 +180,9 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 30, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay' };
-    await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at) VALUES (?, ?, ?, ?)', room.id, room.name, room.owner_token, room.created_at);
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay' };
+    // 확인 간격은 정해 두지 않아요(실시간). 방장이 방 설정에서 정한 대로 따라요.
+    await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at, check_interval_min) VALUES (?, ?, ?, ?, 0)', room.id, room.name, room.owner_token, room.created_at);
     return room;
   }
 
@@ -274,6 +306,7 @@ export class Rooms {
     await this.db.run('DELETE FROM messages WHERE room_id = ?', id);
     await this.db.run('DELETE FROM members WHERE room_id = ?', id);
     await this.db.run('DELETE FROM push_subs WHERE room_id = ?', id);
+    await this.db.run('DELETE FROM guests WHERE room_id = ?', id);
     await this.db.run('DELETE FROM rooms WHERE id = ?', id);
   }
 
@@ -417,6 +450,68 @@ export class Rooms {
       return rows.reverse();
     }
     return this.db.all<MessageRow>('SELECT * FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT ?', roomId, afterId, limit);
+  }
+
+  /** 사진이 있는 글(앨범): 최근 것부터, 사진 데이터는 빼고 */
+  imageMessages(roomId: string, beforeId: number | null, limit: number) {
+    return this.db.all<Pick<MessageRow, 'id' | 'author_id' | 'author_name' | 'text' | 'created_at'>>(
+      `SELECT id, author_id, author_name, text, created_at FROM messages WHERE room_id = ? AND image IS NOT NULL${beforeId ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?`,
+      ...(beforeId ? [roomId, beforeId, limit] : [roomId, limit]),
+    );
+  }
+  imageOf(roomId: string, id: number) {
+    return this.db.first<{ image: string | null }>('SELECT image FROM messages WHERE room_id = ? AND id = ?', roomId, id);
+  }
+
+  /** 그 글 앞뒤 대화(사진 요약용), 사진 데이터는 빼고 */
+  async around(roomId: string, id: number, n: number) {
+    const cols = "id, room_id, author_id, author_name, text, created_at, reply_to, CASE WHEN image IS NULL THEN NULL ELSE 'y' END AS image";
+    const before = await this.db.all<MessageRow>(`SELECT ${cols} FROM messages WHERE room_id = ? AND id < ? AND author_id <> 'system' ORDER BY id DESC LIMIT ?`, roomId, id, n);
+    const after = await this.db.all<MessageRow>(`SELECT ${cols} FROM messages WHERE room_id = ? AND id > ? AND author_id <> 'system' ORDER BY id ASC LIMIT ?`, roomId, id, n);
+    return { before: before.reverse(), after };
+  }
+
+  /** 날짜별 글 수(달력): from~to 사이, 방 시간대 기준 날짜 */
+  dayCounts(roomId: string, from: number, to: number, offsetSec: number) {
+    return this.db.all<{ d: string; n: number }>(
+      "SELECT strftime('%Y-%m-%d', created_at / 1000 + ?, 'unixepoch') AS d, COUNT(*) AS n FROM messages WHERE room_id = ? AND created_at >= ? AND created_at < ? AND author_id <> 'system' GROUP BY d",
+      offsetSec, roomId, from, to,
+    );
+  }
+
+  /** 그 시간 사이의 글(타임라인), 사진 데이터는 빼고 */
+  messagesBetween(roomId: string, from: number, to: number, limit: number) {
+    return this.db.all<MessageRow>(
+      "SELECT id, room_id, author_id, author_name, text, created_at, reply_to, CASE WHEN image IS NULL THEN NULL ELSE 'y' END AS image FROM messages WHERE room_id = ? AND created_at >= ? AND created_at < ? ORDER BY id ASC LIMIT ?",
+      roomId, from, to, limit,
+    );
+  }
+
+  // ── 초대한 사람(손님) ──
+  async addGuest(roomId: string, name: string, canPost: boolean) {
+    const g: GuestRow = { id: randomToken(6), room_id: roomId, name, token: randomToken(20), can_post: canPost ? 1 : 0, created_at: Date.now(), last_seen: null };
+    await this.db.run('INSERT INTO guests (id, room_id, name, token, can_post, created_at) VALUES (?, ?, ?, ?, ?, ?)', g.id, g.room_id, g.name, g.token, g.can_post, g.created_at);
+    await this.post(roomId, SYSTEM_ID, '안내', `${name} 님을 ${canPost ? '대화에' : '구경하러'} 초대했어요.`);
+    return g;
+  }
+  guests(roomId: string) {
+    return this.db.all<GuestRow>('SELECT * FROM guests WHERE room_id = ? ORDER BY created_at', roomId);
+  }
+  guestByToken(token: string) {
+    return this.db.first<GuestRow>('SELECT * FROM guests WHERE token = ?', token);
+  }
+  async removeGuest(roomId: string, guestId: string) {
+    const g = await this.db.first<GuestRow>('SELECT * FROM guests WHERE id = ? AND room_id = ?', guestId, roomId);
+    if (!g) return;
+    await this.db.run('DELETE FROM guests WHERE id = ?', guestId);
+    await this.post(roomId, SYSTEM_ID, '안내', `${g.name} 님의 초대를 거뒀어요.`);
+  }
+  async touchGuest(g: GuestRow) {
+    const now = Date.now();
+    if (g.last_seen && now - g.last_seen < 30_000) return;
+    const first = g.last_seen === null;
+    await this.db.run('UPDATE guests SET last_seen = ? WHERE id = ?', now, g.id);
+    if (first) await this.post(g.room_id, SYSTEM_ID, '안내', `${g.name} 님이 들어왔어요.`);
   }
 
   /** beforeId 앞의 메시지(오래된 대화 불러오기), 오래된 것부터 */

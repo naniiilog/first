@@ -11,6 +11,27 @@ export const DEFAULT_SERVER_URL =
 export const DEFAULT_APP_TOKEN = process.env.EXPO_PUBLIC_APP_TOKEN ?? '';
 
 const base = (s: Settings) => (s.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+/** 서버 기준 상대 주소(/img/...)를 전체 주소로 */
+export const absUrl = (s: Settings, path: string) => (/^(https?:|data:)/.test(path) ? path : `${base(s)}${path}`);
+
+/** 초대받은 사람(손님) 화면용: 앱 비밀번호 없이 초대 열쇠로만 */
+async function guestCall<T>(token: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const res = await fetch(`${DEFAULT_SERVER_URL.replace(/\/+$/, '')}/g/${token}${path}`, {
+    method: init.method ?? 'GET',
+    headers: init.body ? { 'Content-Type': 'application/json' } : {},
+    body: init.body ? JSON.stringify(init.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `오류 ${res.status}`);
+  return data as T;
+}
+export const guestApi = {
+  info: (t: string) =>
+    guestCall<{ room: { id: string; name: string; freeTalk: boolean }; me: { id: string; name: string; canPost: boolean }; members: Member[] }>(t, ''),
+  messages: (t: string, after: number | null) => guestCall<{ messages: ChatMessage[] }>(t, `/messages${after !== null ? `?after=${after}` : ''}`),
+  older: (t: string, before: number) => guestCall<{ messages: ChatMessage[] }>(t, `/messages?before=${before}`),
+  send: (t: string, text: string, replyTo: number | null) => guestCall<{ id: number }>(t, '/messages', { method: 'POST', body: { text, replyTo } }),
+};
 
 async function request(s: Settings, path: string, init: { method?: string; body?: unknown; ownerToken?: string; headers?: Record<string, string> } = {}) {
   try {
@@ -63,6 +84,24 @@ const roomCache = new Map<string, { etag: string; data: RoomInfo }>();
 
 /** 휴대폰 알림 조건: 끔 · 나한테 하는 말만 · 모든 글(묶어서) · 모든 글(하나하나) */
 export type NotifyMode = 'off' | 'mentions' | 'batch' | 'each';
+
+export interface AlbumImage {
+  id: number;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+  /** /img/... 사진 주소(서버 기준 상대 주소) */
+  url: string;
+}
+export interface Guest {
+  id: string;
+  name: string;
+  canPost: boolean;
+  joined: boolean;
+  online?: boolean;
+  url: string;
+}
 
 /** 봇 사용량 대시보드 응답 */
 export interface UsageMember {
@@ -129,6 +168,24 @@ export const api = {
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: { closed }, ownerToken: r.ownerToken }),
 
   deleteRoom: (s: Settings, r: LocalRoom) => call(s, `/api/rooms/${r.id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
+
+  /** 앨범: 사진 있는 글(최근 것부터 60개) */
+  images: (s: Settings, r: LocalRoom, before: number | null) =>
+    call<{ images: AlbumImage[] }>(s, `/api/rooms/${r.id}/images${before ? `?before=${before}` : ''}`, { ownerToken: r.ownerToken }),
+  /** 그 글 앞뒤 대화 */
+  around: (s: Settings, r: LocalRoom, id: number) =>
+    call<{ before: ChatMessage[]; after: ChatMessage[] }>(s, `/api/rooms/${r.id}/around?id=${id}`, { ownerToken: r.ownerToken }),
+  /** 달력: 날짜별 글 수 */
+  days: (s: Settings, r: LocalRoom, from: number, to: number) =>
+    call<{ offsetSec: number; days: { d: string; n: number }[] }>(s, `/api/rooms/${r.id}/days?from=${from}&to=${to}`, { ownerToken: r.ownerToken }),
+  /** 타임라인: 그 시간 사이의 글 */
+  timeline: (s: Settings, r: LocalRoom, from: number, to: number) =>
+    call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/timeline?from=${from}&to=${to}`, { ownerToken: r.ownerToken }),
+  /** 사람 초대 */
+  guests: (s: Settings, r: LocalRoom) => call<{ guests: Guest[] }>(s, `/api/rooms/${r.id}/guests`, { ownerToken: r.ownerToken }),
+  addGuest: (s: Settings, r: LocalRoom, name: string, canPost: boolean) =>
+    call<{ guest: Guest }>(s, `/api/rooms/${r.id}/guests`, { method: 'POST', body: { name, canPost }, ownerToken: r.ownerToken }),
+  removeGuest: (s: Settings, r: LocalRoom, id: string) => call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
 
   /** 오래된 대화(before 글번호 앞의 100개) */
   olderMessages: (s: Settings, r: LocalRoom, before: number) =>

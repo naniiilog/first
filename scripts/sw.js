@@ -15,11 +15,17 @@ self.addEventListener('push', (event) => {
     renotify: true,
     silent: !!d.silent,
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    // 안드로이드 상태 표시줄·잠금화면의 작은 아이콘: 흰색 모양만 쓰여서, 단색 그림을 줘야 네모로 안 보여요.
+    badge: '/badge-96.png',
     data: { url: d.url || '/' },
   };
   if (!d.silent) options.vibrate = [120, 60, 120];
-  event.waitUntil(self.registration.showNotification(d.title || '다봇', options));
+  event.waitUntil(
+    self.registration.showNotification(d.title || '다봇', options).then(() => {
+      // 앱 아이콘 숫자 배지는 안 띄워요(지원하는 휴대폰만).
+      if (self.navigator && self.navigator.clearAppBadge) return self.navigator.clearAppBadge().catch(() => {});
+    }),
+  );
 });
 
 // 알림을 누르면 그 채팅방을 열어요(이미 열린 창이 있으면 그 창으로).

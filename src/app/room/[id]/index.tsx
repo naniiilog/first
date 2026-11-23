@@ -5,10 +5,11 @@ import { Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Press
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
+import { saveImage } from '../../../lib/saveImage';
 import { SearchSheet } from '../../../components/SearchSheet';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
-import { api } from '../../../lib/api';
+import { api, type Guest } from '../../../lib/api';
 import { lookOf } from '../../../lib/avatar';
 import { pickPhoto } from '../../../lib/photo';
 import { useLiveRoom, useStore } from '../../../lib/store';
@@ -41,7 +42,7 @@ const nowMs = () => Date.now();
 const PAGE = 150;
 
 export default function RoomScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, jump } = useLocalSearchParams<{ id: string; jump?: string }>();
   const { settings, forgetRoom } = useStore();
   const live = useLiveRoom(id);
   const { room, messages, members, freeTalk, closed, error, gone, roomInfo } = live;
@@ -65,6 +66,22 @@ export default function RoomScreen() {
   const [searching, setSearching] = useState(false);
   /** 찾아간 글을 잠깐 반짝 표시 */
   const [flashId, setFlashId] = useState<number | null>(null);
+  /** 위로 올려 읽는 중이면 '맨 아래로' 버튼을 보여줘요 */
+  const [showDown, setShowDown] = useState(false);
+  /** 초대한 사람들(위쪽 목록에 '사람'으로 보여요) */
+  const [guests, setGuests] = useState<Guest[]>([]);
+  useEffect(() => {
+    if (!room) return;
+    let alive = true;
+    const load = () => api.guests(settings, room).then((r) => alive && setGuests(r.guests)).catch(() => {});
+    const first = setTimeout(load, 0);
+    const timer = setInterval(load, 20_000);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [room, settings]);
   /** 최신 목록(찾아가기에서 다시 그려진 뒤의 목록을 보려고) */
   const rowsRef = useRef<Row[]>([]);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -100,6 +117,60 @@ export default function RoomScreen() {
     setSeenId(lastRealId(messages));
   };
 
+  /**
+   * 그 글로 찾아가기(답장 원문, 검색 결과).
+   * 안 불러온 오래된 글이면 먼저 불러오고, 화면에 그려지면 가운데쯤으로 스크롤해서 잠깐 반짝여요.
+   */
+  const jumpTo = async (id: number) => {
+    atBottom.current = false;
+    forceBottom.current = false;
+    jumpHold.current = nowMs() + 15_000;
+    let found = messagesRef.current.some((m) => m.id === id);
+    for (let tries = 0; !found && tries < 30; tries++) {
+      const got = await live.loadOlder();
+      if (!got.length) break;
+      found = got.some((m) => m.id === id);
+    }
+    // 불러온 글이 화면 목록에 반영될 때까지 잠깐 기다려요.
+    for (let w = 0; found && !messagesRef.current.some((m) => m.id === id) && w < 40; w++) await new Promise((r) => setTimeout(r, 50));
+    const list = messagesRef.current;
+    const idx = list.findIndex((m) => m.id === id);
+    if (idx < 0) {
+      setSendError('그 글을 찾을 수 없어요(지워졌을 수 있어요).');
+      return;
+    }
+    setShowCount((n) => Math.max(n, list.length - idx + 5));
+    let attempt = 0;
+    const tryScroll = () => {
+      const i = rowsRef.current.findIndex((r) => r.msg.id === id);
+      // 웹은 그 말풍선이 실제로 그려질 때까지 기다려요(목록이 조금씩 나눠 그려요).
+      const el = Platform.OS === 'web' && typeof document !== 'undefined' ? document.getElementById(`msg-${id}`) : null;
+      const ready = Platform.OS === 'web' ? !!el : i >= 0;
+      if (!ready) {
+        if (attempt++ < 30) setTimeout(tryScroll, 150);
+        return;
+      }
+      autoScrollUntil.current = Date.now() + 800;
+      jumpHold.current = Date.now() + 1500;
+      atBottom.current = false;
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      else listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.35 });
+      setFlashId(id);
+      setTimeout(() => setFlashId((f) => (f === id ? null : f)), 1800);
+    };
+    setTimeout(tryScroll, 80);
+  };
+
+  // 다른 화면(앨범·타임라인)에서 '대화에서 보기'로 오면 그 글로 찾아가요.
+  const handledJump = useRef<string | null>(null);
+  useEffect(() => {
+    if (!jump || handledJump.current === jump || !messages.length) return;
+    handledJump.current = jump;
+    const timer = setTimeout(() => jumpTo(Number(jump)), 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump, messages.length]);
+
   if (!room) {
     return (
       <View style={[styles.center, { backgroundColor: t.chatBg }]}>
@@ -109,10 +180,14 @@ export default function RoomScreen() {
   }
 
   /** 봇들을 실제 확인 간격(봇 설정 ?? 방 설정)별로 묶기 */
-  const roomEvery = roomInfo?.checkIntervalMin ?? 30;
-  const groups = [...new Set(members.map((m) => m.checkIntervalMin ?? roomEvery))]
+  const roomEvery = roomInfo?.checkIntervalMin ?? 0;
+  // 한 줄 안에서는 초록불 → 주황불 → 빨간불, 같은 불이면 가나다순
+  const rank = (m: Member) => (!m.active ? 2 : m.exhausted ? 1 : 0);
+  const sorted = [...members].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'ko'));
+  const groups = [...new Set(sorted.map((m) => m.checkIntervalMin ?? roomEvery))]
     .sort((a, b) => a - b)
-    .map((min) => [min, members.filter((m) => (m.checkIntervalMin ?? roomEvery) === min)] as const);
+    .map((min) => [min, sorted.filter((m) => (m.checkIntervalMin ?? roomEvery) === min)] as const);
+  const people = 1 + guests.length;
   /** 참가 중인데 지금 연결이 안 된 봇 수 */
   const away = members.filter((m) => m.active && !m.exhausted && m.joined && !m.online).length;
   const openSettings = () => room && router.push({ pathname: '/room/[id]/settings', params: { id: room.id } });
@@ -167,49 +242,7 @@ export default function RoomScreen() {
   const hidden = Math.max(0, messages.length - showCount);
   const rows = toRows(hidden ? messages.slice(hidden) : messages);
 
-  /**
-   * 그 글로 찾아가기(답장 원문, 검색 결과).
-   * 안 불러온 오래된 글이면 먼저 불러오고, 화면에 그려지면 가운데쯤으로 스크롤해서 잠깐 반짝여요.
-   */
-  const jumpTo = async (id: number) => {
-    atBottom.current = false;
-    forceBottom.current = false;
-    jumpHold.current = nowMs() + 15_000;
-    let found = messagesRef.current.some((m) => m.id === id);
-    for (let tries = 0; !found && tries < 30; tries++) {
-      const got = await live.loadOlder();
-      if (!got.length) break;
-      found = got.some((m) => m.id === id);
-    }
-    // 불러온 글이 화면 목록에 반영될 때까지 잠깐 기다려요.
-    for (let w = 0; found && !messagesRef.current.some((m) => m.id === id) && w < 40; w++) await new Promise((r) => setTimeout(r, 50));
-    const list = messagesRef.current;
-    const idx = list.findIndex((m) => m.id === id);
-    if (idx < 0) {
-      setSendError('그 글을 찾을 수 없어요(지워졌을 수 있어요).');
-      return;
-    }
-    setShowCount((n) => Math.max(n, list.length - idx + 5));
-    let attempt = 0;
-    const tryScroll = () => {
-      const i = rowsRef.current.findIndex((r) => r.msg.id === id);
-      // 웹은 그 말풍선이 실제로 그려질 때까지 기다려요(목록이 조금씩 나눠 그려요).
-      const el = Platform.OS === 'web' && typeof document !== 'undefined' ? document.getElementById(`msg-${id}`) : null;
-      const ready = Platform.OS === 'web' ? !!el : i >= 0;
-      if (!ready) {
-        if (attempt++ < 30) setTimeout(tryScroll, 150);
-        return;
-      }
-      autoScrollUntil.current = Date.now() + 800;
-      jumpHold.current = Date.now() + 1500;
-      atBottom.current = false;
-      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      else listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.35 });
-      setFlashId(id);
-      setTimeout(() => setFlashId((f) => (f === id ? null : f)), 1800);
-    };
-    setTimeout(tryScroll, 80);
-  };
+
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
   const messageById = new Map(messages.map((m) => [m.id, m]));
   const nameOf = (m: ChatMessage) => (m.authorId === OWNER_ID ? settings.userName : (memberById[m.authorId]?.name ?? m.authorName));
@@ -244,13 +277,35 @@ export default function RoomScreen() {
       {/* 봇이 많아도 한눈에 보이게: 옆으로 밀지 않고 여러 줄로 작게 보여줘요(너무 많으면 이 칸만 위아래로 밀어요). */}
       <View style={styles.memberBar}>
         <Text style={[styles.memberSummary, { color: t.chatTime }]}>
-          참가 {members.filter((m) => m.active).length} · 대화 중 {members.filter((m) => m.active && !m.exhausted && m.online).length}
+          사람 {people}명 · 봇 {members.length}명 (대화 중 {members.filter((m) => m.active && !m.exhausted && m.online).length}
           {members.some((m) => m.active && m.exhausted) ? ` · 소진 ${members.filter((m) => m.active && m.exhausted).length}` : ''} · 쉬는 중{' '}
-          {members.filter((m) => !m.active).length}
+          {members.filter((m) => !m.active).length})
         </Text>
         {/* 확인 간격별로 줄을 나눠 보여줘요(실시간 → 긴 간격 순). 봇을 누르면 상태·간격을 바꿔요. */}
         {/* 확인 간격마다 한 줄: "⏱실시간 | 나부 나인 나크" 다음 줄 "⏱5분 | 나지피티 …" */}
-        <ScrollView style={{ maxHeight: 132 }} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ maxHeight: 150 }} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
+          {/* 사람: 나(방장)와 초대한 사람 */}
+          <View style={styles.groupRow}>
+            <View style={[styles.groupTag, { backgroundColor: t.accentSoft }]}>
+              <Text style={{ color: t.accentPurple, fontSize: 10, fontWeight: '800' }}>👤사람</Text>
+            </View>
+            <View style={[styles.memberWrap, { flex: 1 }]}>
+              <View style={[styles.chip, { backgroundColor: t.chip }]}>
+                <Text style={{ fontSize: 13 }}>👑</Text>
+                <Text style={{ color: t.text, fontWeight: '700', fontSize: 11 }}>{settings.userName === '나' ? '나' : `${settings.userName} (나)`}</Text>
+                <View style={[styles.dot, { backgroundColor: '#22C55E' }]} />
+              </View>
+              {[...guests]
+                .sort((a, b) => Number(!!b.online) - Number(!!a.online) || a.name.localeCompare(b.name, 'ko'))
+                .map((g) => (
+                  <Pressable key={g.id} onPress={openMembers} style={[styles.chip, { backgroundColor: t.chip }]}>
+                    <Text style={{ fontSize: 13 }}>🙂</Text>
+                    <Text style={{ color: t.text, fontWeight: '600', fontSize: 11 }}>{g.name}</Text>
+                    <View style={[styles.dot, { backgroundColor: g.online ? '#22C55E' : '#C0C4CF' }]} />
+                  </Pressable>
+                ))}
+            </View>
+          </View>
           {groups.map(([min, list]) => (
             <View key={min} style={styles.groupRow}>
               <View style={[styles.groupTag, { backgroundColor: t.input }]}>
@@ -317,11 +372,15 @@ export default function RoomScreen() {
           if (Date.now() < autoScrollUntil.current) return;
           if (Date.now() < jumpHold.current) {
             atBottom.current = false;
+            if (!showDown) setShowDown(true);
             return;
           }
           const height = contentH.current || contentSize.height;
           const fromBottom = height - (contentOffset.y + layoutMeasurement.height);
           atBottom.current = fromBottom < 80;
+          // 한 화면 넘게 올라가 있으면 '맨 아래로' 버튼
+          const far = fromBottom > layoutMeasurement.height * 0.8;
+          if (far !== showDown) setShowDown(far);
           if (atBottom.current && seenId !== lastRealId(messages)) setSeenId(lastRealId(messages));
         }}
         onContentSizeChange={(_w, h) => {
@@ -357,8 +416,29 @@ export default function RoomScreen() {
           </View>
         )}
       />
+      {showDown && unread === 0 && (
+        <Pressable
+          onPress={() => {
+            jumpHold.current = 0;
+            setShowDown(false);
+            goBottom(true);
+          }}
+          style={[styles.downBtn, { backgroundColor: t.card, borderColor: t.border, borderWidth: StyleSheet.hairlineWidth }]}
+          accessibilityLabel="맨 아래로"
+        >
+          <Ionicons name="arrow-down" size={22} color={t.accent} />
+        </Pressable>
+      )}
       {unread > 0 && (
-        <Pressable onPress={() => goBottom(true)} style={[styles.newPill, { backgroundColor: t.accent }]} accessibilityLabel="새 메시지 보기">
+        <Pressable
+          onPress={() => {
+            jumpHold.current = 0;
+            setShowDown(false);
+            goBottom(true);
+          }}
+          style={[styles.newPill, { backgroundColor: t.accent }]}
+          accessibilityLabel="새 메시지 보기"
+        >
           <Text style={{ color: t.accentText, fontWeight: '700', fontSize: 13 }}>새 메시지 {unread}개 ↓</Text>
         </Pressable>
       )}
@@ -397,7 +477,7 @@ export default function RoomScreen() {
           {/* 확인 간격·매너타임: 누르면 방 설정으로 */}
           <Pressable onPress={openSettings} hitSlop={6} style={[styles.schedPill, { backgroundColor: roomInfo?.quietNow ? t.accentSoft : t.input }]}>
             <Text style={{ color: roomInfo?.quietNow ? t.accentPurple : t.subtext, fontSize: 11, fontWeight: '700' }}>
-              {roomInfo?.quietNow ? '🌙 매너타임' : `⏱ ${scheduleLabel(roomInfo?.checkIntervalMin ?? 30)}${roomInfo?.waitMode === 'away' && (roomInfo?.checkIntervalMin ?? 0) > 0 ? ' · 쉬었다 오기' : ''}`}
+              {roomInfo?.quietNow ? '🌙 매너타임' : `⏱ ${scheduleLabel(roomInfo?.checkIntervalMin ?? 0)}${roomInfo?.waitMode === 'away' && (roomInfo?.checkIntervalMin ?? 0) > 0 ? ' · 쉬었다 오기' : ''}`}
             </Text>
           </Pressable>
         </Pressable>
@@ -411,7 +491,7 @@ export default function RoomScreen() {
         onProfile={openMembers}
         // 쉬게 하기는 소진 표시를 그대로 둬요(그래야 '사용량이 다시 찼어요'라고 잘못 알리지 않아요).
         onPick={(m, state) => run(live.setMemberState(m, { active: state !== 'off', exhausted: state === 'off' ? !!m.exhausted : state === 'exhausted' }))}
-        roomInterval={roomInfo?.checkIntervalMin ?? 30}
+        roomInterval={roomInfo?.checkIntervalMin ?? 0}
         onInterval={(m, v) => run(live.setMemberInterval(m, v))}
       />
 
@@ -421,6 +501,8 @@ export default function RoomScreen() {
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
           { icon: 'notifications-outline', label: '확인 간격 · 매너타임 · 알림', onPress: openSettings },
+          { icon: 'images-outline', label: '사진 앨범', onPress: () => router.push({ pathname: '/room/[id]/album', params: { id: room.id } }) },
+          { icon: 'calendar-outline', label: '타임라인 (달력)', onPress: () => router.push({ pathname: '/room/[id]/timeline', params: { id: room.id } }) },
           { icon: 'stats-chart-outline', label: '봇 사용량', onPress: () => router.push({ pathname: '/usage', params: { room: room.id } }) },
           closed
             ? { icon: 'sunny-outline', label: '봇 다시 부르기', onPress: () => run(live.setRoomClosed(false)) }
@@ -485,6 +567,23 @@ export default function RoomScreen() {
       <Modal visible={!!viewing} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
         <Pressable style={styles.viewer} onPress={() => setViewing(null)}>
           {viewing ? <Image source={{ uri: viewing }} style={{ width: '100%', height: '80%' }} resizeMode="contain" /> : null}
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+            <Pressable
+              onPress={() => {
+                if (!viewing) return;
+                saveImage(viewing, `dabot-${room.name}-${Date.now()}`)
+                  .then((msg) => setSendError(msg))
+                  .catch((e) => setSendError(e instanceof Error ? e.message : String(e)));
+                setViewing(null);
+              }}
+              style={[styles.viewerBtn, { backgroundColor: t.accent }]}
+            >
+              <Text style={{ color: t.accentText, fontWeight: '700' }}>⬇ 저장</Text>
+            </Pressable>
+            <Pressable onPress={() => setViewing(null)} style={[styles.viewerBtn, { borderColor: '#fff', borderWidth: 1 }]}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>닫기</Text>
+            </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
@@ -682,7 +781,8 @@ function MessageRow({
     );
   }
 
-  const look = lookOf(member?.kind ?? 'other', member?.avatar);
+  // 초대받은 사람(손님)은 사람 모양으로
+  const look = msg.authorId.startsWith('guest:') ? { emoji: '🙂', color: '#8FC1FF' } : lookOf(member?.kind ?? 'other', member?.avatar);
   return (
     <>
       {dateLine}
@@ -729,6 +829,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   memberBar: { paddingTop: 2, paddingBottom: 6, paddingHorizontal: 10, gap: 4 },
   brokenPhoto: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 14, marginBottom: 4 },
+  viewerBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 },
+  downBtn: { position: 'absolute', right: 14, bottom: 14, width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
   morePill: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },
