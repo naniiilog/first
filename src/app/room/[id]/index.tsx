@@ -184,15 +184,23 @@ export default function RoomScreen() {
           {members.filter((m) => !m.active).length}
         </Text>
         {/* 확인 간격별로 줄을 나눠 보여줘요(실시간 → 긴 간격 순). 봇을 누르면 상태·간격을 바꿔요. */}
-        {/* "⏱실시간 달수 ⏱10분 나로드 나링 ⏱20분 …"처럼 간격 다음에 그 봇들을 이어서 보여줘요 */}
-        <ScrollView style={{ maxHeight: 96 }} contentContainerStyle={styles.memberWrap} showsVerticalScrollIndicator={false}>
-          {groups.flatMap(([min, list]) => [
-            <View key={`t${min}`} style={[styles.groupTag, { backgroundColor: t.input }]}>
-              <Text style={{ color: t.subtext, fontSize: 10, fontWeight: '800' }}>⏱{intervalShort(min)}</Text>
-            </View>,
-            ...list.map((m) => <MemberChip key={m.id} member={m} onPress={() => setChipMenu(m.id)} />),
-          ])}
-          <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft }]}>
+        {/* 확인 간격마다 한 줄: "⏱실시간 | 나부 나인 나크" 다음 줄 "⏱5분 | 나지피티 …" */}
+        <ScrollView style={{ maxHeight: 132 }} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
+          {groups.map(([min, list]) => (
+            <View key={min} style={styles.groupRow}>
+              <View style={[styles.groupTag, { backgroundColor: t.input }]}>
+                <Text style={{ color: t.subtext, fontSize: 10, fontWeight: '800' }} numberOfLines={1}>
+                  ⏱{intervalShort(min)}
+                </Text>
+              </View>
+              <View style={[styles.memberWrap, { flex: 1 }]}>
+                {list.map((m) => (
+                  <MemberChip key={m.id} member={m} onPress={() => setChipMenu(m.id)} />
+                ))}
+              </View>
+            </View>
+          ))}
+          <Pressable onPress={openMembers} style={[styles.chip, { backgroundColor: t.accentSoft, alignSelf: 'flex-start' }]}>
             <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
           </Pressable>
         </ScrollView>
@@ -598,7 +606,8 @@ const styles = StyleSheet.create({
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },
   memberWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  groupTag: { justifyContent: 'center', paddingHorizontal: 6, borderRadius: 6, marginLeft: 2 },
+  groupRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  groupTag: { width: 50, alignItems: 'center', paddingVertical: 4, borderRadius: 8, marginTop: 1 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 3, paddingRight: 7, paddingVertical: 2, borderRadius: 999, maxWidth: 150 },
   dot: { width: 8, height: 8, borderRadius: 4, marginLeft: 1 },
   errorBar: { paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
