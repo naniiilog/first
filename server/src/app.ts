@@ -100,6 +100,9 @@ const MAX_BODY_CHARS = 1_000_000;
 const MAX_AVATAR_CHARS = 100_000;
 
 /** 프로필 값 검사: null(기본), 'emoji:<이모지>:#rrggbb', 또는 작은 data:image 사진 */
+/** 고를 수 있는 확인 간격(분, 0은 실시간) */
+const INTERVALS = [0, 1, 5, 10, 15, 20, 30, 40, 60, 120];
+
 /** 같은 AI 봇을 또 초대할 때 차례로 쓰는 아이콘 배경색(앱의 ICON_BG_COLORS와 같은 색) */
 const SAME_KIND_COLORS = ['#D0EBFF', '#FFE8CC', '#D3F9D8', '#E5DBFF', '#FFE3E3', '#FFF3BF', '#C5F6FA', '#FCC2D7'];
 
@@ -269,7 +272,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
         // 확인 간격(분)과 매너타임
         const hour = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : undefined);
         const sched = {
-          checkIntervalMin: typeof b.checkIntervalMin === 'number' && [0, 1, 5, 10, 15, 20, 30, 40, 60, 120].includes(b.checkIntervalMin) ? b.checkIntervalMin : undefined,
+          checkIntervalMin: typeof b.checkIntervalMin === 'number' && INTERVALS.includes(b.checkIntervalMin) ? b.checkIntervalMin : undefined,
           quietEnabled: typeof b.quietEnabled === 'boolean' ? b.quietEnabled : undefined,
           quietStart: hour(b.quietStart),
           quietEnd: hour(b.quietEnd),
@@ -402,6 +405,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
           active: typeof b.active === 'boolean' ? b.active : undefined,
           avatar: cleanAvatar(b.avatar),
           exhausted: typeof b.exhausted === 'boolean' ? b.exhausted : undefined,
+          // 이 봇만의 확인 간격(null이면 방 설정 따르기)
+          checkIntervalMin: b.checkIntervalMin === null ? null : typeof b.checkIntervalMin === 'number' && INTERVALS.includes(b.checkIntervalMin) ? b.checkIntervalMin : undefined,
         });
         const reset = cleanReset(b.resetMode, b.resetValue);
         if (reset) await rooms.setReset(m.id, reset.mode, reset.value);

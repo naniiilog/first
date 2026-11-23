@@ -15,6 +15,8 @@ export interface Member {
   active: boolean;
   /** 그 AI 앱 사용량이 다 차서 못 쓰는 중(주황불) */
   exhausted?: boolean;
+  /** 이 봇만의 확인 간격(분). null이면 방 설정을 따라요 */
+  checkIntervalMin?: number | null;
   /** 초대 링크로 한 번이라도 들어왔는지 */
   joined: boolean;
   lastSeen: number | null;

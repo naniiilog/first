@@ -134,9 +134,14 @@ export class AgentSession {
     return this.room.free_talk === 1;
   }
 
+  /** 이 봇에게 적용되는 확인 간격(분): 봇만의 간격이 있으면 그것, 없으면 방 설정 */
+  get interval() {
+    return this.me.check_interval_min ?? this.room.check_interval_min;
+  }
+
   /** 확인 간격 동안 봇이 쉬었다 오는 방식인지(토큰 절약, 대신 채팅 앱 봇은 끊길 수 있어요) */
   get away() {
-    return this.room.wait_mode === 'away' && this.room.check_interval_min > 0;
+    return this.room.wait_mode === 'away' && this.interval > 0;
   }
 
   /** 지금 어떻게 행동할지 한 줄 안내 */
@@ -145,7 +150,7 @@ export class AgentSession {
       ? '[자동대화 ON] 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 방장 질문에는 차례대로 한 명씩 답해요.'
       : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 기다리세요(보내도 서버가 막아요).`;
     // 지금 설정을 매번 분명히 알려줘요(예전 안내를 기억하고 있어도 최신 안내를 따르게).
-    const every = this.room.check_interval_min;
+    const every = this.interval;
     const interval =
       every === 0
         ? ' [확인 간격 실시간] 새 글이 오면 바로 전해줘요.'
@@ -166,7 +171,7 @@ export class AgentSession {
   async gateCheck(): Promise<AgentError | null> {
     const now = Date.now();
     const q = quietState(this.room, now);
-    const every = this.room.check_interval_min * 60_000;
+    const every = this.interval * 60_000;
     // '쉬었다 오기'에서만 간격보다 일찍 온 봇을 돌려보내요(방장이 새 글을 썼으면 통과).
     const early = this.away && this.me.last_check !== null && now - this.me.last_check < every;
     if (q.quiet || early) {
@@ -176,7 +181,7 @@ export class AgentSession {
       }
       if (!q.quiet && early && owner.length === 0) {
         const left = Math.ceil((this.me.last_check! + every - now) / 1000);
-        return fail('too_early', `확인 간격은 ${this.room.check_interval_min}분이에요. ${Math.ceil(left / 60)}분 뒤에 다시 확인하세요.`, left);
+        return fail('too_early', `확인 간격은 ${this.interval}분이에요. ${Math.ceil(left / 60)}분 뒤에 다시 확인하세요.`, left);
       }
     }
     if (this.away) await this.rooms.markChecked(this.me.id);
@@ -285,6 +290,7 @@ export class AgentSession {
         quiet_end: status.quiet_end,
         wait_mode: status.wait_mode,
       });
+      this.me.check_interval_min = status.my_interval;
       if (quietState(this.room).quiet) {
         const owner = await this.rooms.ownerMessagesAfter(this.room.id, from);
         if (!owner.some((m) => mentions(m.text, this.me.name))) {
@@ -293,7 +299,7 @@ export class AgentSession {
       }
       const rows = (await this.rooms.messages(this.room.id, from, 200)).filter((m) => m.author_id !== this.me.id);
       // 확인 간격: 지난번에 전해준 뒤 간격이 안 지났으면, 방장 글이 없는 한 더 모아요.
-      const every = this.room.check_interval_min * 60_000;
+      const every = this.interval * 60_000;
       const holding = every > 0 && this.me.last_check !== null && Date.now() - this.me.last_check < every && !rows.some((m) => m.author_id === OWNER_ID);
       // 안내 글(입장·초대 알림 등)은 부른 것으로 치지 않아요.
       const talk = rows.filter((m) => m.author_id !== SYSTEM_ID);

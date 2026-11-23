@@ -166,7 +166,7 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
       if (isError(w)) return errorResult(w);
       // 아무 일 없을 때는 아주 짧게만 알려줘요(토큰 절약).
       if ('idle' in w) {
-        const every = s.room.check_interval_min;
+        const every = s.interval;
         if (s.away) return result(`새 글 없음. ${every}분 뒤에 다시 확인하세요. [확인 간격 ${every}분 · 쉬었다 오기]`);
         if (every > 0) return result(`새 글을 모으는 중이에요. 대화를 마치지 말고 바로 wait_for_messages를 다시 호출하세요. [확인 간격 ${every}분]`);
         return result(

@@ -300,6 +300,8 @@ export default function RoomScreen() {
         onProfile={openMembers}
         // 쉬게 하기는 소진 표시를 그대로 둬요(그래야 '사용량이 다시 찼어요'라고 잘못 알리지 않아요).
         onPick={(m, state) => run(live.setMemberState(m, { active: state !== 'off', exhausted: state === 'off' ? !!m.exhausted : state === 'exhausted' }))}
+        roomInterval={roomInfo?.checkIntervalMin ?? 30}
+        onInterval={(m, v) => run(live.setMemberInterval(m, v))}
       />
 
       <RoomMenu

@@ -153,7 +153,7 @@ export const api = {
   inviteUrl: (s: Settings, r: LocalRoom, memberId: string) =>
     call<{ inviteUrl: string }>(s, `/api/rooms/${r.id}/members/${memberId}/invite`, { ownerToken: r.ownerToken }),
 
-  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean }) =>
+  updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean; checkIntervalMin?: number | null }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 휴대폰 알림 */

@@ -182,6 +182,16 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
         }),
     );
 
+  /** 이 봇만의 확인 간격(null이면 방 설정 따르기) */
+  const setMemberInterval = (m: Member, minutes: number | null) =>
+    optimistic(
+      () => {
+        setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, checkIntervalMin: minutes } : x)));
+        return () => setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, checkIntervalMin: m.checkIntervalMin ?? null } : x)));
+      },
+      () => api.updateMember(settings, room!, m.id, { checkIntervalMin: minutes }),
+    );
+
   /** 사용량 소진(주황불) 켜고 끄기 */
   const toggleExhausted = (m: Member) =>
     optimistic(
@@ -258,6 +268,7 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
     toggleMember,
     toggleExhausted,
     setMemberState,
+    setMemberInterval,
     toggleFreeTalk,
     setRoomClosed,
     sendMessage,

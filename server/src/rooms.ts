@@ -62,6 +62,8 @@ export interface MemberRow {
   reset_value: number;
   /** 1이면 사용량이 다 차서 못 쓰는 중(주황불). 그 봇이 다시 말하면 저절로 꺼져요. */
   exhausted: number;
+  /** 이 봇만의 확인 간격(분). null이면 방 설정을 따라요 */
+  check_interval_min: number | null;
 }
 
 export interface MessageRow {
@@ -90,6 +92,8 @@ export const publicMember = (m: MemberRow) => ({
   name: m.name,
   active: m.active === 1,
   exhausted: m.exhausted === 1,
+  /** 이 봇만의 확인 간격(분). null이면 방 설정 */
+  checkIntervalMin: m.check_interval_min ?? null,
   joined: m.last_seen !== null,
   avatar: m.avatar ?? null,
   // 분 단위로만 알려줘요(에이전트가 확인할 때마다 값이 바뀌면 '바뀐 게 없으면 304'가 안 먹혀서).
@@ -283,8 +287,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; my_interval: number | null }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, m.check_interval_min AS my_interval FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }
@@ -324,6 +328,7 @@ export class Rooms {
       reset_mode: resetForKind(kind).mode,
       reset_value: resetForKind(kind).value,
       exhausted: 0,
+      check_interval_min: null,
     };
     await this.db.run(
       'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at, reset_mode, reset_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -333,7 +338,13 @@ export class Rooms {
     return m;
   }
 
-  async updateMember(m: MemberRow, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean }) {
+  async updateMember(m: MemberRow, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean; checkIntervalMin?: number | null }) {
+    if (patch.checkIntervalMin !== undefined && patch.checkIntervalMin !== m.check_interval_min) {
+      await this.db.run('UPDATE members SET check_interval_min = ? WHERE id = ?', patch.checkIntervalMin, m.id);
+      const v = patch.checkIntervalMin;
+      const label = v === null ? '방 설정 따르기' : v === 0 ? '실시간' : `${v}분마다`;
+      await this.post(m.room_id, SYSTEM_ID, '안내', `${patch.name ?? m.name} 님의 확인 간격을 바꿨어요: ${label}`);
+    }
     if (patch.exhausted !== undefined && (patch.exhausted ? 1 : 0) !== m.exhausted) {
       await this.db.run('UPDATE members SET exhausted = ? WHERE id = ?', patch.exhausted ? 1 : 0, m.id);
       const name = patch.name ?? m.name;

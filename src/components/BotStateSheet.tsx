@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { aiOf } from '../lib/ais';
 import { lookOf } from '../lib/avatar';
@@ -10,6 +10,8 @@ import type { Member } from '../lib/types';
 import { Avatar } from './ui';
 
 export type BotState = 'on' | 'exhausted' | 'off';
+const BOT_INTERVALS = [0, 1, 5, 10, 15, 20, 30, 40, 60, 120];
+const intervalText = (n: number) => (n === 0 ? '실시간' : n >= 60 ? `${n / 60}시간` : `${n}분`);
 export const stateOf = (m: Member): BotState => (!m.active ? 'off' : m.exhausted ? 'exhausted' : 'on');
 
 const OPTIONS: { key: BotState; color: string; label: string; hint: string }[] = [
@@ -24,11 +26,17 @@ export function BotStateSheet({
   onClose,
   onPick,
   onProfile,
+  roomInterval,
+  onInterval,
 }: {
   member: Member | null;
   onClose: () => void;
   onPick: (m: Member, state: BotState) => void;
   onProfile: () => void;
+  /** 방 전체 확인 간격(분) */
+  roomInterval: number;
+  /** 이 봇만의 확인 간격 바꾸기(null이면 방 설정 따르기) */
+  onInterval: (m: Member, minutes: number | null) => void;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -84,6 +92,26 @@ export function BotStateSheet({
             );
           })}
 
+          {/* 확인 간격: 방 전체 설정을 따르거나 이 봇만 따로 */}
+          <Text style={{ color: t.text, fontWeight: '700', fontSize: 14, marginTop: 4 }}>⏱ 이 봇의 확인 간격</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+            {[null, ...BOT_INTERVALS].map((v) => {
+              const on = (member.checkIntervalMin ?? null) === v;
+              const label = v === null ? `방 설정 (${intervalText(roomInterval)})` : intervalText(v);
+              return (
+                <Pressable
+                  key={String(v)}
+                  onPress={() => {
+                    if (!on) onInterval(member, v);
+                  }}
+                  style={[styles.ichip, { backgroundColor: on ? t.accent : t.card, borderColor: on ? t.accent : t.border }]}
+                >
+                  <Text style={{ color: on ? t.accentText : t.text, fontWeight: '700', fontSize: 12 }}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
           <View style={styles.row}>
             {canCall && (
               <Pressable onPress={() => callBackBot(member, setNote)} style={[styles.small, { backgroundColor: t.accent }]}>
@@ -116,5 +144,6 @@ const styles = StyleSheet.create({
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: 1 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  ichip: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
   small: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
 });

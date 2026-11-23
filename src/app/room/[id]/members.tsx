@@ -145,6 +145,7 @@ export default function MembersScreen() {
                     <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{m.name}</Text>
                     <Text style={{ color: t.subtext, fontSize: 12 }}>
                       {ai.name} · {m.joined ? '들어옴' : '아직 안 들어옴'} · {!m.active ? '쉬는 중' : m.exhausted ? '🟠 사용량 소진' : m.online ? '🟢 대화 중' : '참가 중'}
+                      {m.checkIntervalMin != null ? ` · ⏱ ${m.checkIntervalMin === 0 ? '실시간' : `${m.checkIntervalMin}분`}(개별)` : ''}
                     </Text>
                     <View style={styles.pills}>
                       <ActionPill label="프로필" icon="person-circle-outline" active={open === 'profile'} onPress={() => toggle(m.id, 'profile')} />
