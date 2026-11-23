@@ -5,8 +5,9 @@ import { handleAgentHttp } from './agentHttp.js';
 import { imageFrom, isError, quietState } from './agent.js';
 import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
-import { imageSig, imageUrl, MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms, tzOffsetSec } from './rooms.js';
+import { imageSig, imageUrl, MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms, SYSTEM_ID, tzOffsetSec } from './rooms.js';
 import { cleanReset, windowEnd } from './usage.js';
+import { currentTurn, parseTurn } from './turn.js';
 import { NOTIFY_MODES, notifyBotMessage, sendTest, vapid } from './push.js';
 
 /**
@@ -287,6 +288,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
     if (!sub) {
       if (req.method === 'GET') {
         const members = await rooms.members(room.id);
+        const turn = parseTurn(room);
+        const cur = turn ? currentTurn(turn, members) : null;
         const payload = JSON.stringify({
           room: {
             id: room.id,
@@ -300,6 +303,9 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             tz: room.tz,
             quietNow: quietState(room).quiet,
             waitMode: room.wait_mode || 'stay',
+            // 순서 대화: 순서(멤버 번호)와 지금 차례
+            turnOrder: turn ? turn.order : null,
+            turnCurrent: cur ? cur.id : null,
             notifyMode: room.notify_mode || 'off',
             notifySilent: room.notify_silent === 1,
           },
@@ -337,6 +343,31 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
         const notifyName = typeof b.notifyName === 'string' ? cleanName(b.notifyName) : undefined;
         if (notifyMode !== undefined || notifySilent !== undefined || notifyName !== undefined) {
           await rooms.setNotify(room.id, { mode: notifyMode, silent: notifySilent, name: notifyName });
+        }
+        // 순서 대화: turnOrder(멤버 번호 배열)로 시작·바꾸기, null이면 끝내기, turnNext:true면 다음 차례로
+        if (b.turnOrder !== undefined || b.turnNext === true) {
+          const members = await rooms.members(room.id);
+          const name = (id: string) => members.find((m) => m.id === id)?.name ?? '?';
+          if (b.turnOrder === null) {
+            await rooms.setTurn(room.id, null, 0, 0);
+            await rooms.post(room.id, SYSTEM_ID, '안내', '순서 대화를 끝냈어요. 이제 순서 없이 자유롭게 말해요.');
+          } else if (Array.isArray(b.turnOrder)) {
+            const ids: string[] = [...new Set<string>((b.turnOrder as unknown[]).map(String))].filter((id) => members.some((m) => m.id === id)).slice(0, 30);
+            if (ids.length < 2) throw new HttpError(400, '순서 대화는 봇을 2명 넘게 골라 주세요.');
+            const was = parseTurn(room);
+            const start = typeof b.turnStart === 'string' && ids.includes(b.turnStart) ? ids.indexOf(b.turnStart) : 0;
+            await rooms.setTurn(room.id, ids, start, Date.now());
+            await rooms.post(room.id, SYSTEM_ID, '안내', `${was ? '순서를 바꿨어요' : '순서 대화를 시작해요'}: ${ids.map(name).join(' → ')}. 지금 차례: ${name(ids[start])}. 차례가 아닌 봇은 기다려 주세요.`);
+          } else if (b.turnNext === true) {
+            const turn = parseTurn(room);
+            const cur = turn ? currentTurn(turn, members) : null;
+            if (turn && cur) {
+              const next = (cur.idx + 1) % turn.order.length;
+              await rooms.setTurn(room.id, turn.order, next, Date.now());
+              const after = currentTurn({ ...turn, idx: next, since: Date.now() }, members);
+              await rooms.post(room.id, SYSTEM_ID, '안내', `${cur.name} 차례를 넘겼어요. 지금 차례: ${after?.name ?? name(turn.order[next])}`);
+            }
+          }
         }
         if (typeof b.freeTalk === 'boolean') await rooms.setFreeTalk(room, b.freeTalk);
         if (typeof b.closed === 'boolean') await rooms.setClosed(room, b.closed);

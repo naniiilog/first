@@ -34,6 +34,10 @@ export interface RoomRow {
   owner_seen: number | null;
   /** 확인 간격 동안 봇이 stay(계속 기다리기) · away(쉬었다 오기) */
   wait_mode: string;
+  /** 순서 대화(없으면 null) */
+  turn_order: string | null;
+  turn_idx: number;
+  turn_since: number | null;
 }
 
 export interface MemberRow {
@@ -180,7 +184,7 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay' };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null };
     // 확인 간격은 정해 두지 않아요(실시간). 방장이 방 설정에서 정한 대로 따라요.
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at, check_interval_min) VALUES (?, ?, ?, ?, 0)', room.id, room.name, room.owner_token, room.created_at);
     return room;
@@ -320,8 +324,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; my_interval: number | null }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, m.check_interval_min AS my_interval FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; turn_order: string | null; turn_idx: number; turn_since: number | null; my_interval: number | null }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, r.turn_order AS turn_order, r.turn_idx AS turn_idx, r.turn_since AS turn_since, m.check_interval_min AS my_interval FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }
@@ -450,6 +454,11 @@ export class Rooms {
       return rows.reverse();
     }
     return this.db.all<MessageRow>('SELECT * FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT ?', roomId, afterId, limit);
+  }
+
+  /** 순서 대화 정하기(null이면 끝내기) */
+  setTurn(roomId: string, order: string[] | null, idx: number, since: number) {
+    return this.db.run('UPDATE rooms SET turn_order = ?, turn_idx = ?, turn_since = ? WHERE id = ?', order ? JSON.stringify(order) : null, idx, since, roomId);
   }
 
   /** 사진이 있는 글(앨범): 최근 것부터, 사진 데이터는 빼고 */

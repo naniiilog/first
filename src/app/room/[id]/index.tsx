@@ -1,12 +1,16 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
 import { saveImage } from '../../../lib/saveImage';
+import { getBookmarks, getReadMark, setReadMark, toggleBookmark, type Bookmark } from '../../../lib/marks';
+import { BookmarkSheet, MessageActions } from '../../../components/MessageActions';
 import { SearchSheet } from '../../../components/SearchSheet';
+import { TurnPanel, TurnSetup } from '../../../components/TurnPanel';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
 import { api, type Guest } from '../../../lib/api';
@@ -68,6 +72,8 @@ export default function RoomScreen() {
   const [flashId, setFlashId] = useState<number | null>(null);
   /** 위로 올려 읽는 중이면 '맨 아래로' 버튼을 보여줘요 */
   const [showDown, setShowDown] = useState(false);
+  /** 순서 정하기 창 */
+  const [turnEdit, setTurnEdit] = useState(false);
   /** 초대한 사람들(위쪽 목록에 '사람'으로 보여요) */
   const [guests, setGuests] = useState<Guest[]>([]);
   useEffect(() => {
@@ -108,7 +114,9 @@ export default function RoomScreen() {
   /** 찾아가는 동안(그리고 그 뒤 잠깐)은 맨 아래로 따라 내려가지 않아요. */
   const jumpHold = useRef(0);
 
-  const goBottom = (animated: boolean) => {
+  /** 맨 아래로. markRead면 '여기까지 읽음'도 저장해요(방을 처음 열 때 저절로 내려가는 건 읽은 게 아니라서 빼요). */
+  const goBottom = (animated: boolean, markRead = true) => {
+    if (markRead && id) setReadMark(id, lastRealId(messages));
     autoScrollUntil.current = Date.now() + (animated ? 700 : 250);
     listRef.current?.scrollToEnd({ animated });
     // 웹에서는 마지막 말풍선 높이가 한 박자 늦게 정해져서 끝까지 안 내려갈 때가 있어요. 한 번 더 내려요.
@@ -121,7 +129,7 @@ export default function RoomScreen() {
    * 그 글로 찾아가기(답장 원문, 검색 결과).
    * 안 불러온 오래된 글이면 먼저 불러오고, 화면에 그려지면 가운데쯤으로 스크롤해서 잠깐 반짝여요.
    */
-  const jumpTo = async (id: number) => {
+  const jumpTo = async (id: number, flash = true) => {
     atBottom.current = false;
     forceBottom.current = false;
     jumpHold.current = nowMs() + 15_000;
@@ -155,11 +163,61 @@ export default function RoomScreen() {
       atBottom.current = false;
       if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       else listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.35 });
+      if (!flash) return;
       setFlashId(id);
       setTimeout(() => setFlashId((f) => (f === id ? null : f)), 1800);
     };
     setTimeout(tryScroll, 80);
   };
+
+  // ── 마지막으로 읽은 곳: 방을 열 때 한 번 읽어 두고(이번에 보는 동안 그대로), 맨 아래까지 보면 저장해요 ──
+  const [readMark, setReadMarkState] = useState<number | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    getReadMark(id).then((v) => alive && setReadMarkState(v));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  /** 읽던 곳 다음 첫 글(내 글·안내 빼고) */
+  const firstUnreadId = readMark ? messages.find((m) => m.id > readMark && m.authorId !== OWNER_ID && m.authorId !== SYSTEM_ID)?.id ?? null : null;
+  // 방을 열었을 때 안 읽은 글이 3개 넘게 있으면 읽던 곳으로 가요.
+  const handledRead = useRef(false);
+  useEffect(() => {
+    if (handledRead.current || !firstUnreadId || jump) return;
+    handledRead.current = true;
+    const after = messages.filter((m) => m.id >= firstUnreadId).length;
+    if (after <= 3) {
+      // 안 읽은 게 얼마 안 되면 맨 아래에서 다 보이니 읽은 걸로 해요.
+      setReadMark(id, lastRealId(messages));
+      return;
+    }
+    const timer = setTimeout(() => jumpTo(firstUnreadId, false), 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstUnreadId]);
+
+  // 순서 대화 중엔 새 글이 오면 바로 차례 표시를 새로 받아요(5초 기다리지 않게).
+  const turnOn = !!roomInfo?.turnOrder;
+  useEffect(() => {
+    if (turnOn && messages.length) live.refreshMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnOn, messages.length]);
+
+  // ── 북마크 ──
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  /** 길게 누른 글(답장·북마크·복사 창), 북마크 목록 창 */
+  const [actionMsg, setActionMsg] = useState<ChatMessage | null>(null);
+  const [showMarks, setShowMarks] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    getBookmarks(id).then((b) => alive && setBookmarks(b));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   // 다른 화면(앨범·타임라인)에서 '대화에서 보기'로 오면 그 글로 찾아가요.
   const handledJump = useRef<string | null>(null);
@@ -326,6 +384,30 @@ export default function RoomScreen() {
         </ScrollView>
       </View>
 
+      {roomInfo?.turnOrder ? (
+        <TurnPanel
+          order={roomInfo.turnOrder}
+          current={roomInfo.turnCurrent ?? null}
+          members={members}
+          onNext={() => run(api.setTurn(settings, room, { turnNext: true }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)))}
+          onEdit={() => setTurnEdit(true)}
+          onEnd={() => run(api.setTurn(settings, room, { turnOrder: null }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)))}
+        />
+      ) : null}
+      {turnEdit && (
+        <TurnSetup
+          visible
+          members={members}
+          initial={roomInfo?.turnOrder ?? []}
+          current={roomInfo?.turnCurrent ?? null}
+          onClose={() => setTurnEdit(false)}
+          onStart={(order, start) => {
+            setTurnEdit(false);
+            run(api.setTurn(settings, room, { turnOrder: order, turnStart: start }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)));
+          }}
+        />
+      )}
+
       {(gone || error || sendError) && (
         <Text style={[styles.errorBar, { color: '#fff', backgroundColor: 'rgba(229,72,77,0.85)' }]}>
           ⚠️ {gone ? '서버에서 이 방을 찾을 수 없어요. 삭제됐거나 다른 서버 주소일 수 있어요.' : sendError ?? error}
@@ -343,7 +425,7 @@ export default function RoomScreen() {
         // 오래된 글을 불러오면 한 번에 그려서, 찾아가기가 바로 되게 해요.
         maxToRenderPerBatch={300}
         updateCellsBatchingPeriod={10}
-        extraData={flashId}
+        extraData={[flashId, bookmarks, firstUnreadId]}
         onScrollToIndexFailed={(info) => {
           listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
           setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.35 }), 120);
@@ -378,6 +460,7 @@ export default function RoomScreen() {
           const height = contentH.current || contentSize.height;
           const fromBottom = height - (contentOffset.y + layoutMeasurement.height);
           atBottom.current = fromBottom < 80;
+          if (atBottom.current && id) setReadMark(id, lastRealId(messages));
           // 한 화면 넘게 올라가 있으면 '맨 아래로' 버튼
           const far = fromBottom > layoutMeasurement.height * 0.8;
           if (far !== showDown) setShowDown(far);
@@ -388,8 +471,9 @@ export default function RoomScreen() {
           // 새 메시지로 내용이 길어졌을 때: 맨 아래를 보고 있었으면 따라 내려가고, 위에서 읽는 중이면 그대로 둬요.
           if (Date.now() < jumpHold.current) return;
           if (forceBottom.current || atBottom.current) {
+            const first = forceBottom.current;
             forceBottom.current = false;
-            goBottom(false);
+            goBottom(false, !first);
           }
         }}
         ListEmptyComponent={
@@ -401,6 +485,13 @@ export default function RoomScreen() {
         }
         renderItem={({ item }) => (
           <View nativeID={`msg-${item.msg.id}`}>
+          {item.msg.id === firstUnreadId ? (
+            <View style={styles.readLine}>
+              <View style={[styles.readRule, { backgroundColor: t.accent }]} />
+              <Text style={{ color: t.accent, fontSize: 12, fontWeight: '800' }}>📍 여기까지 읽었어요</Text>
+              <View style={[styles.readRule, { backgroundColor: t.accent }]} />
+            </View>
+          ) : null}
           <MessageRow
             row={item}
             member={memberById[item.msg.authorId]}
@@ -408,7 +499,8 @@ export default function RoomScreen() {
             quotedName={nameOf}
             t={t}
             onProfile={openMembers}
-            onReply={() => setReplyTo(item.msg)}
+            onReply={() => setActionMsg(item.msg)}
+            marked={bookmarks.some((b) => b.id === item.msg.id)}
             onImage={setViewing}
             onQuote={item.msg.replyTo ? () => jumpTo(item.msg.replyTo!) : undefined}
             flash={flashId === item.msg.id}
@@ -483,6 +575,30 @@ export default function RoomScreen() {
         </Pressable>
       )}
 
+      <MessageActions
+        msg={actionMsg}
+        marked={!!actionMsg && bookmarks.some((b) => b.id === actionMsg.id)}
+        onClose={() => setActionMsg(null)}
+        onReply={() => actionMsg && setReplyTo(actionMsg)}
+        onBookmark={() => {
+          if (!actionMsg) return;
+          const was = bookmarks.some((b) => b.id === actionMsg.id);
+          toggleBookmark(room.id, actionMsg).then((list) => {
+            setBookmarks(list);
+            setSendError(was ? '북마크를 해제했어요.' : '🔖 북마크했어요. ☰ → 북마크에서 다시 볼 수 있어요.');
+          });
+        }}
+        onCopy={() => {
+          if (actionMsg?.text) Clipboard.setStringAsync(actionMsg.text).then(() => setSendError('글을 복사했어요.')).catch(() => {});
+        }}
+      />
+      <BookmarkSheet
+        visible={showMarks}
+        list={bookmarks}
+        onClose={() => setShowMarks(false)}
+        onPick={jumpTo}
+        onRemove={(b) => toggleBookmark(room.id, { id: b.id, authorId: '', authorName: b.authorName, text: b.text, createdAt: b.createdAt }).then(setBookmarks)}
+      />
       <SearchSheet visible={searching} settings={settings} room={room} onClose={() => setSearching(false)} onPick={jumpTo} />
 
       <BotStateSheet
@@ -501,6 +617,8 @@ export default function RoomScreen() {
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
           { icon: 'notifications-outline', label: '확인 간격 · 매너타임 · 알림', onPress: openSettings },
+          { icon: 'repeat-outline', label: roomInfo?.turnOrder ? '순서 바꾸기' : '순서 정해서 대화', onPress: () => setTurnEdit(true) },
+          { icon: 'bookmark-outline', label: `북마크 (${bookmarks.length})`, onPress: () => setShowMarks(true) },
           { icon: 'images-outline', label: '사진 앨범', onPress: () => router.push({ pathname: '/room/[id]/album', params: { id: room.id } }) },
           { icon: 'calendar-outline', label: '타임라인 (달력)', onPress: () => router.push({ pathname: '/room/[id]/timeline', params: { id: room.id } }) },
           { icon: 'stats-chart-outline', label: '봇 사용량', onPress: () => router.push({ pathname: '/usage', params: { room: room.id } }) },
@@ -686,6 +804,7 @@ function Bubble({
   onImage,
   onQuote,
   flash,
+  marked,
 }: {
   msg: ChatMessage;
   mine: boolean;
@@ -697,12 +816,13 @@ function Bubble({
   onImage: (uri: string) => void;
   onQuote?: () => void;
   flash?: boolean;
+  marked?: boolean;
 }) {
   return (
     <Pressable
       onLongPress={onReply}
       delayLongPress={350}
-      accessibilityHint="길게 누르면 답장해요"
+      accessibilityHint="길게 누르면 답장·북마크·복사"
       style={[
         styles.bubble,
         { backgroundColor: mine ? t.myBubble : t.botBubble, opacity: msg.pending ? 0.6 : 1 },
@@ -710,6 +830,7 @@ function Bubble({
         first && (mine ? { borderTopRightRadius: 4 } : { borderTopLeftRadius: 4 }),
       ]}
     >
+      {marked ? <Text style={styles.markTag}>🔖</Text> : null}
       <Quote m={quoted} name={quotedName} mine={mine} t={t} onPress={onQuote} />
       {msg.image ? <Photo uri={msg.image} mine={mine} t={t} onOpen={() => onImage(msg.image!)} onReply={onReply} /> : null}
       {msg.text ? (
@@ -732,6 +853,7 @@ function MessageRow({
   onImage,
   onQuote,
   flash,
+  marked,
 }: {
   row: Row;
   member?: Member;
@@ -743,6 +865,7 @@ function MessageRow({
   onImage: (uri: string) => void;
   onQuote?: () => void;
   flash?: boolean;
+  marked?: boolean;
 }) {
   const { msg } = row;
   const dateLine = row.dateLine ? (
@@ -766,7 +889,7 @@ function MessageRow({
     <Text style={[styles.time, { color: t.chatTime }]}>{msg.pending ? '보내는 중…' : stamp(msg.createdAt)}</Text>
   ) : null;
   const bubble = (mine: boolean) => (
-    <Bubble msg={msg} mine={mine} first={row.showProfile} quoted={quoted} quotedName={quotedName} t={t} onReply={onReply} onImage={onImage} onQuote={onQuote} flash={flash} />
+    <Bubble msg={msg} mine={mine} first={row.showProfile} quoted={quoted} quotedName={quotedName} t={t} onReply={onReply} onImage={onImage} onQuote={onQuote} flash={flash} marked={marked} />
   );
 
   if (msg.authorId === OWNER_ID) {
@@ -831,6 +954,9 @@ const styles = StyleSheet.create({
   brokenPhoto: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 14, marginBottom: 4 },
   viewerBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 },
   downBtn: { position: 'absolute', right: 14, bottom: 14, width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+  markTag: { position: 'absolute', top: -8, right: -6, fontSize: 14 },
+  readLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 10, paddingHorizontal: 6 },
+  readRule: { flex: 1, height: 1.5, opacity: 0.5 },
   morePill: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },

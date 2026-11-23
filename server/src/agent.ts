@@ -10,6 +10,7 @@
  */
 import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type RoomRow, type Rooms } from './rooms.js';
 import { findSecret, secretMessage } from './safety.js';
+import { currentTurn, parseTurn, turnNames } from './turn.js';
 import { windowEnd } from './usage.js';
 
 /** 모든 에이전트에게 알려주는 보안 규칙 */
@@ -142,7 +143,17 @@ export class AgentSession {
     readonly rooms: Rooms,
     readonly me: MemberRow,
     readonly room: RoomRow,
+    /** 순서 대화 중일 때만 불러 둔 멤버 목록(차례 계산용) */
+    public turnMembers: MemberRow[] | null = null,
   ) {}
+
+  /** 순서 대화 중이면 지금 차례 */
+  turnNow() {
+    const turn = parseTurn(this.room);
+    if (!turn || !this.turnMembers) return null;
+    const cur = currentTurn(turn, this.turnMembers);
+    return cur ? { ...cur, turn, names: turnNames(turn, this.turnMembers) } : null;
+  }
 
   /**
    * 사용량 기록: 도구를 한 번 부를 때마다 한 번.
@@ -164,7 +175,7 @@ export class AgentSession {
     if (room.closed === 1) return RESTING;
     await rooms.touch(me);
     if (me.active !== 1) return PAUSED;
-    return new AgentSession(rooms, me, room);
+    return new AgentSession(rooms, me, room, room.turn_order ? await rooms.members(room.id) : null);
   }
 
   get freeTalk() {
@@ -198,7 +209,11 @@ export class AgentSession {
       this.room.quiet_enabled === 1
         ? ` [매너타임 ${quietLabel(this.room)}] 이 시간이 되면 대화를 마치세요(방장이 이름을 부르면 예외).`
         : ' [매너타임 없음] 시간과 상관없이 대화해도 돼요. 예전에 들은 매너타임 안내는 무시하세요.';
-    return talk + interval + quiet;
+    const t = this.turnNow();
+    const turn = t
+      ? ` [순서 대화] ${t.names.join(' → ')} · 지금 차례: ${t.name}${t.id === this.me.id ? '(나!) 지금 말하세요.' : '. 내 차례에만 말하고, 그 전에는 끼어들지 말고 기다리세요.'}`
+      : '';
+    return talk + interval + quiet + turn;
   }
 
   /**
@@ -258,6 +273,14 @@ export class AgentSession {
         return fail('not_called', `지금은 자동대화가 꺼져 있고 아무도 "${this.me.name}"을(를) 부르지 않아서 보낼 수 없어요. 이름이 불릴 때까지 기다리세요.`);
       }
     }
+    // 순서 대화: 내 차례가 아니면 못 말해요(방장이 내 이름을 부른 건 예외)
+    const t = this.turnNow();
+    if (t && t.id !== this.me.id) {
+      const since = await this.rooms.messagesSinceMine(this.room.id, this.me.id);
+      if (!since.some((m) => m.author_id === OWNER_ID && mentions(m.text, this.me.name))) {
+        return fail('not_your_turn', `지금은 순서 대화 중이에요(${t.names.join(' → ')}). 지금은 "${t.name}" 차례예요. 내 차례가 올 때까지 기다리세요.`);
+      }
+    }
     const [rows, members] = await Promise.all([this.rooms.relayRows(this.room.id), this.rooms.members(this.room.id)]);
     const relay = relayState(rows, members, this.me, this.freeTalk, Date.now());
     if (relay?.waitingFor) {
@@ -281,6 +304,9 @@ export class AgentSession {
       id, room_id: this.room.id, author_id: this.me.id, author_name: this.me.name, text: body,
       created_at: Date.now(), reply_to: replyTo ?? null, image: opts.image ?? null,
     });
+    // 순서 대화: 내 차례에 말했으면 다음 사람 차례로
+    const t = this.turnNow();
+    if (t && t.id === this.me.id) await this.rooms.setTurn(this.room.id, t.turn.order, (t.idx + 1) % t.turn.order.length, Date.now());
     // 사용량이 다 찼다고 표시된 봇이 다시 말하면, 다시 쓸 수 있게 된 거예요.
     if (this.me.exhausted === 1) {
       this.me.exhausted = 0;
@@ -326,7 +352,11 @@ export class AgentSession {
         quiet_start: status.quiet_start,
         quiet_end: status.quiet_end,
         wait_mode: status.wait_mode,
+        turn_order: status.turn_order,
+        turn_idx: status.turn_idx,
+        turn_since: status.turn_since,
       });
+      if (status.turn_order && !this.turnMembers) this.turnMembers = members;
       this.me.check_interval_min = status.my_interval;
       if (quietState(this.room).quiet) {
         const owner = await this.rooms.ownerMessagesAfter(this.room.id, from);
@@ -337,7 +367,11 @@ export class AgentSession {
       const rows = (await this.rooms.messages(this.room.id, from, 200)).filter((m) => m.author_id !== this.me.id);
       // 확인 간격: 지난번에 전해준 뒤 간격이 안 지났으면, 방장 글이 없는 한 더 모아요.
       const every = this.interval * 60_000;
-      const holding = every > 0 && this.me.last_check !== null && Date.now() - this.me.last_check < every && !rows.some((m) => m.author_id === OWNER_ID);
+      // 순서 대화: 내 차례가 아니면(방장이 이름을 부르지 않는 한) 깨지 않아요. 내 차례면 간격도 기다리지 않아요.
+      const t = this.turnNow();
+      const myTurn = !!t && t.id === this.me.id;
+      const blockedByTurn = !!t && !myTurn && !rows.some((m) => m.author_id === OWNER_ID && mentions(m.text, this.me.name));
+      const holding = (every > 0 && !myTurn && this.me.last_check !== null && Date.now() - this.me.last_check < every && !rows.some((m) => m.author_id === OWNER_ID)) || blockedByTurn;
       // 안내 글(입장·초대 알림 등)은 부른 것으로 치지 않아요.
       const talk = rows.filter((m) => m.author_id !== SYSTEM_ID);
       const called = !holding && (freeTalk ? talk.length > 0 : talk.some((m) => mentions(m.text, this.me.name)));

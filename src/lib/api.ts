@@ -77,6 +77,9 @@ export interface RoomInfo {
     notifySilent?: boolean;
     /** 확인 간격 동안 봇이 stay(계속 기다리기) · away(쉬었다 오기) */
     waitMode?: 'stay' | 'away';
+    /** 순서 대화: 순서(멤버 번호)와 지금 차례 */
+    turnOrder?: string[] | null;
+    turnCurrent?: string | null;
   };
   members: Member[];
 }
@@ -162,6 +165,10 @@ export const api = {
     r: LocalRoom,
     patch: { checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; tz?: string; waitMode?: 'stay' | 'away' },
   ) => call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
+
+  /** 순서 대화: 시작·바꾸기(order, 처음 차례 start) · 끝내기(null) · 다음 차례로 */
+  setTurn: (s: Settings, r: LocalRoom, patch: { turnOrder?: string[] | null; turnStart?: string; turnNext?: boolean }) =>
+    call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 모두 쉬게 하기(true) / 다시 부르기(false) */
   setClosed: (s: Settings, r: LocalRoom, closed: boolean) =>
