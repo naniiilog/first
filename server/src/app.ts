@@ -512,7 +512,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
       if (req.method === 'POST') {
         const s = b.subscription;
         const ok =
-          s && typeof s.endpoint === 'string' && /^https:\/\//.test(s.endpoint) && s.endpoint.length < 1000 &&
+          s && typeof s.endpoint === 'string' && (/^https:\/\//.test(s.endpoint) || /^expo:ExponentPushToken\[[\w-]+\]$/.test(s.endpoint)) && s.endpoint.length < 1000 &&
           typeof s.keys?.p256dh === 'string' && s.keys.p256dh.length < 200 && typeof s.keys?.auth === 'string' && s.keys.auth.length < 100;
         if (!ok) throw new HttpError(400, '알림 구독 정보가 올바르지 않아요.');
         await rooms.addPushSub(room.id, { endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth });

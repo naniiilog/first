@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { api, type NotifyMode, type RoomInfo } from '../lib/api';
 import { disablePush, enablePush, needsHomeScreen, pushStatus, pushSupported } from '../lib/push';
 import { useTheme } from '../lib/theme';
@@ -131,7 +131,9 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                 <Chip label="🔕 무음" selected={silent} onPress={() => save({ notifySilent: true }).catch((e) => setMsg(String(e)))} />
               </View>
               <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 18 }}>
-                진동만 받고 싶으면: 휴대폰 설정 → 알림 → Chrome(또는 다봇) → 사이트 알림에서 이 사이트를 &apos;진동&apos;으로 바꿔 주세요. 소리 종류도 거기서 골라요.
+                {Platform.OS === 'web'
+                  ? '진동만 받고 싶으면: 휴대폰 설정 → 알림 → Chrome(또는 다봇) → 사이트 알림에서 이 사이트를 “진동”으로 바꿔 주세요. 소리 종류도 거기서 골라요.'
+                  : '소리 종류·진동만 받기는 휴대폰 설정 → 앱 → 다봇 → 알림 → “대화 알림”에서 바꿀 수 있어요.'}
               </Text>
 
               <Pressable onPress={test} style={[styles.testBtn, { borderColor: t.accent }]}>

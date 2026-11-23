@@ -10,6 +10,8 @@ import type { LocalRoom, Settings } from './types';
 type Nav = Navigator & { serviceWorker: ServiceWorkerContainer };
 
 export function pushSupported(): boolean {
+  // 설치형 안드로이드 앱은 Expo 알림으로 받아요.
+  if (Platform.OS === 'android') return true;
   return (
     Platform.OS === 'web' &&
     typeof window !== 'undefined' &&
@@ -48,6 +50,16 @@ async function currentSubscription(): Promise<PushSubscription | null> {
 
 /** 이 기기가 이 방 알림을 받고 있는지 */
 export async function pushStatus(s: Settings, room: LocalRoom): Promise<boolean> {
+  if (Platform.OS !== 'web') {
+    try {
+      const { getPermissionsAsync } = await import('expo-notifications');
+      if (!(await getPermissionsAsync()).granted) return false;
+      const { nativePushToken } = await import('./nativePush');
+      return (await api.pushStatus(s, room, `expo:${await nativePushToken()}`)).subscribed;
+    } catch {
+      return false;
+    }
+  }
   if (!pushSupported() || Notification.permission !== 'granted') return false;
   const sub = await currentSubscription();
   if (!sub) return false;
@@ -56,6 +68,12 @@ export async function pushStatus(s: Settings, room: LocalRoom): Promise<boolean>
 
 /** 이 기기에서 이 방 알림 켜기(처음이면 휴대폰이 허용할지 물어봐요) */
 export async function enablePush(s: Settings, room: LocalRoom): Promise<void> {
+  if (Platform.OS !== 'web') {
+    const { nativePushToken } = await import('./nativePush');
+    const token = await nativePushToken();
+    await api.pushSubscribe(s, room, { endpoint: `expo:${token}`, keys: { p256dh: 'expo', auth: 'expo' } });
+    return;
+  }
   if (!pushSupported()) throw new Error('이 브라우저는 알림을 지원하지 않아요.');
   if (needsHomeScreen()) throw new Error('아이폰은 다봇을 홈 화면에 추가해서 열어야 알림을 받을 수 있어요.');
   const perm = await Notification.requestPermission();
@@ -77,6 +95,11 @@ export async function enablePush(s: Settings, room: LocalRoom): Promise<void> {
 
 /** 이 기기에서 이 방 알림 끄기(다른 방 알림은 그대로) */
 export async function disablePush(s: Settings, room: LocalRoom): Promise<void> {
+  if (Platform.OS !== 'web') {
+    const { nativePushToken } = await import('./nativePush');
+    await api.pushUnsubscribe(s, room, `expo:${await nativePushToken()}`).catch(() => {});
+    return;
+  }
   const sub = await currentSubscription();
   if (sub) await api.pushUnsubscribe(s, room, sub.endpoint);
 }

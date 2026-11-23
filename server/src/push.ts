@@ -100,8 +100,32 @@ export interface PushSub {
   auth: string;
 }
 
+/** 설치형 앱(Expo 푸시)으로 보내기. 기기가 없어졌으면 false */
+async function sendExpo(token: string, d: { title: string; body: string; url: string; silent: boolean; tag?: string }): Promise<boolean> {
+  const res = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      to: token,
+      title: d.title,
+      body: d.body,
+      data: { url: d.url },
+      channelId: d.silent ? 'quiet' : 'chat',
+      sound: d.silent ? null : 'default',
+      priority: 'high',
+    }),
+  });
+  const out = (await res.json().catch(() => ({}))) as { data?: { status?: string; details?: { error?: string } } };
+  if (out.data?.status === 'error') {
+    if (out.data.details?.error === 'DeviceNotRegistered') return false;
+    console.error('[push:expo]', JSON.stringify(out.data).slice(0, 200));
+  }
+  return true;
+}
+
 /** 알림 하나 보내기. 구독이 없어졌으면(404/410) false */
 async function sendOne(v: Vapid, sub: PushSub, data: unknown, subject: string): Promise<boolean> {
+  if (sub.endpoint.startsWith('expo:')) return sendExpo(sub.endpoint.slice(5), data as { title: string; body: string; url: string; silent: boolean });
   const body = await encryptPayload(sub.p256dh, sub.auth, enc.encode(JSON.stringify(data)));
   const res = await fetch(sub.endpoint, {
     method: 'POST',

@@ -1,7 +1,7 @@
-import { Stack, usePathname } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { LockScreen } from '../components/LockScreen';
 import { api } from '../lib/api';
 import { registerServiceWorker } from '../lib/push';
@@ -75,8 +75,22 @@ export default function Layout() {
   // 웹에서는 앱을 열 때 알림 담당(서비스 워커)을 등록해 둬요(알림을 누르면 채팅방이 열리게).
   useEffect(() => {
     registerServiceWorker()?.catch(() => {});
+    // 설치형 앱: 알림 준비, 알림을 누르면 그 채팅방으로
+    let sub: { remove: () => void } | null = null;
+    if (Platform.OS !== 'web') {
+      import('../lib/nativePush').then((m) => m.setupNativeNotifications()).catch(() => {});
+      import('expo-notifications')
+        .then((N) => {
+          sub = N.addNotificationResponseReceivedListener((r) => {
+            const url = r.notification.request.content.data?.url;
+            if (typeof url === 'string' && url.startsWith('/room/')) router.push(url as never);
+          });
+        })
+        .catch(() => {});
+    }
     // 앱 아이콘 배지(숫자·점)는 안 띄워요.
     if (typeof navigator !== 'undefined') (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.().catch(() => {});
+    return () => sub?.remove();
   }, []);
   return (
     <StoreProvider>

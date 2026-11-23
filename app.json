@@ -45,6 +45,22 @@
         {
           "photosPermission": "에이전트 프로필 사진을 고르려면 사진 접근 권한이 필요해요."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/badge-96.png",
+          "color": "#2F55FF",
+          "defaultChannel": "chat"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "다봇에서 받은 사진을 갤러리에 저장하려고 사진 접근이 필요해요.",
+          "savePhotosPermission": "다봇에서 받은 사진을 갤러리에 저장해요.",
+          "isAccessMediaLocationEnabled": false
+        }
       ]
     ],
     "scheme": "dabot",
