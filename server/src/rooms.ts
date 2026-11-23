@@ -38,6 +38,9 @@ export interface RoomRow {
   turn_order: string | null;
   turn_idx: number;
   turn_since: number | null;
+  /** 방장이 마지막으로 읽은 글, 북마크(JSON) */
+  read_mark: number;
+  bookmarks: string | null;
 }
 
 export interface MemberRow {
@@ -184,10 +187,18 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null };
     // 확인 간격은 정해 두지 않아요(실시간). 방장이 방 설정에서 정한 대로 따라요.
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at, check_interval_min) VALUES (?, ?, ?, ?, 0)', room.id, room.name, room.owner_token, room.created_at);
     return room;
+  }
+
+  /** 읽은 곳은 더 뒤로만 옮겨요(여러 기기가 동시에 써도 뒤로 안 가게) */
+  setReadMark(roomId: string, id: number) {
+    return this.db.run('UPDATE rooms SET read_mark = MAX(read_mark, ?) WHERE id = ?', id, roomId);
+  }
+  setBookmarks(roomId: string, json: string) {
+    return this.db.run('UPDATE rooms SET bookmarks = ? WHERE id = ?', json, roomId);
   }
 
   /** 모든 방(새로 만든 것부터) */

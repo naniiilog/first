@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import type { Bookmark } from './marks';
 import type { ChatMessage, LocalRoom, Member, Settings } from './types';
 
 /**
@@ -225,6 +226,11 @@ export const api = {
 
   updateMember: (s: Settings, r: LocalRoom, memberId: string, patch: { name?: string; active?: boolean; avatar?: string | null; exhausted?: boolean; checkIntervalMin?: number | null }) =>
     call(s, `/api/rooms/${r.id}/members/${memberId}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
+
+  /** 방장의 읽은 곳·북마크(어느 기기에서든 같게) */
+  marks: (s: Settings, r: LocalRoom) => call<{ readMark: number; bookmarks: Bookmark[] }>(s, `/api/rooms/${r.id}/marks`, { ownerToken: r.ownerToken }),
+  saveMarks: (s: Settings, r: LocalRoom, patch: { readMark?: number; bookmarks?: Bookmark[] }) =>
+    call(s, `/api/rooms/${r.id}/marks`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 서버에 있는 내 방 전부(앱 비밀번호 필요) */
   allRooms: (s: Settings) => call<{ rooms: LocalRoom[] }>(s, '/api/rooms'),

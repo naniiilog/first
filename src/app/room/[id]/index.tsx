@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
 import { saveImage } from '../../../lib/saveImage';
-import { getBookmarks, getReadMark, setReadMark, toggleBookmark, type Bookmark } from '../../../lib/marks';
+import { loadMarks, saveReadMark, toggleBookmark, type Bookmark } from '../../../lib/marks';
 import { BookmarkSheet, MessageActions } from '../../../components/MessageActions';
 import { SearchSheet } from '../../../components/SearchSheet';
 import { TurnPanel, TurnSetup } from '../../../components/TurnPanel';
@@ -116,7 +116,7 @@ export default function RoomScreen() {
 
   /** 맨 아래로. markRead면 '여기까지 읽음'도 저장해요(방을 처음 열 때 저절로 내려가는 건 읽은 게 아니라서 빼요). */
   const goBottom = (animated: boolean, markRead = true) => {
-    if (markRead && id) setReadMark(id, lastRealId(messages));
+    if (markRead && room) saveReadMark(settings, room, lastRealId(messages));
     autoScrollUntil.current = Date.now() + (animated ? 700 : 250);
     listRef.current?.scrollToEnd({ animated });
     // 웹에서는 마지막 말풍선 높이가 한 박자 늦게 정해져서 끝까지 안 내려갈 때가 있어요. 한 번 더 내려요.
@@ -172,14 +172,23 @@ export default function RoomScreen() {
 
   // ── 마지막으로 읽은 곳: 방을 열 때 한 번 읽어 두고(이번에 보는 동안 그대로), 맨 아래까지 보면 저장해요 ──
   const [readMark, setReadMarkState] = useState<number | null>(null);
+  // ── 북마크 ──
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  // 서버(어느 기기에서든 같게)와 이 폰에 있던 것을 합쳐서 한 번 불러와요.
+  const roomId = room?.id;
   useEffect(() => {
-    if (!id) return;
+    if (!room) return;
     let alive = true;
-    getReadMark(id).then((v) => alive && setReadMarkState(v));
+    loadMarks(settings, room).then((m) => {
+      if (!alive) return;
+      setReadMarkState(m.readMark);
+      setBookmarks(m.bookmarks);
+    });
     return () => {
       alive = false;
     };
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
   /** 읽던 곳 다음 첫 글(내 글·안내 빼고) */
   const firstUnreadId = readMark ? messages.find((m) => m.id > readMark && m.authorId !== OWNER_ID && m.authorId !== SYSTEM_ID)?.id ?? null : null;
   // 방을 열었을 때 안 읽은 글이 3개 넘게 있으면 읽던 곳으로 가요.
@@ -190,7 +199,7 @@ export default function RoomScreen() {
     const after = messages.filter((m) => m.id >= firstUnreadId).length;
     if (after <= 3) {
       // 안 읽은 게 얼마 안 되면 맨 아래에서 다 보이니 읽은 걸로 해요.
-      setReadMark(id, lastRealId(messages));
+      if (room) saveReadMark(settings, room, lastRealId(messages));
       return;
     }
     const timer = setTimeout(() => jumpTo(firstUnreadId, false), 500);
@@ -205,19 +214,9 @@ export default function RoomScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turnOn, messages.length]);
 
-  // ── 북마크 ──
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   /** 길게 누른 글(답장·북마크·복사 창), 북마크 목록 창 */
   const [actionMsg, setActionMsg] = useState<ChatMessage | null>(null);
   const [showMarks, setShowMarks] = useState(false);
-  useEffect(() => {
-    if (!id) return;
-    let alive = true;
-    getBookmarks(id).then((b) => alive && setBookmarks(b));
-    return () => {
-      alive = false;
-    };
-  }, [id]);
 
   // 다른 화면(앨범·타임라인)에서 '대화에서 보기'로 오면 그 글로 찾아가요.
   const handledJump = useRef<string | null>(null);
@@ -460,7 +459,7 @@ export default function RoomScreen() {
           const height = contentH.current || contentSize.height;
           const fromBottom = height - (contentOffset.y + layoutMeasurement.height);
           atBottom.current = fromBottom < 80;
-          if (atBottom.current && id) setReadMark(id, lastRealId(messages));
+          if (atBottom.current && room) saveReadMark(settings, room, lastRealId(messages));
           // 한 화면 넘게 올라가 있으면 '맨 아래로' 버튼
           const far = fromBottom > layoutMeasurement.height * 0.8;
           if (far !== showDown) setShowDown(far);
@@ -583,7 +582,7 @@ export default function RoomScreen() {
         onBookmark={() => {
           if (!actionMsg) return;
           const was = bookmarks.some((b) => b.id === actionMsg.id);
-          toggleBookmark(room.id, actionMsg).then((list) => {
+          toggleBookmark(settings, room, bookmarks, actionMsg).then((list) => {
             setBookmarks(list);
             setSendError(was ? '북마크를 해제했어요.' : '🔖 북마크했어요. ☰ → 북마크에서 다시 볼 수 있어요.');
           });
@@ -597,7 +596,7 @@ export default function RoomScreen() {
         list={bookmarks}
         onClose={() => setShowMarks(false)}
         onPick={jumpTo}
-        onRemove={(b) => toggleBookmark(room.id, { id: b.id, authorId: '', authorName: b.authorName, text: b.text, createdAt: b.createdAt }).then(setBookmarks)}
+        onRemove={(b) => toggleBookmark(settings, room, bookmarks, { id: b.id, authorName: b.authorName, text: b.text, createdAt: b.createdAt, image: null }).then(setBookmarks)}
       />
       <SearchSheet visible={searching} settings={settings} room={room} onClose={() => setSearching(false)} onPick={jumpTo} />
 

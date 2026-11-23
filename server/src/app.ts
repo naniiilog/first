@@ -417,6 +417,38 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
       });
     }
 
+    // 방장의 읽은 곳·북마크: GET 읽기, PATCH {readMark?, bookmarks?}
+    if (sub === 'marks') {
+      if (req.method === 'GET') {
+        let bookmarks: unknown[] = [];
+        try {
+          bookmarks = room.bookmarks ? JSON.parse(room.bookmarks) : [];
+        } catch {
+          bookmarks = [];
+        }
+        return json(200, { readMark: room.read_mark ?? 0, bookmarks });
+      }
+      if (req.method === 'PATCH') {
+        const b = await body(req);
+        if (typeof b.readMark === 'number' && Number.isInteger(b.readMark) && b.readMark > 0) await rooms.setReadMark(room.id, b.readMark);
+        if (Array.isArray(b.bookmarks)) {
+          const clean = b.bookmarks
+            .slice(0, 500)
+            .filter((x: { id?: unknown }) => x && typeof x.id === 'number')
+            .map((x: { id: number; authorName?: unknown; text?: unknown; createdAt?: unknown; image?: unknown; savedAt?: unknown }) => ({
+              id: x.id,
+              authorName: String(x.authorName ?? '').slice(0, 40),
+              text: String(x.text ?? '').slice(0, 300),
+              createdAt: Number(x.createdAt) || 0,
+              image: !!x.image,
+              savedAt: Number(x.savedAt) || Date.now(),
+            }));
+          await rooms.setBookmarks(room.id, JSON.stringify(clean));
+        }
+        return json(200, { ok: true });
+      }
+    }
+
     // 앨범: 사진 있는 글 목록(사진은 /img 주소로)
     if (sub === 'images' && req.method === 'GET') {
       const before = Number(url.searchParams.get('before')) || null;
