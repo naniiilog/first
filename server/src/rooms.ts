@@ -418,4 +418,19 @@ export class Rooms {
     }
     return this.db.all<MessageRow>('SELECT * FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT ?', roomId, afterId, limit);
   }
+
+  /** beforeId 앞의 메시지(오래된 대화 불러오기), 오래된 것부터 */
+  async messagesBefore(roomId: string, beforeId: number, limit: number) {
+    const rows = await this.db.all<MessageRow>('SELECT * FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?', roomId, beforeId, limit);
+    return rows.reverse();
+  }
+
+  /** 메시지 검색(최근 것부터). 사진만 있는 글은 빼요. */
+  searchMessages(roomId: string, q: string, limit: number) {
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    return this.db.all<MessageRow>(
+      "SELECT * FROM messages WHERE room_id = ? AND author_id <> 'system' AND (text LIKE ? ESCAPE '\\' OR author_name LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT ?",
+      roomId, like, like, limit,
+    );
+  }
 }

@@ -5,6 +5,7 @@ import { Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Press
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
+import { SearchSheet } from '../../../components/SearchSheet';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
 import { api } from '../../../lib/api';
@@ -33,6 +34,9 @@ function toRows(messages: ChatMessage[]): Row[] {
   });
 }
 
+/** 지금 시각(이벤트 처리 안에서만 써요) */
+const nowMs = () => Date.now();
+
 /** 한 번에 그리는 메시지 수 */
 const PAGE = 150;
 
@@ -57,6 +61,18 @@ export default function RoomScreen() {
   const [chipMenu, setChipMenu] = useState<string | null>(null);
   /** 화면에 그리는 최근 메시지 수. 위의 '이전 대화 더 보기'로 늘려요. */
   const [showCount, setShowCount] = useState(PAGE);
+  /** 검색 창 */
+  const [searching, setSearching] = useState(false);
+  /** 찾아간 글을 잠깐 반짝 표시 */
+  const [flashId, setFlashId] = useState<number | null>(null);
+  /** 최신 목록(찾아가기에서 다시 그려진 뒤의 목록을 보려고) */
+  const rowsRef = useRef<Row[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    const h = Math.max(0, messages.length - showCount);
+    rowsRef.current = toRows(h ? messages.slice(h) : messages);
+    messagesRef.current = messages;
+  }, [messages, showCount]);
 
   /** 맨 아래를 보고 있는지. 위에서 읽는 중이면 새 메시지가 와도 끌어내리지 않아요. */
   const atBottom = useRef(true);
@@ -65,11 +81,15 @@ export default function RoomScreen() {
   /** 마지막으로 처리한 내용 높이. 새 메시지로 길어진 순간의 스크롤 이벤트를 '사용자가 위로 올림'으로 오해하지 않게 해요. */
   const contentH = useRef(0);
   /** 맨 아래에서 본 메시지 수. 그 뒤에 온 건 '새 메시지'로 세요. */
-  const [seenCount, setSeenCount] = useState(0);
-  const unread = Math.max(0, messages.length - seenCount);
+  // 맨 아래에서 마지막으로 본 글 번호. 그보다 새 글만 '새 메시지'로 세요(오래된 글을 불러와도 안 늘어요).
+  const lastRealId = (list: ChatMessage[]) => list.reduce((mx, m) => (m.id > mx ? m.id : mx), 0);
+  const [seenId, setSeenId] = useState(0);
+  const unread = messages.filter((m) => m.id > seenId).length;
 
   /** 앱이 스스로 내리는 동안에는 스크롤 이벤트로 '위로 올림'을 판단하지 않아요. */
   const autoScrollUntil = useRef(0);
+  /** 찾아가는 동안(그리고 그 뒤 잠깐)은 맨 아래로 따라 내려가지 않아요. */
+  const jumpHold = useRef(0);
 
   const goBottom = (animated: boolean) => {
     autoScrollUntil.current = Date.now() + (animated ? 700 : 250);
@@ -77,7 +97,7 @@ export default function RoomScreen() {
     // 웹에서는 마지막 말풍선 높이가 한 박자 늦게 정해져서 끝까지 안 내려갈 때가 있어요. 한 번 더 내려요.
     setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), animated ? 400 : 80);
     atBottom.current = true;
-    setSeenCount(messages.length);
+    setSeenId(lastRealId(messages));
   };
 
   if (!room) {
@@ -146,6 +166,50 @@ export default function RoomScreen() {
 
   const hidden = Math.max(0, messages.length - showCount);
   const rows = toRows(hidden ? messages.slice(hidden) : messages);
+
+  /**
+   * 그 글로 찾아가기(답장 원문, 검색 결과).
+   * 안 불러온 오래된 글이면 먼저 불러오고, 화면에 그려지면 가운데쯤으로 스크롤해서 잠깐 반짝여요.
+   */
+  const jumpTo = async (id: number) => {
+    atBottom.current = false;
+    forceBottom.current = false;
+    jumpHold.current = nowMs() + 15_000;
+    let found = messagesRef.current.some((m) => m.id === id);
+    for (let tries = 0; !found && tries < 30; tries++) {
+      const got = await live.loadOlder();
+      if (!got.length) break;
+      found = got.some((m) => m.id === id);
+    }
+    // 불러온 글이 화면 목록에 반영될 때까지 잠깐 기다려요.
+    for (let w = 0; found && !messagesRef.current.some((m) => m.id === id) && w < 40; w++) await new Promise((r) => setTimeout(r, 50));
+    const list = messagesRef.current;
+    const idx = list.findIndex((m) => m.id === id);
+    if (idx < 0) {
+      setSendError('그 글을 찾을 수 없어요(지워졌을 수 있어요).');
+      return;
+    }
+    setShowCount((n) => Math.max(n, list.length - idx + 5));
+    let attempt = 0;
+    const tryScroll = () => {
+      const i = rowsRef.current.findIndex((r) => r.msg.id === id);
+      // 웹은 그 말풍선이 실제로 그려질 때까지 기다려요(목록이 조금씩 나눠 그려요).
+      const el = Platform.OS === 'web' && typeof document !== 'undefined' ? document.getElementById(`msg-${id}`) : null;
+      const ready = Platform.OS === 'web' ? !!el : i >= 0;
+      if (!ready) {
+        if (attempt++ < 30) setTimeout(tryScroll, 150);
+        return;
+      }
+      autoScrollUntil.current = Date.now() + 800;
+      jumpHold.current = Date.now() + 1500;
+      atBottom.current = false;
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      else listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0.35 });
+      setFlashId(id);
+      setTimeout(() => setFlashId((f) => (f === id ? null : f)), 1800);
+    };
+    setTimeout(tryScroll, 80);
+  };
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
   const messageById = new Map(messages.map((m) => [m.id, m]));
   const nameOf = (m: ChatMessage) => (m.authorId === OWNER_ID ? settings.userName : (memberById[m.authorId]?.name ?? m.authorName));
@@ -169,7 +233,8 @@ export default function RoomScreen() {
             </Text>
           ),
           headerRight: () => (
-            <View style={{ paddingRight: 8 }}>
+            <View style={{ paddingRight: 8, flexDirection: 'row' }}>
+              <HeaderIcon name="search" label="메시지 검색" onPress={() => setSearching(true)} />
               <HeaderIcon name="menu" label="메뉴" onPress={openMenu} />
             </View>
           ),
@@ -220,10 +285,27 @@ export default function RoomScreen() {
         // 웹에서 목록을 나눠 그리다 멈추면 새 메시지가 안 보여요. 최근 메시지만 모두 그려요(나머지는 '이전 대화 더 보기').
         disableVirtualization
         initialNumToRender={showCount}
+        // 오래된 글을 불러오면 한 번에 그려서, 찾아가기가 바로 되게 해요.
+        maxToRenderPerBatch={300}
+        updateCellsBatchingPeriod={10}
+        extraData={flashId}
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+          setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.35 }), 120);
+        }}
         ListHeaderComponent={
-          hidden > 0 ? (
-            <Pressable onPress={() => setShowCount((n) => n + PAGE)} style={[styles.morePill, { backgroundColor: t.card, borderColor: t.border }]}>
-              <Text style={{ color: t.accent, fontWeight: '700', fontSize: 13 }}>이전 대화 더 보기 ({hidden}개)</Text>
+          hidden > 0 || live.hasOlder ? (
+            <Pressable
+              onPress={() => {
+                atBottom.current = false;
+                if (hidden > 0) setShowCount((n) => n + PAGE);
+                else live.loadOlder().then((got) => setShowCount((c) => c + got.length));
+              }}
+              style={[styles.morePill, { backgroundColor: t.card, borderColor: t.border }]}
+            >
+              <Text style={{ color: t.accent, fontWeight: '700', fontSize: 13 }}>
+                {hidden > 0 ? `이전 대화 더 보기 (${hidden}개)` : '이전 대화 불러오기'}
+              </Text>
             </Pressable>
           ) : undefined
         }
@@ -233,14 +315,19 @@ export default function RoomScreen() {
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
           if (Date.now() < autoScrollUntil.current) return;
+          if (Date.now() < jumpHold.current) {
+            atBottom.current = false;
+            return;
+          }
           const height = contentH.current || contentSize.height;
           const fromBottom = height - (contentOffset.y + layoutMeasurement.height);
           atBottom.current = fromBottom < 80;
-          if (atBottom.current && seenCount !== messages.length) setSeenCount(messages.length);
+          if (atBottom.current && seenId !== lastRealId(messages)) setSeenId(lastRealId(messages));
         }}
         onContentSizeChange={(_w, h) => {
           contentH.current = h;
           // 새 메시지로 내용이 길어졌을 때: 맨 아래를 보고 있었으면 따라 내려가고, 위에서 읽는 중이면 그대로 둬요.
+          if (Date.now() < jumpHold.current) return;
           if (forceBottom.current || atBottom.current) {
             forceBottom.current = false;
             goBottom(false);
@@ -254,6 +341,7 @@ export default function RoomScreen() {
           </View>
         }
         renderItem={({ item }) => (
+          <View nativeID={`msg-${item.msg.id}`}>
           <MessageRow
             row={item}
             member={memberById[item.msg.authorId]}
@@ -263,7 +351,10 @@ export default function RoomScreen() {
             onProfile={openMembers}
             onReply={() => setReplyTo(item.msg)}
             onImage={setViewing}
+            onQuote={item.msg.replyTo ? () => jumpTo(item.msg.replyTo!) : undefined}
+            flash={flashId === item.msg.id}
           />
+          </View>
         )}
       />
       {unread > 0 && (
@@ -311,6 +402,8 @@ export default function RoomScreen() {
           </Pressable>
         </Pressable>
       )}
+
+      <SearchSheet visible={searching} settings={settings} room={room} onClose={() => setSearching(false)} onPick={jumpTo} />
 
       <BotStateSheet
         member={members.find((m) => m.id === chipMenu) ?? null}
@@ -443,15 +536,26 @@ function MemberChip({ member, onPress }: { member: Member; onPress: () => void }
 }
 
 /** 답장한 원래 글을 말풍선 위에 작게 보여줘요. */
-function Quote({ m, name, mine, t }: { m?: ChatMessage; name: (m: ChatMessage) => string; mine: boolean; t: Theme }) {
-  if (!m) return null;
+function Quote({ m, name, mine, t, onPress }: { m?: ChatMessage; name: (m: ChatMessage) => string; mine: boolean; t: Theme; onPress?: () => void }) {
+  if (!m) {
+    // 원문을 아직 안 불러왔어도 누르면 찾아가요.
+    return onPress ? (
+      <Pressable onPress={onPress} style={[styles.quote, { borderLeftColor: mine ? 'rgba(255,255,255,0.7)' : t.accentPurple }]}>
+        <Text style={{ color: mine ? 'rgba(255,255,255,0.9)' : t.accentPurple, fontSize: 11, fontWeight: '700' }}>↪ 이전 글에 답장 (눌러서 보기)</Text>
+      </Pressable>
+    ) : null;
+  }
   return (
-    <View style={[styles.quote, { borderLeftColor: mine ? 'rgba(255,255,255,0.7)' : t.accentPurple }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityHint="누르면 원래 글로 가요"
+      style={[styles.quote, { borderLeftColor: mine ? 'rgba(255,255,255,0.7)' : t.accentPurple }]}
+    >
       <Text style={{ color: mine ? 'rgba(255,255,255,0.9)' : t.accentPurple, fontSize: 11, fontWeight: '700' }}>↪ {name(m)}</Text>
       <Text style={{ color: mine ? 'rgba(255,255,255,0.85)' : t.subtext, fontSize: 12 }} numberOfLines={2}>
         {m.image && !m.text ? '[사진]' : m.text}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -464,6 +568,8 @@ function Bubble({
   t,
   onReply,
   onImage,
+  onQuote,
+  flash,
 }: {
   msg: ChatMessage;
   mine: boolean;
@@ -473,6 +579,8 @@ function Bubble({
   t: Theme;
   onReply: () => void;
   onImage: (uri: string) => void;
+  onQuote?: () => void;
+  flash?: boolean;
 }) {
   return (
     <Pressable
@@ -482,10 +590,11 @@ function Bubble({
       style={[
         styles.bubble,
         { backgroundColor: mine ? t.myBubble : t.botBubble, opacity: msg.pending ? 0.6 : 1 },
+        flash && { borderWidth: 3, borderColor: '#F59E0B' },
         first && (mine ? { borderTopRightRadius: 4 } : { borderTopLeftRadius: 4 }),
       ]}
     >
-      <Quote m={quoted} name={quotedName} mine={mine} t={t} />
+      <Quote m={quoted} name={quotedName} mine={mine} t={t} onPress={onQuote} />
       {msg.image ? (
         <Pressable onPress={() => onImage(msg.image!)} onLongPress={onReply} delayLongPress={350}>
           <Image source={{ uri: msg.image }} style={styles.photo} resizeMode="cover" />
@@ -509,6 +618,8 @@ function MessageRow({
   onProfile,
   onReply,
   onImage,
+  onQuote,
+  flash,
 }: {
   row: Row;
   member?: Member;
@@ -518,6 +629,8 @@ function MessageRow({
   onProfile: () => void;
   onReply: () => void;
   onImage: (uri: string) => void;
+  onQuote?: () => void;
+  flash?: boolean;
 }) {
   const { msg } = row;
   const dateLine = row.dateLine ? (
@@ -541,7 +654,7 @@ function MessageRow({
     <Text style={[styles.time, { color: t.chatTime }]}>{msg.pending ? '보내는 중…' : stamp(msg.createdAt)}</Text>
   ) : null;
   const bubble = (mine: boolean) => (
-    <Bubble msg={msg} mine={mine} first={row.showProfile} quoted={quoted} quotedName={quotedName} t={t} onReply={onReply} onImage={onImage} />
+    <Bubble msg={msg} mine={mine} first={row.showProfile} quoted={quoted} quotedName={quotedName} t={t} onReply={onReply} onImage={onImage} onQuote={onQuote} flash={flash} />
   );
 
   if (msg.authorId === OWNER_ID) {

@@ -354,6 +354,18 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
 
     if (sub === 'messages') {
       if (req.method === 'GET') {
+        // 검색: ?q=낱말 → 최근 것부터 최대 50개
+        if (parts[4] === 'search') {
+          const q = (url.searchParams.get('q') ?? '').trim().slice(0, 50);
+          if (!q) return json(200, { messages: [] });
+          return json(200, { messages: (await rooms.searchMessages(room.id, q, 50)).map(publicMessage) });
+        }
+        // 오래된 대화 불러오기: ?before=글번호
+        const before = url.searchParams.get('before');
+        if (before) {
+          const rows = await rooms.messagesBefore(room.id, Number(before), Math.min(200, Number(url.searchParams.get('limit') ?? 100) || 100));
+          return json(200, { messages: rows.map(publicMessage) });
+        }
         const after = url.searchParams.get('after');
         // 방 화면이 새 글을 확인하는 중이면 '방장이 보고 있음'(알림 안 보내요)
         if (after) await rooms.ownerSeen(room);

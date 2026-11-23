@@ -77,6 +77,9 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const lastId = useRef<number | null>(null);
+  /** 불러온 것 중 가장 오래된 글 번호, 그 앞에 더 있는지 */
+  const oldestId = useRef<number | null>(null);
+  const [hasOlder, setHasOlder] = useState(true);
   /** 버튼을 누른 직후 잠깐은 서버의 옛 상태로 화면을 덮어쓰지 않아요(버튼 반응을 바로 보여주려고). */
   const holdUntil = useRef(0);
   const hold = () => {
@@ -105,7 +108,13 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
   const refreshMessages = useCallback(async () => {
     if (!room) return;
     try {
+      const first = lastId.current === null;
       const res = await api.messages(settings, room, lastId.current);
+      if (first) {
+        oldestId.current = res.messages[0]?.id ?? null;
+        // 처음엔 최근 100개만 받아요. 그보다 적으면 더 오래된 글은 없어요.
+        if (res.messages.length < 100) setHasOlder(false);
+      }
       if (res.messages.length) {
         lastId.current = res.messages[res.messages.length - 1].id;
         setMessages((prev) => {
@@ -117,6 +126,20 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }, [room, settings]);
+
+  /** 오래된 대화 100개 더 불러오기. 불러온 글들을 돌려줘요. */
+  const loadOlder = useCallback(async (): Promise<ChatMessage[]> => {
+    if (!room || oldestId.current === null) return [];
+    const res = await api.olderMessages(settings, room, oldestId.current);
+    if (res.messages.length < 100) setHasOlder(false);
+    if (!res.messages.length) return [];
+    oldestId.current = res.messages[0].id;
+    setMessages((prev) => {
+      const seen = new Set(prev.map((m) => m.id));
+      return [...res.messages.filter((m) => !seen.has(m.id)), ...prev];
+    });
+    return res.messages;
   }, [room, settings]);
 
   // 방 화면은 방마다 따로 열리므로(화면 하나 = 방 하나) 여기서 상태를 초기화할 필요는 없어요.
@@ -264,6 +287,8 @@ export function useLiveRoom(roomId: string | undefined, opts: { messages?: boole
     error,
     gone,
     refreshMessages,
+    loadOlder,
+    hasOlder,
     refreshMembers,
     toggleMember,
     toggleExhausted,

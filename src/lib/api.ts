@@ -130,6 +130,12 @@ export const api = {
 
   deleteRoom: (s: Settings, r: LocalRoom) => call(s, `/api/rooms/${r.id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
 
+  /** 오래된 대화(before 글번호 앞의 100개) */
+  olderMessages: (s: Settings, r: LocalRoom, before: number) =>
+    call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages?before=${before}&limit=100`, { ownerToken: r.ownerToken }),
+  /** 메시지 검색(최근 것부터 50개) */
+  searchMessages: (s: Settings, r: LocalRoom, q: string) =>
+    call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages/search?q=${encodeURIComponent(q)}`, { ownerToken: r.ownerToken }),
   messages: (s: Settings, r: LocalRoom, after: number | null) =>
     call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/messages${after !== null ? `?after=${after}` : ''}`, { ownerToken: r.ownerToken }),
 

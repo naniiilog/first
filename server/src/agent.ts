@@ -84,8 +84,13 @@ export const quietLabel = (room: RoomRow) => `${pad2(room.quiet_start)}:00~${pad
 
 type RelayRow = Pick<MessageRow, 'id' | 'author_id' | 'created_at' | 'text'>;
 
-/** 차례대로 답하기: 지금 내가 방장 질문에 답할 차례인지 */
+/**
+ * 차례대로 답하기: 지금 내가 방장 질문에 답할 차례인지.
+ * 방장 요청으로 꺼 두었어요(봇들이 서로 기다리지 않고 바로 답해요). 다시 켜려면 RELAY_ON을 true로.
+ */
+const RELAY_ON = false;
 export function relayState(rows: RelayRow[], members: MemberRow[], me: MemberRow, freeTalk: boolean, now: number) {
+  if (!RELAY_ON) return null;
   const q = rows[0];
   if (!q || q.author_id !== OWNER_ID || now - q.created_at > RELAY_WINDOW_MS) return null;
   const after = rows.slice(1).filter((r) => r.author_id !== SYSTEM_ID);
@@ -147,7 +152,7 @@ export class AgentSession {
   /** 지금 어떻게 행동할지 한 줄 안내 */
   hint(freeTalk = this.freeTalk): string {
     const talk = freeTalk
-      ? '[자동대화 ON] 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 방장 질문에는 차례대로 한 명씩 답해요.'
+      ? '[자동대화 ON] 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요.'
       : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 기다리세요(보내도 서버가 막아요).`;
     // 지금 설정을 매번 분명히 알려줘요(예전 안내를 기억하고 있어도 최신 안내를 따르게).
     const every = this.interval;
