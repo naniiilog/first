@@ -6,12 +6,22 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://dabot.botroom-yao.workers.dev" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dabot.botroom-yao.workers.dev"
+      },
+      "channel": "preview"
     },
     "production": {
-      "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://dabot.botroom-yao.workers.dev" }
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dabot.botroom-yao.workers.dev"
+      },
+      "channel": "production"
     }
   }
 }

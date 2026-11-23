@@ -32,7 +32,8 @@ export function needsHomeScreen(): boolean {
 let registering: Promise<ServiceWorkerRegistration> | null = null;
 /** 앱을 열 때 알림 담당(서비스 워커)을 등록해 둬요. */
 export function registerServiceWorker(): Promise<ServiceWorkerRegistration> | null {
-  if (!pushSupported()) return null;
+  // 웹에서만: 설치형 앱에는 서비스 워커가 없어요(있다고 착각하면 앱이 켜지자마자 꺼져요).
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
   registering ??= (navigator as Nav).serviceWorker.register('/sw.js');
   return registering;
 }
