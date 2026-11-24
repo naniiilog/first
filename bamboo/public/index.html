@@ -1209,6 +1209,7 @@ function dropLeaf() {
   setTimeout(() => el.remove(), 18000);
 }
 let audio = null;
+const WIND = .045;
 function startSound() {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
@@ -1216,11 +1217,11 @@ function startSound() {
   const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
   let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
-  const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 900; filter.Q.value = .6;
+  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 520; filter.Q.value = .4;
   const gain = ctx.createGain(); gain.gain.value = 0;
-  const lfo = ctx.createOscillator(); lfo.frequency.value = .09; const lg = ctx.createGain(); lg.gain.value = 500; lfo.connect(lg).connect(filter.frequency);
+  const lfo = ctx.createOscillator(); lfo.frequency.value = .09; const lg = ctx.createGain(); lg.gain.value = 180; lfo.connect(lg).connect(filter.frequency);
   src.connect(filter).connect(gain).connect(master); src.start(); lfo.start();
-  gain.gain.linearRampToValueAtTime(.2, ctx.currentTime + 2);
+  gain.gain.linearRampToValueAtTime(WIND, ctx.currentTime + 3);
   audio = { ctx, gain };
   // ---------- music: a different theme for the plaza and each grove ----------
   const mus = ctx.createGain(); mus.gain.value = 0;
@@ -1262,7 +1263,7 @@ function startSound() {
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.07 * vel, t + .22); g.gain.setValueAtTime(.07 * vel, t + dur * .7); g.gain.linearRampToValueAtTime(0, t + dur);
     const n = ctx.createBufferSource(), nf = ctx.createBiquadFilter(), ng = ctx.createGain();
     n.buffer = noiseBuf; nf.type = 'bandpass'; nf.frequency.value = f * 2; nf.Q.value = 3;
-    ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(.05 * vel, t + .1); ng.gain.linearRampToValueAtTime(.012 * vel, t + .5); ng.gain.linearRampToValueAtTime(0, t + dur);
+    ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(.02 * vel, t + .1); ng.gain.linearRampToValueAtTime(.005 * vel, t + .5); ng.gain.linearRampToValueAtTime(0, t + dur);
     osc.connect(g).connect(mus); n.connect(nf).connect(ng).connect(mus);
     osc.start(t); vib.start(t); n.start(t, Math.random() * 2); osc.stop(t + dur + .05); vib.stop(t + dur + .05); n.stop(t + dur + .05);
   };
@@ -1347,7 +1348,7 @@ function startSound() {
     for (let i = 0; i < n; i++) { const o = ctx.createOscillator(), g = ctx.createGain(), st = t + i * .13; o.frequency.setValueAtTime(base, st); o.frequency.exponentialRampToValueAtTime(base * 1.35, st + .08); g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.03, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .11); o.connect(g).connect(master); o.start(st); o.stop(st + .12); }
   }, 2600);
 }
-function whoosh(k) { if (!audio) return; const { ctx, gain } = audio, t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(.2 + k, t + .4); gain.gain.linearRampToValueAtTime(.2, t + 2.2); }
+function whoosh(k) { if (!audio) return; const { ctx, gain } = audio, t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(WIND + k * .12, t + .5); gain.gain.linearRampToValueAtTime(WIND, t + 2.6); }
 $('soundBtn').onclick = () => {
   const b = $('soundBtn');
   if (!audio) { startSound(); b.textContent = '🔊'; b.setAttribute('aria-pressed', 'true'); return; }
