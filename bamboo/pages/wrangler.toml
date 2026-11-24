@@ -1,5 +1,5 @@
 # Cloudflare Pages project (bamboo-forest.pages.dev); build with: node scripts/build-pages.mjs
-name = "bamboo-forest"
+name = "bambooforest"
 pages_build_output_dir = "./dist"
 compatibility_date = "2025-09-01"
 
