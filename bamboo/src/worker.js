@@ -1,3 +1,20 @@
+import INDEX_HTML from '../public/index.html';
+import ADMIN_HTML from '../public/admin.html';
+import MANIFEST from '../public/manifest.webmanifest';
+import ICON_180 from '../public/icon-180.png';
+import ICON_192 from '../public/icon-192.png';
+import ICON_512 from '../public/icon-512.png';
+
+const STATIC = {
+  '/': [INDEX_HTML, 'text/html; charset=utf-8'],
+  '/index.html': [INDEX_HTML, 'text/html; charset=utf-8'],
+  '/admin.html': [ADMIN_HTML, 'text/html; charset=utf-8'],
+  '/manifest.webmanifest': [MANIFEST, 'application/manifest+json'],
+  '/icon-180.png': [ICON_180, 'image/png'],
+  '/icon-192.png': [ICON_192, 'image/png'],
+  '/icon-512.png': [ICON_512, 'image/png'],
+};
+
 // 대나무숲 — Cloudflare Worker API
 // Leaves live for 24 hours. No raw IPs are stored: visitors are identified only by a
 // daily-rotating HMAC, used for rate limiting and one-reaction-per-leaf.
@@ -188,7 +205,9 @@ export default {
         return fail(500, '숲에 잠시 문제가 생겼어요. 조금 뒤에 다시 시도해 주세요.');
       }
     }
-    return env.ASSETS.fetch(request);
+    const file = STATIC[url.pathname];
+    if (file) return new Response(file[0], { headers: { 'content-type': file[1], 'cache-control': url.pathname.endsWith('.png') ? 'public, max-age=86400' : 'no-cache' } });
+    return new Response('없는 길이에요.', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
   },
   async scheduled(_event, env) {
     await cleanup(env);
