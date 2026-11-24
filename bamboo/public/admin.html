@@ -41,6 +41,7 @@
   table.t thead th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
   table.t tr:last-child td { border-bottom: 0; }
   .crisis { color: #ffb4a6; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+  .enterForest { display: block; text-align: center; margin: 4px 0 12px; padding: 14px; border-radius: 14px; background: var(--accent); color: #0d1b18; font-weight: 700; font-size: 16px; text-decoration: none; }
   .danger { border-color: var(--danger); color: var(--danger); }
 </style>
 </head>
@@ -53,6 +54,7 @@
   </form>
   <p id="loginNote" style="color:var(--muted);font-size:13px;margin:8px 2px 0">한 번 들어가면 이 기기에서는 기억해 둬요. 다른 사람과 같이 쓰는 기기라면 다 보고 나서 "나가기"를 눌러 주세요.</p>
   <div id="panel" hidden>
+    <a class="enterForest" href="/">🎋 숲지기로 대숲 들어가기</a>
     <div class="bar"><span id="summary"></span><span><button id="refresh">새로고침</button> <button id="pwBtn">비밀번호 바꾸기</button> <button id="logout">나가기</button></span></div>
     <form id="pwForm" class="item" hidden autocomplete="off">
       <div style="font-weight:700;margin-bottom:8px">새 비밀번호 정하기</div>
