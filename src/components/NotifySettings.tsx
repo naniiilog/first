@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { api, type NotifyMode, type RoomInfo } from '../lib/api';
 import { disablePush, enablePush, needsHomeScreen, pushStatus, pushSupported } from '../lib/push';
 import { SOUNDS } from '../lib/sounds';
@@ -25,6 +25,24 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
   const mode = draft.mode ?? info.notifyMode ?? 'off';
   const silent = draft.silent ?? info.notifySilent ?? false;
   const sound = draft.sound ?? info.notifySound ?? 'default';
+  const picked = silent ? 'silent' : sound;
+  /** 폰 설정에서 이 칸 소리가 바뀌었는지(설정 화면에 다녀오면 다시 확인해요) */
+  const [chState, setChState] = useState<'ok' | 'changed' | 'free' | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    let alive = true;
+    const check = () =>
+      import('../lib/nativePush')
+        .then((m) => m.channelSoundState(picked))
+        .then((v) => alive && setChState(v))
+        .catch(() => {});
+    check();
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && check());
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, [picked]);
 
   useEffect(() => {
     if (!supported) return;
@@ -176,8 +194,16 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                       );
                     })}
                   </View>
-                  <Pressable onPress={() => openChannelSettings(silent ? 'silent' : sound)} style={[styles.testBtn, { borderColor: t.border }]}>
-                    <Text style={{ color: t.text, fontWeight: '700' }}>⚙️ 폰 알림 설정 열기 (잠금화면·팝업·내 음악)</Text>
+                  {/* 폰 설정 화면에서 바꿔도 되는 것 · 안 되는 것 */}
+                  <Text style={{ color: chState === 'changed' ? t.danger : t.subtext, fontSize: 12, lineHeight: 18 }}>
+                    {picked === 'default'
+                      ? '📱 폰 기본음 칸이에요. 아래 버튼 → "소리"에서 폰에 있는 아무 소리(슬랙 소리 등)로 마음대로 바꿔도 돼요.'
+                      : chState === 'changed'
+                        ? '⚠️ 폰 설정에서 이 칸의 소리가 다른 소리로 바뀌어 있어요. 그래서 여기서 고른 이름과 다른 소리가 나요. 폰 소리를 쓰려면 "폰 기본음"을 골라 그 칸에서 바꾸는 걸 추천해요.'
+                        : '✅ 소리는 여기서 고른 대로 나요. 폰 설정에서는 잠금화면·팝업·진동만 바꾸고, "소리"는 건드리지 마세요(바꾸면 이름과 다른 소리가 나요).'}
+                  </Text>
+                  <Pressable onPress={() => openChannelSettings(picked)} style={[styles.testBtn, { borderColor: t.border }]}>
+                    <Text style={{ color: t.text, fontWeight: '700' }}>{picked === 'default' ? '⚙️ 폰 소리 고르기 · 잠금화면 · 팝업' : '⚙️ 잠금화면 · 팝업 · 진동 설정'}</Text>
                   </Pressable>
                 </>
               )}

@@ -18,7 +18,7 @@ async function ensureChannels() {
   // eslint-disable-next-line import/namespace -- 다시 내보낸 이름이라 린트가 못 찾아요(타입 검사는 통과)
   const { HIGH, LOW } = Notifications.AndroidImportance;
   const base = { importance: HIGH, vibrationPattern: [0, 120, 60, 120], showBadge: false };
-  await Notifications.setNotificationChannelAsync('chat', { ...base, name: '대화 알림(폰 기본음)' });
+  await Notifications.setNotificationChannelAsync('chat', { ...base, name: '대화 알림(폰 소리 · 내가 고르기)' });
   for (const k of CUSTOM) {
     await Notifications.setNotificationChannelAsync(`snd_${k}`, { ...base, name: `대화 알림(${LABEL[k]})`, sound: `${k}.wav` });
   }
@@ -26,6 +26,22 @@ async function ensureChannels() {
   await Notifications.setNotificationChannelAsync('vibrate', { ...base, name: '대화 알림(진동만)', sound: null });
   await Notifications.setNotificationChannelAsync('quiet', { name: '대화 알림(무음)', importance: LOW, sound: null, enableVibrate: false, showBadge: false });
   channelsReady = true;
+}
+
+/**
+ * 폰 설정에서 이 알림 칸의 소리가 원래대로인지 확인해요.
+ * - 'ok': 다봇 소리 그대로 / 'changed': 폰 설정에서 다른 소리로 바뀜 / 'free': 폰 기본음 칸(마음대로 바꿔도 돼요)
+ */
+export async function channelSoundState(key: string): Promise<'ok' | 'changed' | 'free' | null> {
+  if (Platform.OS !== 'android') return null;
+  if (key === 'default') return 'free';
+  await ensureChannels();
+  const id = key === 'silent' ? 'quiet' : key === 'vibrate' ? 'vibrate' : `snd_${key}`;
+  const ch = await Notifications.getNotificationChannelAsync(id);
+  if (!ch) return null;
+  const uri = ch.sound ?? '';
+  if (key === 'silent' || key === 'vibrate') return uri ? 'changed' : 'ok';
+  return uri.includes(`/${key}`) || uri.endsWith(`/${key}.wav`) ? 'ok' : 'changed';
 }
 
 /** 알림 소리 미리듣기(설치형 앱) */
