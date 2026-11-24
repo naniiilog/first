@@ -99,6 +99,21 @@ export default function TimelineScreen() {
   const move = (d: number) => setYm(({ y, m }) => ({ y: m + d < 0 ? y - 1 : m + d > 11 ? y + 1 : y, m: (m + d + 12) % 12 }));
   const [py, pm, pd] = picked.split('-').map(Number);
 
+  /** 날짜를 누르면: 그날 첫 대화로 채팅방에서 바로 가요 */
+  const goDay = async (k: string) => {
+    setPicked(k);
+    if (!room) return;
+    try {
+      const [y, m, d] = k.split('-').map(Number);
+      const from = Date.UTC(y, m - 1, d) - offset * 1000;
+      const res = await api.timeline(settings, room, from, from + 86_400_000);
+      const first = res.messages.find((x) => x.authorId !== SYSTEM_ID) ?? res.messages[0];
+      if (first) router.navigate({ pathname: '/room/[id]', params: { id: room.id, jump: String(first.id) } });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const calendar = (
     <View style={{ gap: 10, paddingBottom: 6 }}>
       <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
@@ -127,8 +142,12 @@ export default function TimelineScreen() {
             return (
               <Pressable
                 key={k}
-                onPress={() => setPicked(k)}
+                // 대화가 있는 날은 누르면 채팅방 그날로, 길게 누르면 아래에 미리보기만
+                onPress={() => (n ? goDay(k) : setPicked(k))}
+                onLongPress={() => setPicked(k)}
+                delayLongPress={350}
                 accessibilityLabel={`${ym.m + 1}월 ${d}일 대화 ${n}개`}
+                accessibilityHint='누르면 그날 대화로 가요. 길게 누르면 아래에 미리 봐요.'
                 style={[styles.cell, on && { backgroundColor: t.accent, borderRadius: 10 }, !on && k === todayKey && { borderWidth: 1, borderColor: t.accent, borderRadius: 10 }]}
               >
                 <Text style={{ color: on ? t.accentText : t.text, fontWeight: n ? '800' : '400', fontSize: 14 }}>{d}</Text>
@@ -142,6 +161,7 @@ export default function TimelineScreen() {
             );
           })}
         </View>
+        <Text style={{ color: t.subtext, fontSize: 11, textAlign: 'center' }}>날짜를 누르면 그날 대화로 가요 · 길게 누르면 아래에 미리 봐요</Text>
       </View>
 
       <View style={{ paddingHorizontal: 4, gap: 2 }}>

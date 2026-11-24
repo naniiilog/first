@@ -551,11 +551,14 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
 
     if (sub === 'messages') {
       if (req.method === 'GET') {
-        // 검색: ?q=낱말 → 최근 것부터 최대 50개
+        // 검색: ?q=낱말 → 최근 것부터 200개씩, ?before=글번호로 다음 묶음(처음엔 전체 개수도)
         if (parts[4] === 'search') {
           const q = (url.searchParams.get('q') ?? '').trim().slice(0, 50);
-          if (!q) return json(200, { messages: [] });
-          return json(200, { messages: (await rooms.searchMessages(room.id, q, 50)).map(publicMessage) });
+          if (!q) return json(200, { messages: [], total: 0 });
+          const before = Number(url.searchParams.get('before')) || null;
+          const rows = await rooms.searchMessages(room.id, q, 200, before);
+          const total = before ? undefined : await rooms.countSearch(room.id, q);
+          return json(200, { messages: rows.map(publicMessage), total });
         }
         // 오래된 대화 불러오기: ?before=글번호
         const before = url.searchParams.get('before');

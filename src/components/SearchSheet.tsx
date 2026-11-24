@@ -27,6 +27,10 @@ export function SearchSheet({
   const [results, setResults] = useState<ChatMessage[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 찾은 글 전체 개수, 더 불러올 게 있는지 */
+  const [total, setTotal] = useState(0);
+  const [more, setMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // 입력을 멈추고 0.3초 뒤에 서버에서 찾아요(대화 전체에서).
   useEffect(() => {
@@ -40,7 +44,13 @@ export function SearchSheet({
       setBusy(true);
       api
         .searchMessages(settings, room, word)
-        .then((r) => alive && (setResults(r.messages), setError(null)))
+        .then((r) => {
+          if (!alive) return;
+          setResults(r.messages);
+          setTotal(r.total ?? r.messages.length);
+          setMore(r.messages.length >= 200);
+          setError(null);
+        })
         .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)))
         .finally(() => alive && setBusy(false));
     }, 300);
@@ -49,6 +59,21 @@ export function SearchSheet({
       clearTimeout(timer);
     };
   }, [q, settings, room]);
+
+  /** 아래로 내리면 다음 묶음(200개씩)을 이어서 불러와요. 끝까지 다 볼 수 있어요. */
+  const loadMore = () => {
+    const word = q.trim();
+    if (!more || loadingMore || !results?.length || !word) return;
+    setLoadingMore(true);
+    api
+      .searchMessages(settings, room, word, results[results.length - 1].id)
+      .then((r) => {
+        setResults((prev) => [...(prev ?? []), ...r.messages]);
+        setMore(r.messages.length >= 200);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoadingMore(false));
+  };
 
   const close = () => {
     setQ('');
@@ -107,7 +132,16 @@ export function SearchSheet({
           keyExtractor={(m) => String(m.id)}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-          ListHeaderComponent={results && results.length ? <Text style={[styles.count, { color: t.subtext }]}>{results.length}개 (최근 것부터)</Text> : undefined}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.6}
+          ListHeaderComponent={
+            results && results.length ? (
+              <Text style={[styles.count, { color: t.subtext }]}>
+                모두 {total}개 (최근 것부터){more ? ` · ${results.length}개 보는 중, 내리면 더 나와요` : ''}
+              </Text>
+            ) : undefined
+          }
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={t.accent} /> : undefined}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => {

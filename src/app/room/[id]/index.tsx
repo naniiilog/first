@@ -176,7 +176,7 @@ export default function RoomScreen() {
     forceBottom.current = false;
     jumpHold.current = nowMs() + 15_000;
     let found = messagesRef.current.some((m) => m.id === id);
-    for (let tries = 0; !found && tries < 30; tries++) {
+    for (let tries = 0; !found && tries < 80; tries++) {
       const got = await live.loadOlder();
       if (!got.length) break;
       found = got.some((m) => m.id === id);

@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { api, type NotifyMode, type RoomInfo } from '../lib/api';
@@ -175,7 +176,7 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                       );
                     })}
                   </View>
-                  <Pressable onPress={() => Linking.openSettings().catch(() => {})} style={[styles.testBtn, { borderColor: t.border }]}>
+                  <Pressable onPress={() => openChannelSettings(silent ? 'silent' : sound)} style={[styles.testBtn, { borderColor: t.border }]}>
                     <Text style={{ color: t.text, fontWeight: '700' }}>⚙️ 폰 알림 설정 열기 (잠금화면·팝업·내 음악)</Text>
                   </Pressable>
                 </>
@@ -194,6 +195,27 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
       )}
     </Section>
   );
+}
+
+/** 고른 소리의 알림 칸(채널) 이름 — 서버가 보내는 칸과 같아요 */
+const channelOf = (sound: string) => (sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' ? 'chat' : `snd_${sound}`);
+
+/**
+ * 폰 알림 설정 열기: 지금 고른 소리의 알림 칸 설정으로 바로 가요(소리·잠금화면·팝업을 거기서 바꿔요).
+ * 안 되는 폰이면 다봇 알림 설정 → 앱 정보 순서로 열어요.
+ */
+async function openChannelSettings(sound: string) {
+  const pkg = Constants.expoConfig?.android?.package ?? 'app.dabot';
+  const APP = { key: 'android.provider.extra.APP_PACKAGE', value: pkg };
+  try {
+    await Linking.sendIntent('android.settings.CHANNEL_NOTIFICATION_SETTINGS', [APP, { key: 'android.provider.extra.CHANNEL_ID', value: channelOf(sound) }]);
+    return;
+  } catch {}
+  try {
+    await Linking.sendIntent('android.settings.APP_NOTIFICATION_SETTINGS', [APP]);
+    return;
+  } catch {}
+  Linking.openSettings().catch(() => {});
 }
 
 const styles = StyleSheet.create({

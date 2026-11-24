@@ -564,11 +564,22 @@ export class Rooms {
   }
 
   /** 메시지 검색(최근 것부터). 사진만 있는 글은 빼요. */
-  searchMessages(roomId: string, q: string, limit: number) {
+  /** 검색: 최근 것부터 limit개씩(before보다 오래된 것). 사진 데이터는 빼고 가볍게 */
+  searchMessages(roomId: string, q: string, limit: number, before: number | null = null) {
     const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     return this.db.all<MessageRow>(
-      "SELECT * FROM messages WHERE room_id = ? AND author_id <> 'system' AND (text LIKE ? ESCAPE '\\' OR author_name LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT ?",
-      roomId, like, like, limit,
+      "SELECT id, room_id, author_id, author_name, text, created_at, reply_to, NULL AS image FROM messages WHERE room_id = ? AND author_id <> 'system' AND id < ? AND (text LIKE ? ESCAPE '\\' OR author_name LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT ?",
+      roomId, before ?? Number.MAX_SAFE_INTEGER, like, like, limit,
     );
+  }
+
+  /** 검색 결과가 모두 몇 개인지 */
+  async countSearch(roomId: string, q: string) {
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const r = await this.db.first<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND author_id <> 'system' AND (text LIKE ? ESCAPE '\\' OR author_name LIKE ? ESCAPE '\\')",
+      roomId, like, like,
+    );
+    return r?.n ?? 0;
   }
 }
