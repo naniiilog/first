@@ -190,7 +190,7 @@ async function handleApi(request, env, url, ctx) {
     const row = await env.DB.prepare(
       'INSERT INTO leaves (text, created, author, mode, grove) VALUES (?, ?, ?, ?, ?) RETURNING id, text, created, heard, mode, grove',
     ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper', [0, 1, 2].includes(body?.grove) ? body.grove : 0).first();
-    const keeperPost = await isKeeper(request, env);
+    const keeperPost = body?.ad === 1 || await isKeeper(request, env);
     if (!keeperPost) { const day = kstDay(now);
       await env.DB.batch([bump(env, day, 'leaves'), bump(env, day, 'leaves_g' + row.grove), bump(env, day, 'leaves_' + row.mode)]); }
     if (!keeperPost) later(notify(env, CRISIS.test(row.text) ? `🆘 위기 신호가 있는 사연 · ${GROVE_NAME[row.grove] || ''}` : `🎋 새 사연 · ${GROVE_NAME[row.grove] || ''}`, `${MODE_NAME[row.mode] || ''}  ${clip(row.text)}`));
@@ -209,7 +209,8 @@ async function handleApi(request, env, url, ctx) {
       .bind(id, visitor, kind).run();
     if (ins.meta.changes) {
       if (kind === 'heard') {
-        const kp = await isKeeper(request, env);
+        let rb = {}; try { rb = await request.clone().json(); } catch {}
+        const kp = rb?.ad === 1 || await isKeeper(request, env);
         await env.DB.batch([env.DB.prepare('UPDATE leaves SET heard = heard + 1 WHERE id = ?').bind(id), ...(kp ? [] : [bump(env, kstDay(now), 'heard')])]);
       } else {
         await env.DB.prepare(
@@ -231,13 +232,14 @@ async function handleApi(request, env, url, ctx) {
     if (!/^[a-z0-9]{12,40}$/.test(sid)) return fail(400, '잘못된 요청이에요.');
     const place = PLACES.includes(body?.place) ? body.place : 'plaza';
     const keeper = await isKeeper(request, env);
+    const adminDevice = keeper || body?.ad === 1;   // the admin's own phone: never counted, even outside 숲지기 mode
     if (keeper && body?.keeper !== 'visible') {
       await env.DB.prepare('DELETE FROM presence WHERE sid = ?').bind(sid).run();           // invisible keeper: not stored, not shown
     } else {
       await env.DB.prepare('INSERT INTO presence (sid, seen, place, keeper) VALUES (?, ?, ?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen, place = excluded.place, keeper = excluded.keeper')
-        .bind(sid, now, place, keeper ? 1 : 0).run();
+        .bind(sid, now, place, keeper ? 1 : adminDevice ? 2 : 0).run();
     }
-    if (!keeper) {
+    if (!adminDevice) {
       const day = kstDay(now), who = await visitorId(request, env);
       await countOnce(env, day, who, 'site', 'visits');
       if (place !== 'plaza') await countOnce(env, day, who, place, 'visits_' + place);
@@ -247,7 +249,7 @@ async function handleApi(request, env, url, ctx) {
       .bind(now - PRESENCE_MS).all();
     // other strollers only, as short one-way hashes (enough to tell them apart)
     const short = (x) => { let h = 2166136261; for (const c of x) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(36); };
-    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => ({ id: short(r.sid), place: r.place, keeper: r.keeper ? 1 : 0 })) });
+    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => ({ id: short(r.sid), place: r.place, keeper: r.keeper === 1 ? 1 : 0 })) });
   }
 
   // ---- admin ----
@@ -273,6 +275,13 @@ async function handleApi(request, env, url, ctx) {
       return json({ ok: true });
     }
     if (pathname === '/api/admin/ping' && method === 'GET') return json({ ok: true });
+    if (pathname === '/api/admin/uncount-me' && method === 'POST') {
+      const day = kstDay(now), who = await visitorId(request, env);
+      const { results } = await env.DB.prepare('SELECT what FROM daily_seen WHERE day = ? AND visitor = ?').bind(day, who).all();
+      const ops = results.map((r) => bump(env, day, r.what === 'site' ? 'visits' : 'visits_' + r.what, -1));
+      if (ops.length) await env.DB.batch([...ops, env.DB.prepare('DELETE FROM daily_seen WHERE day = ? AND visitor = ?').bind(day, who)]);
+      return json({ ok: true, removed: results.length });
+    }
     if (pathname === '/api/admin/push/key' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
     if (pathname === '/api/admin/push/subscribe' && method === 'POST') {
       let body; try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }

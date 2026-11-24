@@ -465,10 +465,12 @@ function toast(msg, ms = 2800) {
 // ---------- 🎋 숲지기 (the admin walking the forest) ----------
 let keeperToken = ''; try { keeperToken = localStorage.getItem('bamboo.admin') || ''; } catch {}
 let keeper = false;
+let adminDevice = false; try { adminDevice = localStorage.getItem('bamboo.adminDevice') === '1'; } catch {}
 let keeperVisible = false; try { keeperVisible = localStorage.getItem('bamboo.keeper.visible') === '1'; } catch {}
 async function api(path, body) {
   const headers = body ? { 'content-type': 'application/json' } : {};
   if (keeper || (keeperToken && path.startsWith('/api/admin/'))) headers.authorization = 'Bearer ' + encodeURIComponent(keeperToken);
+  if (body && adminDevice) body = { ...body, ad: 1 };
   const res = await fetch(path, body ? { method: 'POST', headers, body: JSON.stringify(body) } : { headers });
   let data = {}; try { data = await res.json(); } catch {}
   if (!res.ok) throw new Error(data.error || '숲에 잠시 문제가 생겼어요.');
@@ -1300,6 +1302,8 @@ async function startKeeper() {
   if (!keeperToken) return;
   try { await api('/api/admin/ping'); } catch { keeperChecking = false; heartbeat(); return; }
   keeper = true; keeperChecking = false; setKeeperBtn();
+  if (!adminDevice) { adminDevice = true; try { localStorage.setItem('bamboo.adminDevice', '1'); } catch {} }
+  api('/api/admin/uncount-me', {}).catch(() => {});
   if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나 · 🎋'; }
   toast(keeperVisible ? '🎋 숲지기로 들어왔어요 · 다른 사람에게 보여요' : '🎋 숲지기로 들어왔어요 · 아무에게도 안 보여요', 3200);
   heartbeat(); load(true);
