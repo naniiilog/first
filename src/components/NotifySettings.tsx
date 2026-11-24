@@ -27,7 +27,7 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
   const sound = draft.sound ?? info.notifySound ?? 'default';
   const picked = silent ? 'silent' : sound;
   /** 폰 설정에서 이 칸 소리가 바뀌었는지(설정 화면에 다녀오면 다시 확인해요) */
-  const [chState, setChState] = useState<'ok' | 'changed' | 'free' | null>(null);
+  const [chState, setChState] = useState<'ok' | 'changed' | 'free' | 'missing' | null>(null);
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     let alive = true;
@@ -195,11 +195,13 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                     })}
                   </View>
                   {/* 폰 설정 화면에서 바꿔도 되는 것 · 안 되는 것 */}
-                  <Text style={{ color: chState === 'changed' ? t.danger : t.subtext, fontSize: 12, lineHeight: 18 }}>
+                  <Text style={{ color: chState === 'changed' || chState === 'missing' ? t.danger : t.subtext, fontSize: 12, lineHeight: 18 }}>
                     {picked === 'default'
                       ? '📱 폰 기본음 칸이에요. 아래 버튼 → "소리"에서 폰에 있는 아무 소리(슬랙 소리 등)로 마음대로 바꿔도 돼요.'
-                      : chState === 'changed'
-                        ? '⚠️ 폰 설정에서 이 칸의 소리가 다른 소리로 바뀌어 있어요. 그래서 여기서 고른 이름과 다른 소리가 나요. 폰 소리를 쓰려면 "폰 기본음"을 골라 그 칸에서 바꾸는 걸 추천해요.'
+                      : chState === 'missing'
+                        ? '⚠️ 이 소리 파일이 지금 앱에 없어요. 앱 버전 5(다봇 소리가 들어 있는 앱)를 설치해 주세요. 설치 전까지는 폰 기본음이 나요.'
+                        : chState === 'changed'
+                        ? '⚠️ 폰 설정에서 이 칸의 "소리"가 바뀌어 있어요. 그래서 여기서 고른 이름과 다른 소리가 나요. 폰 소리를 쓰려면 "폰 기본음"을 골라 그 칸에서 바꾸세요.'
                         : '✅ 소리는 여기서 고른 대로 나요. 폰 설정에서는 잠금화면·팝업·진동만 바꾸고, "소리"는 건드리지 마세요(바꾸면 이름과 다른 소리가 나요).'}
                   </Text>
                   <Pressable onPress={() => openChannelSettings(picked)} style={[styles.testBtn, { borderColor: t.border }]}>
@@ -224,7 +226,7 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
 }
 
 /** 고른 소리의 알림 칸(채널) 이름 — 서버가 보내는 칸과 같아요 */
-const channelOf = (sound: string) => (sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' ? 'chat' : `snd_${sound}`);
+const channelOf = (sound: string) => (sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' ? 'chat' : `s2_${sound}`);
 
 /**
  * 폰 알림 설정 열기: 지금 고른 소리의 알림 칸 설정으로 바로 가요(소리·잠금화면·팝업을 거기서 바꿔요).

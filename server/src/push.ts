@@ -103,7 +103,7 @@ export interface PushSub {
 export const NOTIFY_SOUNDS = ['default', 'salang', 'pogeun', 'pop', 'tok', 'marimba', 'bogeul', 'vibrate', 'silent'];
 /** 설치형 앱 알림 칸(앱의 nativePush.ts와 같은 이름) */
 const channelFor = (sound: string, silent: boolean) =>
-  silent || sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' || !NOTIFY_SOUNDS.includes(sound) ? 'chat' : `snd_${sound}`;
+  silent || sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' || !NOTIFY_SOUNDS.includes(sound) ? 'chat' : `s2_${sound}`;
 
 /** 설치형 앱(Expo 푸시)으로 보내기. 기기가 없어졌으면 false */
 async function sendExpo(token: string, d: { title: string; body: string; url: string; silent: boolean; sound?: string; tag?: string }): Promise<boolean> {

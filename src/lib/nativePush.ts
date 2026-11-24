@@ -20,9 +20,12 @@ async function ensureChannels() {
   const base = { importance: HIGH, vibrationPattern: [0, 120, 60, 120], showBadge: false };
   await Notifications.setNotificationChannelAsync('chat', { ...base, name: '대화 알림(폰 소리 · 내가 고르기)' });
   for (const k of CUSTOM) {
-    await Notifications.setNotificationChannelAsync(`snd_${k}`, { ...base, name: `대화 알림(${LABEL[k]})`, sound: `${k}.wav` });
+    const ch = await Notifications.setNotificationChannelAsync(`s2_${k}`, { ...base, name: `대화 알림(${LABEL[k]})`, sound: `${k}.wav` });
+    // 이 앱에 소리 파일이 없으면(예전 버전 앱) 기본음으로 굳어버리니 칸을 지워 둬요. 새 버전을 설치하면 제대로 다시 만들어요.
+    if (ch && !(ch.sound ?? '').includes(`/raw/${k}`)) await Notifications.deleteNotificationChannelAsync(`s2_${k}`).catch(() => {});
   }
-  for (const k of REMOVED) await Notifications.deleteNotificationChannelAsync(`snd_${k}`).catch(() => {});
+  // 예전 칸(소리가 안 붙었거나 폰 설정에서 바뀐 것)은 지우고 새 칸(s2_)을 써요.
+  for (const k of [...REMOVED, ...CUSTOM]) await Notifications.deleteNotificationChannelAsync(`snd_${k}`).catch(() => {});
   await Notifications.setNotificationChannelAsync('vibrate', { ...base, name: '대화 알림(진동만)', sound: null });
   await Notifications.setNotificationChannelAsync('quiet', { name: '대화 알림(무음)', importance: LOW, sound: null, enableVibrate: false, showBadge: false });
   channelsReady = true;
@@ -32,13 +35,13 @@ async function ensureChannels() {
  * 폰 설정에서 이 알림 칸의 소리가 원래대로인지 확인해요.
  * - 'ok': 다봇 소리 그대로 / 'changed': 폰 설정에서 다른 소리로 바뀜 / 'free': 폰 기본음 칸(마음대로 바꿔도 돼요)
  */
-export async function channelSoundState(key: string): Promise<'ok' | 'changed' | 'free' | null> {
+export async function channelSoundState(key: string): Promise<'ok' | 'changed' | 'free' | 'missing' | null> {
   if (Platform.OS !== 'android') return null;
   if (key === 'default') return 'free';
   await ensureChannels();
-  const id = key === 'silent' ? 'quiet' : key === 'vibrate' ? 'vibrate' : `snd_${key}`;
+  const id = key === 'silent' ? 'quiet' : key === 'vibrate' ? 'vibrate' : `s2_${key}`;
   const ch = await Notifications.getNotificationChannelAsync(id);
-  if (!ch) return null;
+  if (!ch) return key === 'silent' || key === 'vibrate' ? null : 'missing';
   const uri = ch.sound ?? '';
   if (key === 'silent' || key === 'vibrate') return uri ? 'changed' : 'ok';
   return uri.includes(`/${key}`) || uri.endsWith(`/${key}.wav`) ? 'ok' : 'changed';
