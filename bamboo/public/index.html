@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>대나무숲</title>
 <meta name="description" content="대나무숲 입구에서 길을 골라 걸어 들어가, 울창한 대숲에 속마음을 털어놓아요. 임금님 귀는 당나귀 귀!">
-<meta name="theme-color" content="#2f5a2c">
+<meta name="theme-color" content="#0f1d14">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="대나무숲">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎋</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +23,18 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body { background: #2f5a2c; color: var(--ink); overflow: hidden; -webkit-tap-highlight-color: transparent; user-select: none;
+  html, body { overscroll-behavior: none; }
+  #app { position: fixed; top: 0; bottom: 0; left: 50%; width: min(100vw, 480px); transform: translateX(-50%); overflow: hidden; touch-action: manipulation; background: #2f5a2c; }
+  #backdrop { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 40%, #2c4a30, #0f1d14 75%); }
+  #backdrop .hint { display: none; }
+  @media (min-width: 560px) {
+    #app { top: 50%; bottom: auto; width: 400px; height: min(860px, calc(100vh - 32px)); transform: translate(-50%, -50%); border-radius: 34px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 10px #111a14, 0 0 0 11px #2c3a30; }
+    #backdrop .hint { display: block; position: absolute; left: calc(50% + 240px); top: 50%; transform: translateY(-50%); color: #a8c4aa; font-size: 15px; line-height: 1.7; font-family: "Gowun Batang", serif; }
+    dialog { width: 372px !important; }
+    #sheet { margin-bottom: max(16px, calc((100vh - min(860px, calc(100vh - 32px))) / 2)) !important; width: 400px !important; border-radius: 0 0 34px 34px !important; }
+  }
+  body { background: #0f1d14; color: var(--ink); overflow: hidden; -webkit-tap-highlight-color: transparent; user-select: none;
     font-family: "Gowun Dodum", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
   button { font: inherit; color: inherit; cursor: pointer; }
   .view { position: fixed; inset: 0; overflow: hidden; }
@@ -77,14 +94,14 @@
   .titlecard h1 { margin: 0; font-family: "Gowun Batang", serif; font-size: 19px; letter-spacing: .08em; }
   .titlecard .sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
   .tools { display: flex; gap: 6px; }
-  .pill { white-space: nowrap; padding: 7px 12px; font-size: 14px; border-radius: 999px; }
+  .pill { white-space: nowrap; padding: 9px 14px; min-height: 40px; font-size: 14px; border-radius: 999px; }
   .pill:hover { border-color: var(--accent); }
   #backBtn { margin-right: auto; }
 
-  #pathPanel { left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); padding: 12px; text-align: center; }
+  #pathPanel { left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: calc(100% - 24px); padding: 12px; text-align: center; }
   #pathPanel .q { font-family: "Gowun Batang", serif; font-weight: 700; margin-bottom: 9px; font-size: 15px; }
   #pathPanel .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .pathBtn { border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 9px 4px 7px; transition: .15s; }
+  .pathBtn { border: 1px solid var(--line); background: #fff; border-radius: 16px; padding: 12px 4px 10px; min-height: 60px; transition: .15s; }
   .pathBtn:hover { border-color: var(--accent); transform: translateY(-1px); }
   .pathBtn b { display: block; font-size: 15px; }
   .pathBtn small { color: var(--muted); font-size: 11.5px; }
@@ -174,9 +191,13 @@
   @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
   dialog::backdrop { background: rgba(20, 40, 20, .3); }
   .close { position: absolute; top: 10px; right: 10px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; padding: 6px; }
+  #sheet { margin: auto auto 0; width: min(100vw, 480px); max-width: none; border-radius: 26px 26px 0 0; padding: 26px 18px max(18px, env(safe-area-inset-bottom)); }
+  #sheet::before { content: ""; position: absolute; left: 50%; top: 9px; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: rgba(60, 90, 60, .25); }
+  #sheet[open] { animation: sheetUp .3s cubic-bezier(.2, .9, .3, 1); }
+  @keyframes sheetUp { from { transform: translateY(100%); } }
   #sheet h2 { font-family: "Gowun Batang", serif; font-size: 19px; margin: 0 0 12px; }
   .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
-  .mode { border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 10px 6px; text-align: center; transition: .15s; }
+  .mode { border: 1.5px solid var(--line); background: #fff; border-radius: 16px; padding: 12px 6px; min-height: 96px; text-align: center; transition: .15s; }
   .mode .e { font-size: 24px; display: block; }
   .mode b { display: block; font-size: 14.5px; margin: 2px 0; }
   .mode small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; word-break: keep-all; }
@@ -187,7 +208,7 @@
   .sheetfoot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
   .count { font-size: 12.5px; color: var(--muted); }
   .count.over { color: var(--danger); }
-  #sendBtn { border: 0; border-radius: 14px; padding: 11px 22px; font-weight: 700; color: #fff; background: var(--mc, var(--accent)); }
+  #sendBtn { border: 0; border-radius: 16px; padding: 13px 26px; font-size: 16px; font-weight: 700; color: #fff; background: var(--mc, var(--accent)); }
   #sendBtn:disabled { opacity: .45; cursor: default; }
 
   .mode-label { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; margin-bottom: 10px; }
@@ -204,7 +225,7 @@
   .about ul { padding-left: 18px; margin: 0 0 14px; line-height: 1.85; font-size: 14.5px; }
 
   .toast { position: fixed; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 64px); transform: translate(-50%, -8px); z-index: 40; background: rgba(255, 255, 250, .94);
-    border: 1px solid var(--line); padding: 10px 16px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px;
+    border: 1px solid var(--line); padding: 10px 16px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none; max-width: calc(100% - 32px); text-align: center; font-size: 14.5px;
     box-shadow: 0 8px 24px rgba(20, 50, 20, .2); }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   #fade { position: fixed; inset: 0; z-index: 30; background: #f4f8e8; opacity: 0; pointer-events: none; transition: opacity .55s; }
@@ -216,6 +237,8 @@
 </style>
 </head>
 <body>
+<div id="backdrop" aria-hidden="true"><div class="hint">📱 휴대폰으로 접속하면<br>더 깊이 들어갈 수 있어요</div></div>
+<div id="app">
 
 <!-- ============ entrance map ============ -->
 <div class="view" id="map">
@@ -288,8 +311,11 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="fade"></div>
 
+</div>
 <script>
 const $ = (id) => document.getElementById(id);
+const APP = document.getElementById('app');
+const AW = () => APP.clientWidth, AH = () => APP.clientHeight;
 const SVGNS = 'http://www.w3.org/2000/svg';
 const MAX = 200;
 
@@ -487,12 +513,12 @@ function clump(x, y, sc, r) {
 // camera
 let mapScale = 1, cam = { x: 0, y: 0 }, charScale = 1;
 function layoutMap() {
-  const W = innerWidth, H = innerHeight;
+  const W = AW(), H = AH();
   mapScale = W < 720 ? W / 720 : Math.max(W / WW, H / 1150);
   charScale = W < 720 ? 1.45 : 1.1;
 }
 function camTarget(p, snap) {
-  const vw = innerWidth / mapScale, vh = innerHeight / mapScale;
+  const vw = AW() / mapScale, vh = AH() / mapScale;
   const tx = clamp(p.x - vw / 2, 0, Math.max(0, WW - vw)), extra = ($('pathPanel').offsetHeight + 24) / mapScale, ty = clamp(p.y - vh * .42, 0, Math.max(0, WH - vh + extra));
   if (snap) { cam.x = tx; cam.y = ty; } else { cam.x = lerp(cam.x, tx, .08); cam.y = lerp(cam.y, ty, .08); }
   $('world').style.transform = `scale(${mapScale}) translate(${f1(-cam.x)}px, ${f1(-cam.y)}px)`;
@@ -616,7 +642,7 @@ function walkToGrove(k) {
 }
 $('map').addEventListener('click', (e) => {
   if (scene !== 'map' || !me || walkingTo >= 0) return;
-  const wx = cam.x + e.clientX / mapScale, wy = cam.y + e.clientY / mapScale;
+  const rc = APP.getBoundingClientRect(), wx = cam.x + (e.clientX - rc.left) / mapScale, wy = cam.y + (e.clientY - rc.top) / mapScale;
   const k = GROVES.findIndex((g) => distToPoly(wx, wy, g.poly) < 46 && wy < FORK.y + 10);
   if (k >= 0) { walkToGrove(k); return; }
   if (Math.hypot((wx - PLAZA.x) / PLAZA.rx, (wy - PLAZA.y) / PLAZA.ry) < .95) me.go([{ x: wx, y: wy }]);
@@ -650,7 +676,7 @@ const LAYERS = [
   { id: 'gL3', every: 0,  w: [22, 32], h: [1.15, 1.3], cane: '#1d4829', node: '#30693d', leaf: '#1b4527', rim: '#336e3f', leafLen: [74, 108], density: 1, sway: .9, hang: true },
 ];
 function buildGrove(k) {
-  const W = innerWidth, H = innerHeight, small = W < 600;
+  const W = AW(), H = AH(), small = W < 600;
   const groundY = H * (small ? .8 : .78);
   G = { W, H, groundY, small, scale: Math.min(1, Math.max(.72, W / 1100)) };
   const P = PHASES[phase], S = GSTYLE[k];
@@ -1048,7 +1074,7 @@ function updateStatus() {
   if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `${PHASES[phase].label} · 입구 광장 · ${total}명 · 잎 ${leaves.length}장`; }
   else {
     const g = GROVES[groveIdx], n = leaves.length, here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).length + 1;
-    $('title').textContent = `${g.icon} ${g.name}`; $('title').title = PHASES[phase].label; $('status').textContent = innerWidth < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
+    $('title').textContent = `${g.icon} ${g.name}`; $('title').title = PHASES[phase].label; $('status').textContent = AW() < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
   }
 }
 async function load(first) {
@@ -1083,10 +1109,10 @@ function dropLeaf() {
   if (document.hidden || scene !== 'grove' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const L = 14 + Math.random() * 14, el = document.createElementNS(SVGNS, 'svg');
   el.setAttribute('width', L); el.setAttribute('height', L * .4); el.setAttribute('viewBox', `0 ${-L * .2} ${L} ${L * .4}`);
-  el.style.cssText = `position:fixed;z-index:4;pointer-events:none;overflow:visible;left:${Math.random() * innerWidth}px;top:-20px;transition:transform ${11 + Math.random() * 6}s linear, opacity 1s`;
+  el.style.cssText = `position:fixed;z-index:4;pointer-events:none;overflow:visible;left:${Math.random() * AW()}px;top:-20px;transition:transform ${11 + Math.random() * 6}s linear, opacity 1s`;
   el.innerHTML = `<path d="${leafPath(L, L * .14)}" fill="${['#6fae5a', '#8cc46c', '#5a9a4a', '#4f8f52'][Math.floor(Math.random() * 4)]}"/>`;
-  document.body.appendChild(el);
-  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `translate(${Math.random() * 240 - 120}px, ${innerHeight + 40}px) rotate(${400 + Math.random() * 300}deg)`; }));
+  APP.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `translate(${Math.random() * 240 - 120}px, ${AH() + 40}px) rotate(${400 + Math.random() * 300}deg)`; }));
   setTimeout(() => el.remove(), 18000);
 }
 let audio = null;
