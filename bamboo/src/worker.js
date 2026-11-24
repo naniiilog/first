@@ -169,7 +169,17 @@ async function handleApi(request, env, url) {
 
   // ---- admin ----
   if (pathname.startsWith('/api/admin/')) {
-    if (!isAdmin(request, env)) return fail(401, '관리자 비밀번호가 맞지 않아요.');
+    const who = await visitorId(request, env);
+    const since = now - 15 * 60 * 1000;
+    const fails = await env.DB.prepare('SELECT COUNT(*) AS n FROM admin_fails WHERE visitor = ? AND ts >= ?').bind(who, since).first();
+    if ((fails?.n || 0) >= 5) return fail(429, '비밀번호를 여러 번 틀려서 15분 동안 잠겼어요. 잠시 뒤에 다시 시도해 주세요.');
+    if (!isAdmin(request, env)) {
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO admin_fails (visitor, ts) VALUES (?, ?)').bind(who, now),
+        env.DB.prepare('DELETE FROM admin_fails WHERE ts < ?').bind(now - 24 * 3600 * 1000),
+      ]);
+      return fail(401, `관리자 비밀번호가 맞지 않아요. (남은 시도 ${Math.max(0, 4 - (fails?.n || 0))}번)`);
+    }
     if (pathname === '/api/admin/leaves' && method === 'GET') {
       const { results } = await env.DB.prepare(
         'SELECT id, text, created, heard, reports, hidden, mode, grove FROM leaves WHERE created >= ? ORDER BY hidden DESC, reports DESC, id DESC LIMIT 500',

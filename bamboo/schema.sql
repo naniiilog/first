@@ -26,3 +26,10 @@ CREATE TABLE IF NOT EXISTS presence (
   place TEXT NOT NULL DEFAULT 'plaza'  -- plaza | g0 | g1 | g2
 );
 CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(seen);
+
+-- wrong admin password attempts (hashed visitor only), for a short lockout
+CREATE TABLE IF NOT EXISTS admin_fails (
+  visitor TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_fails ON admin_fails(visitor, ts);
