@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>숲지기</title>
+<link rel="manifest" href="/admin.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="숲지기">
 <style>
   :root { --bg: #0d1b18; --card: #142824; --ink: #e9f3ec; --muted: #9db8ab; --line: #24413a; --accent: #8fe0a6; --danger: #ff8a7a; }
   * { box-sizing: border-box; }
@@ -55,6 +60,13 @@
       <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="pwCancel">취소</button><button id="pwSave" style="border-color:var(--accent);color:var(--accent)">바꾸기</button></div>
       <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">바꾼 비밀번호는 암호화해서 저장돼서 아무도 볼 수 없어요. 잊어버리면 되찾을 수 없으니 꼭 기억해 두세요.</p>
     </form>
+    <section id="notifyBox" class="item" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div><b>🔔 알림</b> <span id="notifyState" style="color:var(--muted);font-size:13px"></span></div>
+        <span><button id="notifyOn">알림 받기</button> <button id="notifyTest" hidden>시험 알림</button> <button id="notifyOff" hidden>끄기</button></span>
+      </div>
+      <p id="notifyHelp" style="color:var(--muted);font-size:12.5px;margin:8px 0 0;line-height:1.6">새 사연이 올라오거나 신고가 들어오면 바로, 방문자는 한 시간에 한 번 묶어서 알려드려요.</p>
+    </section>
     <section id="stats"></section>
     <h2 class="sec">잎 목록</h2>
     <div id="list"></div>
@@ -102,11 +114,54 @@ async function loadStats() {
       </tbody></table>`;
   } catch (e) { $('stats').innerHTML = `<p style="color:var(--muted)">숫자를 불러오지 못했어요: ${esc(e.message)}</p>`; }
 }
+// ---------- 🔔 push notifications for the admin ----------
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+async function saveTokenForSW() { try { const c = await caches.open('bamboo-admin'); await c.put('/__token', new Response(token)); } catch {} }
+const urlB64 = (s) => { const p = '='.repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, (c) => c.charCodeAt(0)); };
+async function notifyStatus() {
+  const st = $('notifyState'), on = $('notifyOn'), off = $('notifyOff'), test = $('notifyTest'), help = $('notifyHelp');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    on.hidden = true;
+    st.textContent = '이 브라우저에서는 알림을 받을 수 없어요';
+    if (isIOS && !standalone) help.innerHTML = '아이폰은 Safari에서 <b>공유 버튼 → 홈 화면에 추가</b>를 누른 뒤, 홈 화면의 <b>숲지기</b> 아이콘으로 열어야 알림을 켤 수 있어요.';
+    return;
+  }
+  const reg = await navigator.serviceWorker.getRegistration('/');
+  const sub = reg && await reg.pushManager.getSubscription();
+  const enabled = !!sub && Notification.permission === 'granted';
+  on.hidden = enabled; off.hidden = !enabled; test.hidden = !enabled;
+  st.textContent = enabled ? '켜져 있어요 (이 기기)' : Notification.permission === 'denied' ? '알림이 차단돼 있어요. 휴대폰 설정에서 이 사이트 알림을 허용해 주세요.' : '꺼져 있어요';
+}
+$('notifyOn').onclick = async () => {
+  try {
+    const { key } = await call('/api/admin/push/key');
+    if (!key) throw new Error('서버 알림 설정이 아직 안 돼 있어요.');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { await notifyStatus(); return; }
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
+    await saveTokenForSW();
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) });
+    const res = await fetch('/api/admin/push/subscribe', { method: 'POST', headers: { authorization: 'Bearer ' + encodeURIComponent(token), 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+    if (!res.ok) throw new Error('등록하지 못했어요.');
+    await notifyStatus();
+    alert('알림을 켰어요! "시험 알림"을 눌러 잘 오는지 확인해 보세요.');
+  } catch (e) { alert(e.message); await notifyStatus(); }
+};
+$('notifyOff').onclick = async () => {
+  const reg = await navigator.serviceWorker.getRegistration('/'); const sub = reg && await reg.pushManager.getSubscription();
+  if (sub) { await fetch('/api/admin/push/unsubscribe', { method: 'POST', headers: { authorization: 'Bearer ' + encodeURIComponent(token), 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+  await notifyStatus();
+};
+$('notifyTest').onclick = async () => { try { await call('/api/admin/push/test', true); } catch (e) { alert(e.message); } };
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data === 'refresh') load(); });
+
 async function load() {
   try {
     const { leaves, now } = await call('/api/admin/leaves');
     $('login').hidden = true; $('loginNote').hidden = true; $('panel').hidden = false;
-    loadStats();
+    loadStats(); saveTokenForSW(); notifyStatus();
     const hidden = leaves.filter((l) => l.hidden).length;
     $('summary').textContent = `잎 ${leaves.length}장 · 숨김 ${hidden}장 · 신고 있는 잎 ${leaves.filter((l) => l.reports).length}장`;
     $('list').innerHTML = leaves.map((l) => `<div class="item${l.hidden ? ' hidden' : ''}">
@@ -121,7 +176,7 @@ async function load() {
   }
 }
 $('login').onsubmit = (e) => { e.preventDefault(); token = $('token').value.trim(); try { localStorage.setItem('bamboo.admin', token); } catch {} load(); };
-$('logout').onclick = () => { token = ''; try { localStorage.removeItem('bamboo.admin'); } catch {} $('token').value = ''; load(); };
+$('logout').onclick = () => { token = ''; try { localStorage.removeItem('bamboo.admin'); } catch {} saveTokenForSW(); $('token').value = ''; load(); };
 $('refresh').onclick = load;
 $('pwBtn').onclick = () => { $('pwForm').hidden = !$('pwForm').hidden; $('pw1').value = $('pw2').value = ''; if (!$('pwForm').hidden) $('pw1').focus(); };
 $('pwCancel').onclick = () => { $('pwForm').hidden = true; };
@@ -133,7 +188,7 @@ $('pwForm').onsubmit = async (e) => {
   try {
     const res = await fetch('/api/admin/password', { method: 'POST', headers: { authorization: 'Bearer ' + encodeURIComponent(token), 'content-type': 'application/json' }, body: JSON.stringify({ next: a }) });
     const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.error || res.status);
-    token = a; try { localStorage.setItem('bamboo.admin', token); } catch {}
+    token = a; try { localStorage.setItem('bamboo.admin', token); } catch {} saveTokenForSW();
     $('pwForm').hidden = true; alert('비밀번호를 바꿨어요. 이 기기에서는 계속 로그인돼 있어요.');
   } catch (err) { alert(err.message); }
 };

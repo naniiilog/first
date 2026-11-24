@@ -5,6 +5,8 @@ import ICON_180 from '../public/icon-180.png';
 import ICON_192 from '../public/icon-192.png';
 import ICON_512 from '../public/icon-512.png';
 import OG_IMAGE from '../public/og.jpg';
+import SW_JS from '../public/sw.js';
+import ADMIN_MANIFEST from '../public/admin.webmanifest';
 
 const STATIC = {
   '/': [INDEX_HTML, 'text/html; charset=utf-8'],
@@ -15,6 +17,8 @@ const STATIC = {
   '/icon-192.png': [ICON_192, 'image/png'],
   '/icon-512.png': [ICON_512, 'image/png'],
   '/og.jpg': [OG_IMAGE, 'image/jpeg'],
+  '/sw.js': [SW_JS, 'text/javascript; charset=utf-8'],
+  '/admin.webmanifest': [ADMIN_MANIFEST, 'application/manifest+json'],
 };
 
 // 대나무숲 — Cloudflare Worker API
@@ -105,6 +109,34 @@ async function countOnce(env, day, visitor, what, metric) {
   if (r.meta.changes) await bump(env, day, metric).run();
 }
 
+// ---------- web push to the admin (no payload, so no encryption needed; the admin's service worker fetches the text) ----------
+const b64u = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+let vapidKey = null;
+async function vapidHeader(env, endpoint) {
+  if (!vapidKey) vapidKey = await crypto.subtle.importKey('jwk', JSON.parse(env.VAPID_PRIVATE_JWK), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const enc = (o) => b64u(new TextEncoder().encode(JSON.stringify(o)));
+  const unsigned = `${enc({ typ: 'JWT', alg: 'ES256' })}.${enc({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'https://bambooforest.pages.dev' })}`;
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, vapidKey, new TextEncoder().encode(unsigned));
+  return `vapid t=${unsigned}.${b64u(sig)}, k=${env.VAPID_PUBLIC}`;
+}
+async function notify(env, title, body) {
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO notifications (ts, title, body) VALUES (?, ?, ?)').bind(Date.now(), title, body),
+    env.DB.prepare('DELETE FROM notifications WHERE id <= (SELECT MAX(id) FROM notifications) - 100'),
+  ]);
+  if (!env.VAPID_PRIVATE_JWK || !env.VAPID_PUBLIC) return;
+  const { results } = await env.DB.prepare('SELECT endpoint FROM push_subs').all();
+  await Promise.all(results.map(async ({ endpoint }) => {
+    try {
+      const r = await fetch(endpoint, { method: 'POST', headers: { Authorization: await vapidHeader(env, endpoint), TTL: '86400', Urgency: 'high', 'Content-Length': '0' } });
+      if (r.status === 404 || r.status === 410) await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ?').bind(endpoint).run();
+    } catch (e) { console.error('push failed', e); }
+  }));
+}
+const GROVE_NAME = ['🍃 바람 숲', '🌙 달빛 숲', '💧 이슬 숲'];
+const MODE_NAME = { whisper: '🤫 속삭임', shout: '📣 소리침', sigh: '😮‍💨 한숨' };
+const clip = (t, n = 60) => ([...t].length > n ? [...t].slice(0, n).join('') + '…' : t);
+
 async function cleanup(env) {
   const cutoff = Date.now() - LIFETIME_MS;
   await env.DB.batch([
@@ -115,7 +147,8 @@ async function cleanup(env) {
   ]);
 }
 
-async function handleApi(request, env, url) {
+async function handleApi(request, env, url, ctx) {
+  const later = (p) => (ctx && ctx.waitUntil ? ctx.waitUntil(p.catch((e) => console.error(e))) : p.catch(() => {}));
   const { pathname } = url;
   const method = request.method;
   const now = Date.now();
@@ -150,6 +183,7 @@ async function handleApi(request, env, url) {
     ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper', [0, 1, 2].includes(body?.grove) ? body.grove : 0).first();
     { const day = kstDay(now);
       await env.DB.batch([bump(env, day, 'leaves'), bump(env, day, 'leaves_g' + row.grove), bump(env, day, 'leaves_' + row.mode)]); }
+    later(notify(env, `🎋 새 사연 · ${GROVE_NAME[row.grove] || ''}`, `${MODE_NAME[row.mode] || ''}  ${clip(row.text)}`));
     return json({ leaf: row }, 201);
   }
 
@@ -170,6 +204,8 @@ async function handleApi(request, env, url) {
         await env.DB.prepare(
           'UPDATE leaves SET reports = reports + 1, hidden = CASE WHEN reports + 1 >= ? THEN 1 ELSE hidden END WHERE id = ?',
         ).bind(AUTO_HIDE_REPORTS, id).run();
+        const rl = await env.DB.prepare('SELECT text, reports, hidden FROM leaves WHERE id = ?').bind(id).first();
+        if (rl) later(notify(env, rl.hidden ? `🚨 신고 ${rl.reports}번 · 자동으로 숨겼어요` : `🚨 신고 들어옴 (${rl.reports}번째)`, clip(rl.text)));
       }
     }
     const after = await env.DB.prepare('SELECT heard FROM leaves WHERE id = ?').bind(id).first();
@@ -218,6 +254,25 @@ async function handleApi(request, env, url) {
       await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('admin_hash', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(`${salt}:${await pbkdf2(next, salt)}`).run();
       return json({ ok: true });
     }
+    if (pathname === '/api/admin/push/key' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
+    if (pathname === '/api/admin/push/subscribe' && method === 'POST') {
+      let body; try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }
+      const ep = String(body?.endpoint || '');
+      if (!/^https:\/\/[^\s]+$/.test(ep) || ep.length > 1000) return fail(400, '잘못된 요청이에요.');
+      await env.DB.prepare('INSERT OR IGNORE INTO push_subs (endpoint, created) VALUES (?, ?)').bind(ep, now).run();
+      return json({ ok: true });
+    }
+    if (pathname === '/api/admin/push/unsubscribe' && method === 'POST') {
+      let body; try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }
+      await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ?').bind(String(body?.endpoint || '')).run();
+      return json({ ok: true });
+    }
+    if (pathname === '/api/admin/push/test' && method === 'POST') { await notify(env, '🔔 알림 시험', '알림이 잘 와요! 이제 새 사연과 신고를 알려드릴게요.'); return json({ ok: true }); }
+    if (pathname === '/api/admin/notifications' && method === 'GET') {
+      const after = Number(url.searchParams.get('after') || 0);
+      const { results } = await env.DB.prepare('SELECT id, ts, title, body FROM notifications WHERE id > ? ORDER BY id DESC LIMIT 10').bind(after).all();
+      return json({ items: results });
+    }
     if (pathname === '/api/admin/stats' && method === 'GET') {
       const today = kstDay(now), week = [...Array(7)].map((_, i) => kstDay(now - (6 - i) * 86400 * 1000));
       const [live, tot, td, days] = await Promise.all([
@@ -256,11 +311,11 @@ async function handleApi(request, env, url) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) {
       try {
-        return await handleApi(request, env, url);
+        return await handleApi(request, env, url, ctx);
       } catch (err) {
         console.error(err);
         return fail(500, '숲에 잠시 문제가 생겼어요. 조금 뒤에 다시 시도해 주세요.');
@@ -272,5 +327,15 @@ export default {
   },
   async scheduled(_event, env) {
     await cleanup(env);
+    // one summary per hour about new visitors (only when someone new came)
+    const tot = await env.DB.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM daily_stats WHERE metric = 'visits'").first();
+    const last = await env.DB.prepare("SELECT v FROM settings WHERE k = 'notified_visits'").first();
+    const prev = last ? Number(last.v) : tot.n;
+    await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('notified_visits', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(String(tot.n)).run();
+    const diff = tot.n - prev;
+    if (last && diff > 0) {
+      const live = await env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE seen >= ?').bind(Date.now() - PRESENCE_MS).first();
+      await notify(env, `👣 지난 1시간 새 방문자 ${diff}명`, `지금 숲에 ${live.n}명 · 오늘까지 누적 ${tot.n}명`);
+    }
   },
 };

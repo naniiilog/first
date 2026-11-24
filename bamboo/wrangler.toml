@@ -8,7 +8,7 @@ compatibility_date = "2025-09-01"
 # The page files are bundled into the worker (see src/worker.js)
 [[rules]]
 type = "Text"
-globs = ["**/*.html", "**/*.webmanifest"]
+globs = ["**/*.html", "**/*.webmanifest", "**/sw.js"]
 fallthrough = true
 
 [[rules]]

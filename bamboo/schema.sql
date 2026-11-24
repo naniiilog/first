@@ -54,3 +54,15 @@ CREATE TABLE IF NOT EXISTS daily_seen (
   what TEXT NOT NULL,
   PRIMARY KEY (day, visitor, what)
 );
+
+-- admin push notifications (payload-free web push; the admin's service worker fetches the text)
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint TEXT PRIMARY KEY,
+  created INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL
+);
