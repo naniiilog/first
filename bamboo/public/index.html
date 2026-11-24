@@ -118,7 +118,7 @@
   @keyframes flicker { 50% { filter: brightness(.8); } }
   .ripple { stroke-dasharray: 18 30; animation: ripple 3s linear infinite; }
   @keyframes ripple { to { stroke-dashoffset: -96; } }
-  #gCel, #gMist { pointer-events: none; }
+  #gCel, #gMist, #gFloorBack { pointer-events: none; }
   #mapLights { position: absolute; left: 0; top: 0; mix-blend-mode: screen; pointer-events: none; transition: opacity 2s; }
   #mapSvg { transition: filter 2s; }
   .gsky { position: absolute; inset: 0; }
@@ -225,6 +225,7 @@
 <!-- ============ grove at the end of a path ============ -->
 <div class="view" id="grove" hidden>
   <div class="gsky" id="gsky"></div>
+  <div class="layer" id="gFloorBack"></div>
   <svg class="layer" id="gL0"></svg>
   <div class="layer" id="gCel"></div>
   <svg class="layer" id="gL1"></svg>
@@ -693,7 +694,7 @@ function buildGrove(k) {
       const gid = `cg${li}_${si}`, hl = lerp(.4, .65, r());
       defs += `<linearGradient id="${gid}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cane, '#0d2010', .35)}"/><stop offset="${f1(hl - .25)}" stop-color="${cane}"/><stop offset="${f1(hl)}" stop-color="${mix(cane, '#e4f8d2', .3 + (1 - age) * .2)}"/><stop offset="${f1(hl + .22)}" stop-color="${cane}"/><stop offset="1" stop-color="${mix(cane, '#0d2010', .3)}"/></linearGradient>`;
       const w = lerp(cfg.w[0], cfg.w[1], r()) * lerp(.65, 1.45, r()) * S.widthK * (cfg.every ? 1 : G.scale);
-      const base = cfg.every ? groundY - (3 - li) * 14 + r() * 8 : H + 10;
+      const base = cfg.every ? groundY + 14 + li * 8 + r() * 18 : H + 10;
       const broken = cfg.every && li >= 1 && r() < .06;
       const h = lerp(cfg.h[0], cfg.h[1], r()) * H * (broken ? lerp(.35, .6, r()) : 1);
       const lean = (r() - .5) * H * lerp(.02, .09, r()), bow = (r() - .5) * H * (r() < .25 ? .06 : .02), topY = base - h;
@@ -757,12 +758,20 @@ function buildGrove(k) {
   // ---- forest floor ----
   const r = rng(900 + k);
   const gr = P.ground.map(tone);
+  $('gFloorBack').style.background = `linear-gradient(180deg, transparent ${f1(groundY - H * .16)}px, ${gr[0]}cc ${f1(groundY - 10)}px, ${gr[0]} ${f1(groundY + 20)}px)`;
   let s = `<defs><linearGradient id="gfloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${gr[0]}"/><stop offset=".4" stop-color="${gr[1]}"/><stop offset="1" stop-color="${gr[2]}"/></linearGradient>
     <radialGradient id="glight" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="rgb(${P.beam})" stop-opacity="${f1(.08 + P.light * .18)}"/><stop offset="1" stop-color="rgb(${P.beam})" stop-opacity="0"/></radialGradient>
     <radialGradient id="lampg"><stop offset="0" stop-color="#ffe7a6" stop-opacity=".95"/><stop offset=".35" stop-color="#ffcf6a" stop-opacity=".45"/><stop offset="1" stop-color="#ffb84a" stop-opacity="0"/></radialGradient>
     <linearGradient id="water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tone('#7cc3c8')}"/><stop offset="1" stop-color="${tone('#3f8a95')}"/></linearGradient></defs>`;
   s += `<path d="M0 ${f1(groundY)}${Array.from({ length: Math.ceil(W / 20) + 2 }, (_, i) => `L${i * 20} ${f1(groundY + Math.sin(i * .5) * 4)}`).join('')}L${W + 40} ${H}L0 ${H}Z" fill="url(#gfloor)"/>`;
   s += `<ellipse cx="${W / 2}" cy="${f1(groundY + (H - groundY) * .55)}" rx="${f1(W * .38)}" ry="${f1((H - groundY) * .5)}" fill="url(#glight)"/>`;
+  for (let x = -20; x < W + 30; x += small ? 14 : 18) {
+    const yb = groundY + 6 + r() * 10, n = 5 + Math.floor(r() * 4);
+    for (let q = 0; q < n; q++) {
+      const L = lerp(14, 34, r()), ang = lerp(-170, -10, r());
+      s += `<path d="${leafPath(L, L * .2)}" transform="translate(${f1(x + (r() - .5) * 14)} ${f1(yb)}) rotate(${f1(ang)})" fill="${tone(mix('#1f4a28', '#3d7a3c', r()))}"/>`;
+    }
+  }
   const blades = S.kind === 'wind' ? W / 4 : W / 9;
   for (let i = 0; i < blades; i++) {
     const x = r() * W, y = groundY + r() * (S.kind === 'wind' ? 40 : 14), hh = (S.kind === 'wind' ? 14 : 6) + r() * (S.kind === 'wind' ? 26 : 14), bend = S.kind === 'wind' ? 6 + r() * 8 : r() * 6 - 1;
