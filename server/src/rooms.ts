@@ -41,6 +41,8 @@ export interface RoomRow {
   /** 방장이 마지막으로 읽은 글, 북마크(JSON) */
   read_mark: number;
   bookmarks: string | null;
+  /** 설치형 앱 알림 소리 */
+  notify_sound: string;
 }
 
 export interface MemberRow {
@@ -158,7 +160,8 @@ export class Rooms {
   notifier?: (room: RoomRow, msg: MessageRow) => void;
 
   /** 알림 설정 */
-  async setNotify(roomId: string, patch: { mode?: string; silent?: boolean; name?: string }) {
+  async setNotify(roomId: string, patch: { mode?: string; silent?: boolean; name?: string; sound?: string }) {
+    if (patch.sound !== undefined) await this.db.run('UPDATE rooms SET notify_sound = ? WHERE id = ?', patch.sound, roomId);
     // 조건을 바꾸면 '묶어서' 3분 간격도 새로 시작해요.
     if (patch.mode !== undefined) await this.db.run('UPDATE rooms SET notify_mode = ?, notify_last = NULL WHERE id = ?', patch.mode, roomId);
     if (patch.silent !== undefined) await this.db.run('UPDATE rooms SET notify_silent = ? WHERE id = ?', patch.silent ? 1 : 0, roomId);
@@ -187,7 +190,7 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null, notify_sound: 'default' };
     // 확인 간격은 정해 두지 않아요(실시간). 방장이 방 설정에서 정한 대로 따라요.
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at, check_interval_min) VALUES (?, ?, ?, ?, 0)', room.id, room.name, room.owner_token, room.created_at);
     return room;

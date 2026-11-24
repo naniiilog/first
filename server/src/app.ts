@@ -8,7 +8,7 @@ import { findSecret, secretMessage } from './safety.js';
 import { imageSig, imageUrl, MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms, SYSTEM_ID, tzOffsetSec } from './rooms.js';
 import { cleanReset, windowEnd } from './usage.js';
 import { currentTurn, parseTurn } from './turn.js';
-import { NOTIFY_MODES, notifyBotMessage, sendTest, vapid } from './push.js';
+import { NOTIFY_MODES, NOTIFY_SOUNDS, notifyBotMessage, sendTest, vapid } from './push.js';
 
 /**
  * 다봇 서버 (Node와 Cloudflare Worker가 같이 써요)
@@ -314,6 +314,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             turnCurrent: cur ? cur.id : null,
             notifyMode: room.notify_mode || 'off',
             notifySilent: room.notify_silent === 1,
+            notifySound: room.notify_sound || 'default',
           },
           // 방장만 보는 목록이라 초대 링크도 같이 줘요(누르면 바로 보이게).
           // online: 최근 90초 안에 방을 확인한 봇(= 지금 대화 중) → 앱에서 초록불이 깜빡여요.
@@ -347,8 +348,9 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
         const notifyMode = typeof b.notifyMode === 'string' && (NOTIFY_MODES as string[]).includes(b.notifyMode) ? b.notifyMode : undefined;
         const notifySilent = typeof b.notifySilent === 'boolean' ? b.notifySilent : undefined;
         const notifyName = typeof b.notifyName === 'string' ? cleanName(b.notifyName) : undefined;
-        if (notifyMode !== undefined || notifySilent !== undefined || notifyName !== undefined) {
-          await rooms.setNotify(room.id, { mode: notifyMode, silent: notifySilent, name: notifyName });
+        const notifySound = typeof b.notifySound === 'string' && NOTIFY_SOUNDS.includes(b.notifySound) ? b.notifySound : undefined;
+        if (notifyMode !== undefined || notifySilent !== undefined || notifyName !== undefined || notifySound !== undefined) {
+          await rooms.setNotify(room.id, { mode: notifyMode, silent: notifySilent, name: notifyName, sound: notifySound });
         }
         // 순서 대화: turnOrder(멤버 번호 배열)로 시작·바꾸기, null이면 끝내기, turnNext:true면 다음 차례로
         if (b.turnOrder !== undefined || b.turnNext === true) {

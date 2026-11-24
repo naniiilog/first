@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { api, type NotifyMode, type RoomInfo } from '../lib/api';
 import { disablePush, enablePush, needsHomeScreen, pushStatus, pushSupported } from '../lib/push';
+import { SOUNDS } from '../lib/sounds';
 import { useTheme } from '../lib/theme';
 import type { LocalRoom, Settings } from '../lib/types';
 import { Chip, Section } from './ui';
@@ -18,10 +19,11 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
   const [on, setOn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ mode?: NotifyMode; silent?: boolean }>({});
+  const [draft, setDraft] = useState<{ mode?: NotifyMode; silent?: boolean; sound?: string }>({});
   const supported = pushSupported();
   const mode = draft.mode ?? info.notifyMode ?? 'off';
   const silent = draft.silent ?? info.notifySilent ?? false;
+  const sound = draft.sound ?? info.notifySound ?? 'default';
 
   useEffect(() => {
     if (!supported) return;
@@ -34,8 +36,13 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
     };
   }, [supported, settings, room]);
 
-  const save = async (patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string }) => {
-    setDraft((d) => ({ ...d, ...(patch.notifyMode ? { mode: patch.notifyMode } : {}), ...(patch.notifySilent !== undefined ? { silent: patch.notifySilent } : {}) }));
+  const save = async (patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string; notifySound?: string }) => {
+    setDraft((d) => ({
+      ...d,
+      ...(patch.notifyMode ? { mode: patch.notifyMode } : {}),
+      ...(patch.notifySilent !== undefined ? { silent: patch.notifySilent } : {}),
+      ...(patch.notifySound ? { sound: patch.notifySound } : {}),
+    }));
     await api.setNotify(settings, room, patch);
     await refresh();
   };
@@ -126,15 +133,52 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
               ))}
 
               <Text style={{ color: t.text, fontWeight: '600' }}>알림 방식</Text>
-              <View style={styles.row}>
-                <Chip label="🔊 소리·진동" selected={!silent} onPress={() => save({ notifySilent: false }).catch((e) => setMsg(String(e)))} />
-                <Chip label="🔕 무음" selected={silent} onPress={() => save({ notifySilent: true }).catch((e) => setMsg(String(e)))} />
-              </View>
-              <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 18 }}>
-                {Platform.OS === 'web'
-                  ? '진동만 받고 싶으면: 휴대폰 설정 → 알림 → Chrome(또는 다봇) → 사이트 알림에서 이 사이트를 “진동”으로 바꿔 주세요. 소리 종류도 거기서 골라요.'
-                  : '소리 종류·진동만 받기는 휴대폰 설정 → 앱 → 다봇 → 알림 → “대화 알림”에서 바꿀 수 있어요.'}
-              </Text>
+              {Platform.OS === 'web' ? (
+                <>
+                  <View style={styles.row}>
+                    <Chip label="🔊 소리·진동" selected={!silent} onPress={() => save({ notifySilent: false }).catch((e) => setMsg(String(e)))} />
+                    <Chip label="🔕 무음" selected={silent} onPress={() => save({ notifySilent: true }).catch((e) => setMsg(String(e)))} />
+                  </View>
+                  <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 18 }}>
+                    진동만 받거나 소리를 바꾸려면: 휴대폰 설정 → 알림 → Chrome(또는 다봇) → 사이트 알림에서 바꿔 주세요. 설치형 앱에서는 다봇 전용 알림음도 고를 수 있어요.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  {/* 설치형 앱: 다봇 전용 알림음 · 폰 기본음 · 진동만 · 무음, ▶로 미리듣기 */}
+                  <View style={styles.row}>
+                    {SOUNDS.map((x) => {
+                      const on = (silent ? 'silent' : sound) === x.key;
+                      return (
+                        <View key={x.key} style={[styles.sound, { borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accentSoft : t.card }]}>
+                          <Pressable
+                            onPress={() =>
+                              save({ notifySound: x.key, notifySilent: x.key === 'silent' }).catch((e) => setMsg(String(e)))
+                            }
+                          >
+                            <Text style={{ color: on ? t.accent : t.text, fontWeight: '700', fontSize: 13 }}>
+                              {x.key === 'vibrate' ? '📳 ' : x.key === 'silent' ? '🔕 ' : '🔔 '}
+                              {x.label}
+                            </Text>
+                          </Pressable>
+                          {x.file ? (
+                            <Pressable
+                              hitSlop={8}
+                              accessibilityLabel={`${x.label} 미리듣기`}
+                              onPress={() => import('../lib/nativePush').then((m) => m.previewSound(x.file!)).catch(() => {})}
+                            >
+                              <Text style={{ color: t.accent, fontSize: 12 }}>▶</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <Pressable onPress={() => Linking.openSettings().catch(() => {})} style={[styles.testBtn, { borderColor: t.border }]}>
+                    <Text style={{ color: t.text, fontWeight: '700' }}>⚙️ 폰 알림 설정 열기 (잠금화면·팝업·내 음악)</Text>
+                  </Pressable>
+                </>
+              )}
 
               <Pressable onPress={test} style={[styles.testBtn, { borderColor: t.accent }]}>
                 <Text style={{ color: t.accent, fontWeight: '700' }}>시험 알림 보내기</Text>
@@ -157,5 +201,6 @@ const styles = StyleSheet.create({
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sound: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   testBtn: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
 });

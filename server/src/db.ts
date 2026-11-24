@@ -68,7 +68,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '15';
+const SCHEMA_VERSION = '16';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -125,6 +125,8 @@ export function ensureSchema(db: Db): Promise<void> {
       // 방장의 '마지막으로 읽은 글'과 북마크(JSON) — 어느 기기에서든 같게
       'read_mark INTEGER NOT NULL DEFAULT 0',
       'bookmarks TEXT',
+      // 설치형 앱 알림 소리(default·dingdong·bell·pop·tok·chime·vibrate·silent)
+      "notify_sound TEXT NOT NULL DEFAULT 'default'",
     ]) {
       await db.run(`ALTER TABLE rooms ADD COLUMN ${col}`).catch(() => {});
     }

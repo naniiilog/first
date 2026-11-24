@@ -100,8 +100,14 @@ export interface PushSub {
   auth: string;
 }
 
+export const NOTIFY_SOUNDS = ['default', 'dingdong', 'bell', 'pop', 'tok', 'chime', 'vibrate', 'silent'];
+/** 설치형 앱 알림 칸(앱의 nativePush.ts와 같은 이름) */
+const channelFor = (sound: string, silent: boolean) =>
+  silent || sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' || !NOTIFY_SOUNDS.includes(sound) ? 'chat' : `snd_${sound}`;
+
 /** 설치형 앱(Expo 푸시)으로 보내기. 기기가 없어졌으면 false */
-async function sendExpo(token: string, d: { title: string; body: string; url: string; silent: boolean; tag?: string }): Promise<boolean> {
+async function sendExpo(token: string, d: { title: string; body: string; url: string; silent: boolean; sound?: string; tag?: string }): Promise<boolean> {
+  const channelId = channelFor(d.sound ?? 'default', d.silent);
   const res = await fetch('https://exp.host/--/api/v2/push/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -110,8 +116,8 @@ async function sendExpo(token: string, d: { title: string; body: string; url: st
       title: d.title,
       body: d.body,
       data: { url: d.url },
-      channelId: d.silent ? 'quiet' : 'chat',
-      sound: d.silent ? null : 'default',
+      channelId,
+      sound: channelId === 'quiet' || channelId === 'vibrate' ? null : 'default',
       priority: 'high',
     }),
   });
@@ -192,7 +198,7 @@ export async function notifyBotMessage(db: Db, room: RoomRow, msg: MessageRow, o
   if (!subs.length) return;
   await db.run('UPDATE rooms SET notify_last = ?, notify_last_id = ? WHERE id = ?', now, msg.id, room.id);
   const v = await vapid(db);
-  const data = { title, body, tag, url: `/room/${room.id}`, silent: room.notify_silent === 1 };
+  const data = { title, body, tag, url: `/room/${room.id}`, silent: room.notify_silent === 1, sound: room.notify_sound || 'default' };
   for (const sub of subs) {
     const alive = await sendOne(v, sub, data, origin).catch((e) => {
       console.error('[push]', e);
@@ -209,7 +215,7 @@ export async function sendTest(db: Db, room: RoomRow, origin: string) {
   let sent = 0;
   let failed = 0;
   for (const sub of subs) {
-    const ok = await sendOne(v, sub, { title: room.name, body: '다봇 알림이 잘 와요 🔔', tag: `test-${room.id}`, url: `/room/${room.id}`, silent: room.notify_silent === 1 }, origin).catch((e) => {
+    const ok = await sendOne(v, sub, { title: room.name, body: '다봇 알림이 잘 와요 🔔', tag: `test-${room.id}`, url: `/room/${room.id}`, silent: room.notify_silent === 1, sound: room.notify_sound || 'default' }, origin).catch((e) => {
       console.error('[push]', e);
       return null;
     });

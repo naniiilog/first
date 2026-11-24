@@ -7,24 +7,30 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 let channelsReady = false;
+// 알림 칸(채널): 서버가 방 설정에 맞춰 이 이름으로 보내요(server/src/push.ts의 channelFor와 같아요).
+// 안드로이드는 한 번 만든 칸의 소리를 앱에서 못 바꿔서, 소리마다 칸을 따로 만들어요.
+const CUSTOM = ['dingdong', 'bell', 'pop', 'tok', 'chime'] as const;
+const LABEL: Record<(typeof CUSTOM)[number], string> = { dingdong: '딩동', bell: '방울', pop: '뿅', tok: '톡', chime: '차임' };
 async function ensureChannels() {
   if (channelsReady || Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync('chat', {
-    name: '대화 알림',
-    // eslint-disable-next-line import/namespace -- 다시 내보낸 이름이라 린트가 못 찾아요(타입 검사는 통과)
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 120, 60, 120],
-    showBadge: false,
-  });
-  await Notifications.setNotificationChannelAsync('quiet', {
-    name: '대화 알림(무음)',
-    // eslint-disable-next-line import/namespace
-    importance: Notifications.AndroidImportance.LOW,
-    sound: null,
-    enableVibrate: false,
-    showBadge: false,
-  });
+  // eslint-disable-next-line import/namespace -- 다시 내보낸 이름이라 린트가 못 찾아요(타입 검사는 통과)
+  const { HIGH, LOW } = Notifications.AndroidImportance;
+  const base = { importance: HIGH, vibrationPattern: [0, 120, 60, 120], showBadge: false };
+  await Notifications.setNotificationChannelAsync('chat', { ...base, name: '대화 알림(폰 기본음)' });
+  for (const k of CUSTOM) {
+    await Notifications.setNotificationChannelAsync(`snd_${k}`, { ...base, name: `대화 알림(${LABEL[k]})`, sound: `${k}.wav` });
+  }
+  await Notifications.setNotificationChannelAsync('vibrate', { ...base, name: '대화 알림(진동만)', sound: null });
+  await Notifications.setNotificationChannelAsync('quiet', { name: '대화 알림(무음)', importance: LOW, sound: null, enableVibrate: false, showBadge: false });
   channelsReady = true;
+}
+
+/** 알림 소리 미리듣기(설치형 앱) */
+export async function previewSound(file: number) {
+  const { createAudioPlayer } = await import('expo-audio');
+  const player = createAudioPlayer(file);
+  player.play();
+  setTimeout(() => player.remove(), 3000);
 }
 
 /** 앱을 켜 둔 동안 온 알림도 위에 띄워요(서버가 지금 보고 있는 방이면 안 보내요). */

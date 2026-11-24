@@ -76,6 +76,7 @@ export interface RoomInfo {
     quietNow?: boolean;
     notifyMode?: NotifyMode;
     notifySilent?: boolean;
+    notifySound?: string;
     /** 확인 간격 동안 봇이 stay(계속 기다리기) · away(쉬었다 오기) */
     waitMode?: 'stay' | 'away';
     /** 순서 대화: 순서(멤버 번호)와 지금 차례 */
@@ -245,7 +246,7 @@ export const api = {
     call(s, `/api/rooms/${r.id}/push`, { method: 'DELETE', body: { endpoint }, ownerToken: r.ownerToken }),
   pushTest: (s: Settings, r: LocalRoom) => call<{ sent: number; failed: number }>(s, `/api/rooms/${r.id}/push/test`, { method: 'POST', ownerToken: r.ownerToken }),
   /** 알림 조건·소리 */
-  setNotify: (s: Settings, r: LocalRoom, patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string }) =>
+  setNotify: (s: Settings, r: LocalRoom, patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string; notifySound?: string }) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 사용량(오늘 0시부터) */
