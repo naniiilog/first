@@ -1463,7 +1463,7 @@ function startSound() {
     // plaza: a single soft bell now and then
     plaza(t) { tone(880 * Math.pow(2, PENTA[Math.floor(Math.random() * 5)] / 12), t, { parts: [[1, 1], [2.76, .25]], peak: .012, decay: 3 }); },
   };
-  const placeKey = () => { const k = scene === 'grove' ? groveIdx : (walkingTo >= 0 && walkingTo < 3 ? walkingTo : -1); return ['wind', 'moon', 'dew'][k] || 'plaza'; };
+  const placeKey = () => scene === 'grove' ? ['wind', 'moon', 'dew'][groveIdx] || 'plaza' : 'plaza';
   function chime(t, k = 1) { CHIMES[placeKey()](t, k); }
   setInterval(() => { if (ctx.state === 'running' && Math.random() < .06) chime(ctx.currentTime + Math.random() * .5, .4); }, 5000);
 
@@ -1485,7 +1485,7 @@ function startSound() {
   let wet = 0;
   setInterval(() => {
     if (ctx.state !== 'running') return;
-    const want = placeKey() === 'dew' ? .22 : 0, now = ctx.currentTime;
+    const want = placeKey() === 'dew' ? .3 : 0, now = ctx.currentTime;
     if (want !== wet) { water.gain.cancelScheduledValues(now); water.gain.setValueAtTime(water.gain.value, now); water.gain.linearRampToValueAtTime(want, now + 3); wet = want; }
 
   }, 500);
@@ -1507,10 +1507,10 @@ function startSound() {
   mus.connect(master); mus.connect(dl); dl.connect(dlf).connect(fb).connect(dl); dlf.connect(master);
   const noiseBuf = buf;
   const THEMES = {
-    plaza: { base: 174.61, scale: [0, 2, 5, 7, 9],  bar: 9,  vol: .9,  roots: [0, 3, 2, 0, 4, 3] },   // F, breathing chords
+    plaza: { base: 174.61, scale: [0, 2, 4, 7, 9],  bar: 7,  vol: 1.15,  roots: [0, 3, 2, 0, 4, 3] },   // F major pentatonic, warm welcome tune
     wind:  { base: 196.0,  scale: [0, 2, 4, 7, 9],  bar: 6.5, vol: .55, roots: [0, 3, 4, 3, 0, 2] },   // G major pentatonic, warm & hopeful
     moon:  { base: 146.83, scale: [0, 3, 5, 7, 10], bar: 11, vol: .6,  roots: [0, 2, 3, 0, 4, 2] },   // D 계면조, lullaby
-    dew:   { base: 164.81, scale: [0, 2, 4, 7, 9],  bar: 8,  vol: .85,  roots: [0, 4, 3, 0, 2, 4] },   // E major pentatonic, clear
+    dew:   { base: 164.81, scale: [0, 2, 4, 7, 9],  bar: 11, vol: .85,  roots: [0, 4, 3, 0, 2, 4] },   // E major pentatonic, clear
   };
   let th = THEMES.plaza;
   const hz = (deg, oct) => th.base * Math.pow(2, (th.scale[((deg % 5) + 5) % 5] + 12 * (oct + Math.floor(deg / 5))) / 12);
@@ -1562,29 +1562,42 @@ function startSound() {
     o.connect(g).connect(mus); o.start(t); o.stop(t + dur + .1);
   };
   const step = (m, lo, hi) => Math.max(lo, Math.min(hi, m + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
-  let root = 0, melody = 2, next = ctx.currentTime + .5, cur = null;
+  let root = 0, melody = 2, next = ctx.currentTime + .5, cur = null, plazaStep = 0;
   const PHRASE = {
-    plaza(t0, bar, slow) {       // the entrance: no 가야금 — a breathing 생황-like chord and a low 편종 now and then
-      const breathe = (deg, oct, st, dur, vol) => {
-        for (const [d, det] of [[deg, -5], [deg, 5], [deg + 2, 0], [deg + 4, -3]]) {
-          const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
-          o.type = 'sine'; o2.type = 'triangle'; o.frequency.value = hz(d, oct); o2.frequency.value = hz(d, oct) * 2; o.detune.value = det; o2.detune.value = -det;
-          const g2 = ctx.createGain(); g2.gain.value = .18;
-          lp.type = 'lowpass'; lp.frequency.setValueAtTime(500, st); lp.frequency.linearRampToValueAtTime(1300, st + dur * .5); lp.frequency.linearRampToValueAtTime(500, st + dur);
-          g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(vol, st + dur * .45); g.gain.linearRampToValueAtTime(0, st + dur);
-          o.connect(lp); o2.connect(g2).connect(lp); lp.connect(g).connect(mus); o.start(st); o2.start(st); o.stop(st + dur + .1); o2.stop(st + dur + .1);
+    plaza(t0, bar, slow) {       // the entrance: a short, warm "어서 와" tune on 양금 that you can recognise, over a thin 생황 pad
+      const yanggeum = (deg, oct, st, vel = 1, trem = false) => {
+        const f = hz(deg, oct);
+        for (const det of [-6, 6]) {                       // two strings per course, slightly apart: that shimmer is the 양금
+          const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+          o.type = 'triangle'; o.frequency.value = f; o.detune.value = det;
+          lp.type = 'lowpass'; lp.frequency.setValueAtTime(4200, st); lp.frequency.exponentialRampToValueAtTime(900, st + 1.4);
+          const strike = (t, v, first) => { if (first) g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05 * v, t + .006); g.gain.exponentialRampToValueAtTime(.0006, t + 2.2); };
+          g.gain.value = 0; strike(st, vel, true);
+          if (trem) for (let k = 1; k < 5; k++) strike(st + k * .085, vel * (.75 - k * .1));
+          o.connect(lp).connect(g).connect(mus); o.start(st); o.stop(st + 2.6);
         }
       };
-      breathe(root, 0, t0, bar + 2.5, .035);
-      if (Math.random() < .6) breathe(root + 2, 1, t0 + bar * .4, bar * .8, .015);
-      if (Math.random() < .5) {                    // 편종: one low, round strike
-        const st = t0 + bar * lerp(.2, .7, Math.random()), f = hz(root, -1) * 2;
-        for (const [k, a2, dec] of [[1, 1, 5], [2.0, .3, 3], [3.0, .1, 1.6]]) {
-          const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f * k;
-          g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.05 * a2, st + .01); g.gain.exponentialRampToValueAtTime(.0003, st + dec);
-          o.connect(g).connect(mus); o.start(st); o.stop(st + dec + .1);
+      const breathe = (deg, oct, st, dur, vol) => {
+        for (const [d, det] of [[deg, -5], [deg, 5], [deg + 2, 0], [deg + 4, -3]]) {
+          const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+          o.type = 'sine'; o.frequency.value = hz(d, oct); o.detune.value = det;
+          lp.type = 'lowpass'; lp.frequency.value = 900;
+          g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(vol, st + dur * .4); g.gain.linearRampToValueAtTime(0, st + dur);
+          o.connect(lp).connect(g).connect(mus); o.start(st); o.stop(st + dur + .1);
         }
-      }
+      };
+      // the tune: four phrases that come back in order, so it becomes familiar
+      const PHRASES = [
+        [[2, .5], [3, .5], [4, 1], [3, .5], [2, .5], [1, 1.5]],
+        [[2, .5], [3, .5], [4, 1], [6, .5], [5, .5], [4, 1.5, 1]],
+        [[5, .75], [4, .25], [3, .5], [2, .5], [3, 1], [1, .5], [2, 1]],
+        [[1, .5], [2, .5], [3, .5], [2, .5], [0, 2, 1]],
+      ];
+      const ph = PHRASES[plazaStep++ % PHRASES.length], beat = bar / 5.5;
+      const roots = [0, 3, 2, 0];
+      breathe(roots[(plazaStep - 1) % 4], 0, t0, bar + 2, .018);
+      let t = t0 + .3;
+      for (const [deg, len, trem] of ph) { yanggeum(deg, 1, t, .9, !!trem); t += len * beat; }
     },
     wind(t0, bar, slow) {        // a gentle flute line that rises at the end of the phrase, like a reassuring breath
       pad(root, t0, bar + 2, { cut: 900, vol: .04 });
@@ -1603,16 +1616,12 @@ function startSound() {
       for (let i = 0; i < notes; i++) { pluck(root + pattern[(i + Math.floor(Math.random() * 2)) % 6] + 2, 0, t, .6 + Math.random() * .2); t += (bar - 2) / notes; }
       if (Math.random() < .55) bell(root + 4, 2, t0 + bar * (.3 + Math.random() * .4), .5, 6);
     },
-    dew(t0, bar, slow) {         // drops falling into still water, then a clear bell
-      pad(root, t0, bar + 2, { type: 'sine', cut: 1400, vol: .03, oct: 1 });
-      let t = t0 + .5; const k = slow ? 3 : 4 + Math.floor(Math.random() * 2);
-      let d = root + Math.floor(Math.random() * 3);
-      for (let i = 0; i < k; i++) { drop(d, 2, t, .7 + Math.random() * .3); d += Math.random() < .7 ? 1 : 2; t += lerp(.35, .7, Math.random()); }
-      bell(d, 2, t + .4, .7, 5);
-      if (Math.random() < .5) { let t2 = t0 + bar * .6; for (let i = 0; i < 3; i++) { drop(root + 4 - i, 2, t2, .5); t2 += .45; } }
+    dew(t0, bar, slow) {         // only a very thin, slow harmony; the stream carries the rest
+      pad(root, t0, bar + 4, { type: 'sine', cut: 900, vol: .022 });
+      if (Math.random() < .5) pad(root + 2, t0 + bar * .5, bar + 2, { type: 'sine', cut: 1200, vol: .01, oct: 1 });
     },
   };
-  const themeNow = () => { const k = scene === 'grove' ? groveIdx : (walkingTo >= 0 && walkingTo < 3 ? walkingTo : -1); return ['wind', 'moon', 'dew'][k] || 'plaza'; };
+  const themeNow = () => scene === 'grove' ? ['wind', 'moon', 'dew'][groveIdx] || 'plaza' : 'plaza';
   const schedule = () => {
     if (ctx.state !== 'running') return;
     const want = themeNow(), now = ctx.currentTime;
@@ -1621,7 +1630,7 @@ function startSound() {
       old.gain.cancelScheduledValues(now); old.gain.setValueAtTime(old.gain.value, now); old.gain.linearRampToValueAtTime(0, now + .7);
       setTimeout(() => { try { old.disconnect(); } catch {} }, 6000);
       mus = ctx.createGain(); mus.gain.value = 0; mus.connect(master); mus.connect(dl); audio.mus = mus;
-      th = THEMES[want]; cur = want; root = 0; melody = 3; next = now + .3;
+      th = THEMES[want]; cur = want; root = 0; melody = 3; plazaStep = 0; next = now + .3;
       mus.gain.linearRampToValueAtTime(th.vol, now + 1.2);
     }
     const slow = phase === 'night' || phase === 'dawn', bar = th.bar * (slow ? 1.25 : 1);
