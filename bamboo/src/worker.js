@@ -8,6 +8,7 @@ const POSTS_PER_10MIN = 3;
 const POSTS_PER_DAY = 20;
 const AUTO_HIDE_REPORTS = 3;
 const PRESENCE_MS = 75 * 1000;
+const MODES = ['whisper', 'shout', 'sigh'];
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -84,7 +85,7 @@ async function handleApi(request, env, url) {
 
   if (pathname === '/api/leaves' && method === 'GET') {
     const { results } = await env.DB.prepare(
-      'SELECT id, text, created, heard FROM leaves WHERE hidden = 0 AND created >= ? ORDER BY id DESC LIMIT 300',
+      'SELECT id, text, created, heard, mode FROM leaves WHERE hidden = 0 AND created >= ? ORDER BY id DESC LIMIT 300',
     ).bind(now - LIFETIME_MS).all();
     return json({ now, lifetime: LIFETIME_MS, leaves: results });
   }
@@ -103,8 +104,8 @@ async function handleApi(request, env, url) {
     if ((recent?.d || 0) >= POSTS_PER_DAY) return fail(429, '오늘은 충분히 외쳤어요. 내일 다시 만나요.');
 
     const row = await env.DB.prepare(
-      'INSERT INTO leaves (text, created, author) VALUES (?, ?, ?) RETURNING id, text, created, heard',
-    ).bind(checked.text, now, visitor).first();
+      'INSERT INTO leaves (text, created, author, mode) VALUES (?, ?, ?, ?) RETURNING id, text, created, heard, mode',
+    ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper').first();
     return json({ leaf: row }, 201);
   }
 
@@ -152,7 +153,7 @@ async function handleApi(request, env, url) {
     if (!isAdmin(request, env)) return fail(401, '관리자 비밀번호가 맞지 않아요.');
     if (pathname === '/api/admin/leaves' && method === 'GET') {
       const { results } = await env.DB.prepare(
-        'SELECT id, text, created, heard, reports, hidden FROM leaves WHERE created >= ? ORDER BY hidden DESC, reports DESC, id DESC LIMIT 500',
+        'SELECT id, text, created, heard, reports, hidden, mode FROM leaves WHERE created >= ? ORDER BY hidden DESC, reports DESC, id DESC LIMIT 500',
       ).bind(now - LIFETIME_MS).all();
       return json({ now, leaves: results });
     }

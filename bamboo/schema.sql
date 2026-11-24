@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS leaves (
   heard INTEGER NOT NULL DEFAULT 0,
   reports INTEGER NOT NULL DEFAULT 0,
   hidden INTEGER NOT NULL DEFAULT 0,
-  author TEXT NOT NULL               -- daily-rotating HMAC of visitor, never a raw IP
+  author TEXT NOT NULL,              -- daily-rotating HMAC of visitor, never a raw IP
+  mode TEXT NOT NULL DEFAULT 'whisper' -- how it was told: whisper | shout | sigh
 );
 CREATE INDEX IF NOT EXISTS idx_leaves_created ON leaves(created);
 CREATE INDEX IF NOT EXISTS idx_leaves_author ON leaves(author, created);

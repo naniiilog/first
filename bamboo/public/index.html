@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>대나무숲</title>
-<meta name="description" content="임금님 귀는 당나귀 귀! 울창한 대나무숲 산책로에서 하고 싶은 말을 외치면 빛나는 잎이 되어 하루 동안 머물다 바람에 날아가요.">
+<meta name="description" content="임금님 귀는 당나귀 귀! 울창한 대나무숲 산책로에서 속마음을 털어놓으면 빛나는 잎이 되어 하루 동안 머물다 바람에 날아가요.">
 <meta name="theme-color" content="#dcefd0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎋</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,6 +79,21 @@
   .bubble.show { opacity: 1; transform: translate(-50%, -6px) scale(1); }
   .walker.me .bubble { bottom: calc(100% + 18px); }
 
+  /* telling motions */
+  .walker .bob { transform-origin: 50% 100%; }
+  .walker .mo { display: none; }
+  .walker.m-whisper .bob { animation: whisper .9s ease-in-out 3 alternate; }
+  @keyframes whisper { to { transform: rotate(14deg) translateY(2px); } }
+  .walker.m-shout .bob { animation: shout .16s ease-in-out 12 alternate; }
+  @keyframes shout { from { transform: translateY(0) scale(1); } to { transform: translateY(-11px) scale(1.14, .94); } }
+  .walker.m-shout .mo { display: inline; } .walker.m-shout .ms { display: none; }
+  .walker.m-sigh .bob { animation: sigh 2.4s ease-in-out 1 forwards; }
+  @keyframes sigh { 30% { transform: translateY(-3px) scaleY(1.05); } 100% { transform: translateY(2px) scale(1.04, .88); } }
+  .walker.m-sigh .eyes { animation: none; transform: scaleY(.2); }
+  .bubble.loud { font-size: 17px; font-weight: 700; color: #c2412d; padding: 4px 10px; }
+  .bubble.soft { font-size: 13px; color: var(--muted); font-style: italic; }
+  #scene.gust .sw { --a: 3deg !important; }
+
   #pathHit { position: absolute; left: 0; right: 0; pointer-events: auto; cursor: pointer; }
 
   .falling { position: fixed; z-index: 4; pointer-events: none; animation: fall var(--fd) linear forwards; }
@@ -112,7 +127,11 @@
   .composer textarea::placeholder { color: #86a08c; }
   .count { font-size: 12px; color: var(--muted); align-self: center; min-width: 52px; text-align: right; }
   .count.over { color: var(--danger); }
-  .shout { border: 0; border-radius: 16px; padding: 10px 18px; background: var(--accent); color: var(--accent-ink); font-weight: 700; white-space: nowrap; transition: transform .15s, opacity .2s; }
+  .modes { max-width: 600px; margin: 0 auto 8px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .modes button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 13px; font-size: 14px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: .15s; }
+  .modes button[aria-checked="true"] { background: var(--mode); color: #fff; border-color: var(--mode); font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+  .shout { border: 0; border-radius: 16px; padding: 10px 18px; background: var(--mode, var(--accent)); color: var(--accent-ink); font-weight: 700; white-space: nowrap; transition: transform .15s, opacity .2s, background .2s; }
   .shout:active { transform: scale(.96); }
   .shout:disabled { opacity: .45; cursor: default; }
 
@@ -123,6 +142,8 @@
   @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
   dialog::backdrop { background: rgba(40, 70, 40, .25); }
   .leaf-text { font-family: "Gowun Batang", serif; font-size: 19px; line-height: 1.8; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 18px; }
+  .mode-label { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; margin-bottom: 10px; }
+  .leaf-text.loud { font-weight: 700; }
   .meta { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 0 24px 14px 0; }
   .actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
   .heard { border: 1.5px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 9px 18px; font-weight: 700; transition: .2s; }
@@ -135,7 +156,7 @@
   .about ul { padding-left: 18px; margin: 0 0 16px; line-height: 1.85; font-size: 14.5px; }
   .close { position: absolute; top: 12px; right: 12px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; padding: 6px; }
 
-  .toast { position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 10px); z-index: 20; background: rgba(255, 255, 250, .92); border: 1px solid var(--line);
+  .toast { position: fixed; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 70px); transform: translate(-50%, -10px); z-index: 20; background: rgba(255, 255, 250, .92); border: 1px solid var(--line);
     padding: 11px 18px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px;
     box-shadow: 0 8px 24px rgba(30, 60, 30, .18); }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -175,11 +196,16 @@
   </div>
 </header>
 
-<div class="empty" id="empty" hidden><span>아직 숲이 조용해요.<br>임금님 귀는 당나귀 귀! 처음으로 외쳐 보세요.</span></div>
+<div class="empty" id="empty" hidden><span>아직 숲이 조용해요.<br>대나무에게 처음으로 속마음을 털어놓아 보세요.</span></div>
 
 <div class="composer">
+  <div class="modes" role="radiogroup" aria-label="털어놓는 방법">
+    <button type="button" role="radio" data-mode="whisper" aria-checked="true" style="--mode:#3f9158">🤫 속삭이기</button>
+    <button type="button" role="radio" data-mode="shout" aria-checked="false" style="--mode:#e0663f">📣 소리치기</button>
+    <button type="button" role="radio" data-mode="sigh" aria-checked="false" style="--mode:#6f86c6">😮‍💨 한숨 쉬기</button>
+  </div>
   <form id="form" autocomplete="off">
-    <textarea id="text" rows="1" maxlength="400" placeholder="아무에게도 못 한 말을 숲에 외쳐 보세요" aria-label="외칠 말"></textarea>
+    <textarea id="text" rows="1" maxlength="400" placeholder="아무에게도 못 한 말을 숲에 외쳐 보세요" aria-label="털어놓을 말"></textarea>
     <span class="count" id="count">0 / 200</span>
     <button class="shout" id="shoutBtn" type="submit">외치기</button>
   </form>
@@ -187,6 +213,7 @@
 
 <dialog id="leafDlg">
   <button class="close" data-close aria-label="닫기">×</button>
+  <span class="mode-label" id="leafMode"></span>
   <div class="meta" id="leafMeta"></div>
   <p class="leaf-text" id="leafText"></p>
   <div class="care" id="leafCare" hidden></div>
@@ -200,9 +227,10 @@
   <button class="close" data-close aria-label="닫기">×</button>
   <h2>숲 이야기</h2>
   <ul>
-    <li>여기는 <b>임금님 귀는 당나귀 귀</b>를 외치는 대나무숲 산책로예요.</li>
+    <li>여기는 아무에게도 못 한 속마음을 <b>대나무에게 털어놓는</b> 산책로예요. 임금님 귀는 당나귀 귀!</li>
     <li>길 위의 친구들은 <b>지금 숲에 와 있는 사람들</b>이에요. 머리에 <b>나</b>라고 적힌 게 당신이에요. 길을 누르면 그쪽으로 걸어가요.</li>
-    <li>외친 말은 빛나는 잎이 되어 <b>24시간 동안</b> 숲에 머물다 바람에 날아가요.</li>
+    <li>사연에 따라 <b>🤫 속삭이기 · 📣 소리치기 · 😮‍💨 한숨 쉬기</b> 중에 골라 털어놓을 수 있어요.</li>
+    <li>털어놓은 말은 빛나는 잎이 되어 <b>24시간 동안</b> 숲에 머물다 바람에 날아가요.</li>
     <li>다른 사람은 <b>🍃 들었어요</b>로만 대답할 수 있어요. 댓글은 없어요.</li>
     <li>가입도 이름도 없어요. IP 주소는 저장하지 않아요.</li>
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
@@ -256,6 +284,22 @@ function mix(c1, c2, t) {
 function leafPath(L, w) {
   return `M0 0C${f1(L * .18)} ${f1(-w)} ${f1(L * .62)} ${f1(-w * .9)} ${f1(L)} 0C${f1(L * .62)} ${f1(w * .55)} ${f1(L * .2)} ${f1(w * .7)} 0 0Z`;
 }
+
+// ================= telling modes =================
+const MODES = {
+  whisper: { color: '#3f9158', btn: '속삭이기', ph: '대나무에게만 살짝 털어놓아 보세요', phS: '살짝 털어놓아 보세요', label: '🤫 속삭인 말',
+    fill: '#fffbe6', edge: '#d9a93a', halo: '#fff1a8', bubble: '소곤소곤…', bubbleCls: 'soft', reveal: 1500, wind: .15,
+    done: '대나무가 사락사락… 다 들었대요 🍃' },
+  shout:   { color: '#e0663f', btn: '소리치기', ph: '속 시원하게 소리쳐 보세요!', phS: '속 시원하게 소리쳐 보세요!', label: '📣 소리친 말',
+    fill: '#fff0e8', edge: '#e0663f', halo: '#ffc3a6', bubble: '임금님 귀는 당나귀 귀!!', bubbleOther: '으아아아!!', bubbleCls: 'loud', reveal: 900, wind: 1.1,
+    done: '대숲이 쩌렁쩌렁 울렸어요! 속이 좀 시원해졌길 📣' },
+  sigh:    { color: '#6f86c6', btn: '한숨 쉬기', ph: '한숨과 함께 내려놓고 싶은 말', phS: '한숨과 함께 내려놓을 말', label: '😮‍💨 한숨과 함께 놓고 간 말',
+    fill: '#eef3ff', edge: '#7f95d1', halo: '#d3e0ff', bubble: '후우…', bubbleCls: 'soft', reveal: 1700, wind: .35,
+    done: '한숨이 바람에 실려 갔어요. 오늘도 수고했어요 🌿' },
+};
+let currentMode = 'whisper';
+try { const m = localStorage.getItem('bamboo.mode'); if (MODES[m]) currentMode = m; } catch {}
+const modeOf = (leaf) => MODES[leaf.mode] ? leaf.mode : 'whisper';
 
 // ================= scene =================
 const LAYERS = [
@@ -435,21 +479,22 @@ function drawLeaf(leaf, fresh) {
   const bx = x + Math.cos(bang * Math.PI / 180) * blen, by = y + Math.sin(bang * Math.PI / 180) * blen;
   const ang = side > 0 ? droop : 180 - droop;
   const age = Math.min(1, Math.max(0, (now() - leaf.created) / lifetime));
-  const fill = mix('#fffbe6', '#ffd27a', age);
-  const edge = mix('#d9a93a', '#b8862a', age);
+  const M = MODES[modeOf(leaf)];
+  const fill = mix(M.fill, '#ffd27a', age * .7);
+  const edge = mix(M.edge, '#b8862a', age * .5);
   const ribbon = ['#ff8fa3', '#8fc9ff', '#c7a0ff', '#ffb46b', '#6fd3a8'][leaf.id % 5];
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'msg' + (fresh ? ' fresh' : ''));
   g.setAttribute('data-id', leaf.id);
   g.setAttribute('tabindex', '0');
   g.setAttribute('role', 'button');
-  g.setAttribute('aria-label', '누군가의 외침 읽기: ' + leaf.text.slice(0, 30));
+  g.setAttribute('aria-label', '누군가의 속마음 읽기: ' + leaf.text.slice(0, 30));
   g.style.setProperty('--d', (2.6 + hash(leaf.id * 3) * 2).toFixed(1) + 's');
   g.style.setProperty('--dl', (-hash(leaf.id * 9) * 4).toFixed(1) + 's');
   g.innerHTML =
     `<path d="M${f1(x)} ${f1(y)}L${f1(bx)} ${f1(by)}" stroke="#5f9f4f" stroke-width="1.8" stroke-linecap="round"/>` +
     `<g transform="translate(${f1(bx)} ${f1(by)})"><g class="flut"><g transform="rotate(${f1(ang)})">` +
-      `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .72)}" ry="${f1(L * .34)}" fill="#fff1a8" filter="url(#glow${s.layer})"/>` +
+      `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .72)}" ry="${f1(L * .34)}" fill="${M.halo}" filter="url(#glow${s.layer})"/>` +
       `<path class="body" d="${leafPath(L, L * .16)}" fill="${fill}" stroke="${edge}" stroke-width="1.6"/>` +
       `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${edge}" stroke-width="1" fill="none" opacity=".7"/>` +
       `<path d="M3 0l-6 -5v10z M3 0l-2 9 M3 0l3 9" fill="${ribbon}" stroke="${ribbon}" stroke-width="2" stroke-linecap="round"/>` +
@@ -485,7 +530,8 @@ function characterSVG(color, hat) {
     <g class="eyes"><circle cx="16" cy="26" r="2.4" fill="#2e2a2a"/><circle cx="28" cy="26" r="2.4" fill="#2e2a2a"/>
       <circle cx="16.8" cy="25.2" r=".8" fill="#fff"/><circle cx="28.8" cy="25.2" r=".8" fill="#fff"/></g>
     <ellipse cx="11.5" cy="31" rx="3" ry="1.8" fill="#ff8f8f" opacity=".45"/><ellipse cx="32.5" cy="31" rx="3" ry="1.8" fill="#ff8f8f" opacity=".45"/>
-    <path d="M20 31q2 2 4 0" stroke="#2e2a2a" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+    <path class="ms" d="M20 31q2 2 4 0" stroke="#2e2a2a" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+    <ellipse class="mo" cx="22" cy="33" rx="3" ry="3.6" fill="#7a2f2f"/>
     ${hatSvg}
   </svg>`;
 }
@@ -508,7 +554,7 @@ function say(w, text, ms = 2200) {
   const b = w.el.querySelector('.bubble'); b.textContent = text; b.classList.add('show');
   clearTimeout(w.sayT); w.sayT = setTimeout(() => b.classList.remove('show'), ms);
 }
-function walkTo(w, x, y, onArrive) { w.tx = x; w.ty = y; w.wait = 0; w.onArrive = onArrive || null; }
+function walkTo(w, x, y, onArrive, rush) { w.tx = x; w.ty = y; w.wait = 0; w.onArrive = onArrive || null; w.rush = !!rush; }
 function syncWalkers(ids) {
   const want = new Set(ids.slice(0, G.small ? 12 : 24));
   for (const id of want) if (!walkers.has(id)) makeWalker(id, false);
@@ -526,10 +572,10 @@ function tick(t) {
     let walking = false;
     if (w.wait > 0) w.wait -= dt;
     else if (dist > 2) {
-      const step = Math.min(dist, w.speed * dt);
+      const step = Math.min(dist, (w.rush ? Math.max(170, dist * 1.4) : w.speed) * dt);
       w.x += dx / dist * step; w.y += dy / dist * step; walking = true;
       if (Math.abs(dx) > 1) w.el.classList.toggle('flip', dx < 0);
-    } else if (w.onArrive) { const f = w.onArrive; w.onArrive = null; f(); }
+    } else if (w.onArrive) { const f = w.onArrive; w.onArrive = null; w.rush = false; f(); }
     else if (!w.isMe) {
       w.wait = 1.5 + Math.random() * 4;
       if (Math.random() < .35) say(w, EMOTES[Math.floor(Math.random() * EMOTES.length)]);
@@ -546,20 +592,32 @@ function tick(t) {
 
 $('pathHit').addEventListener('click', (e) => { if (meWalker) walkTo(meWalker, e.clientX, clampY(e.clientY)); });
 
-// walk to the bamboo, shout, and the leaf appears
+// walk to the bamboo, tell it (whisper / shout / sigh), and the leaf appears
+function burstLeaves(n) { for (let i = 0; i < n; i++) setTimeout(dropLeaf, i * 90); }
 function shoutAt(w, leaf) {
+  const mode = modeOf(leaf), M = MODES[mode];
   const a = leafAnchor(leaf);
-  const reveal = () => { if (!document.querySelector(`.msg[data-id="${leaf.id}"]`) && leaves.some((l) => l.id === leaf.id)) drawLeaf(leaf, true); };
+  const reveal = () => {
+    if (!document.querySelector(`.msg[data-id="${leaf.id}"]`) && leaves.some((l) => l.id === leaf.id)) drawLeaf(leaf, true);
+    if (w && w.isMe) toast(M.done, 3200);
+  };
   if (!a || !w) { reveal(); return; }
-  const tx = Math.max(24, Math.min(G.W - 24, a.x + (Math.random() * 30 - 15)));
-  const fallback = setTimeout(reveal, 9000);
-  walkTo(w, tx, G.pathTop + 14 + Math.random() * 10, () => {
+  const tx = Math.max(24, Math.min(G.W - 24, a.x + (Math.random() < .5 ? -22 : 22)));
+  const fallback = setTimeout(reveal, 10000);
+  walkTo(w, tx, G.pathTop + 14 + Math.random() * 8, () => {
     clearTimeout(fallback);
-    w.el.classList.add('cheer'); setTimeout(() => w.el.classList.remove('cheer'), 1500);
-    say(w, w.isMe ? '📣 임금님 귀는…!' : '📣', 1800);
-    whoosh(.5);
-    setTimeout(reveal, 450);
-  });
+    w.el.classList.toggle('flip', a.x < w.x);           // face the bamboo
+    w.el.classList.add('m-' + mode);
+    const b = w.el.querySelector('.bubble'); b.className = 'bubble ' + M.bubbleCls;
+    say(w, !w.isMe && M.bubbleOther ? M.bubbleOther : M.bubble, M.reveal + 900);
+    whoosh(M.wind);
+    if (mode === 'shout') {
+      $('scene').classList.add('gust'); burstLeaves(14);
+      setTimeout(() => $('scene').classList.remove('gust'), 2200);
+    }
+    setTimeout(reveal, M.reveal);
+    setTimeout(() => { w.el.classList.remove('m-' + mode); b.className = 'bubble'; }, M.reveal + 1200);
+  }, true);
 }
 
 // ================= dialog =================
@@ -576,8 +634,11 @@ const CARE = /(죽고\s*싶|자살|살기\s*싫|사라지고\s*싶|극단적|자
 function openLeafDialog(leaf) {
   openLeaf = leaf;
   const age = now() - leaf.created;
-  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 외친 말' : ''}</span><span>${timeLeft(lifetime - age)}</span>`;
+  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 털어놓은 말' : ''}</span><span>${timeLeft(lifetime - age)}</span>`;
   $('leafText').textContent = leaf.text;
+  const M = MODES[modeOf(leaf)];
+  $('leafMode').textContent = M.label; $('leafMode').style.background = M.color;
+  $('leafText').classList.toggle('loud', modeOf(leaf) === 'shout');
   const care = CARE.test(leaf.text);
   $('leafCare').hidden = !care;
   if (care) $('leafCare').innerHTML = '이 말을 남긴 누군가가 많이 힘든가 봐요. 혹시 당신도 그렇다면, 자살예방상담전화 <a href="tel:109">109</a>는 24시간 열려 있어요.';
@@ -630,18 +691,28 @@ function syncCount() {
   ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
 }
 ta.addEventListener('input', syncCount);
+function setMode(m) {
+  currentMode = m;
+  try { localStorage.setItem('bamboo.mode', m); } catch {}
+  document.querySelectorAll('.modes button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
+  const M = MODES[m];
+  $('shoutBtn').textContent = M.btn;
+  $('form').style.setProperty('--mode', M.color);
+  ta.placeholder = innerWidth < 520 ? M.phS : M.ph;
+}
+document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', () => { setMode(b.dataset.mode); ta.focus(); }));
 ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('form').requestSubmit(); });
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = ta.value.trim(); if (!text) return;
   $('shoutBtn').disabled = true;
   try {
-    const { leaf } = await api('/api/leaves', { text });
+    const { leaf } = await api('/api/leaves', { text, mode: currentMode });
     mine.add(leaf.id); store.set('bamboo.mine', [...mine].slice(-200));
     leaves.unshift(leaf); ta.value = ''; syncCount(); ta.blur();
     updateStatus(); $('empty').hidden = true;
     shoutAt(meWalker, leaf);
-    toast('내 캐릭터가 대나무에 대고 외치러 가요 📣');
+    toast('대나무에게 다가가는 중…', 1800);
   } catch (err) { toast(err.message, 3500); }
   finally { syncCount(); }
 });
@@ -735,13 +806,13 @@ function buildAll() {
 }
 let resizeT;
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(buildAll, 200); });
-if (innerWidth < 520) ta.placeholder = '못 한 말을 숲에 외쳐 보세요';
+setMode(currentMode);
 buildAll(); syncCount();
 meWalker = makeWalker('me', true);
 setTimeout(() => say(meWalker, '안녕! 👋', 2500), 600);
 requestAnimationFrame(tick);
 load(true).then(() => {
-  if (!store.get('bamboo.visited2', false)) { toast('빛나는 잎을 눌러 외침을 듣고, 길을 눌러 산책해 보세요 🍃', 4500); store.set('bamboo.visited2', true); }
+  if (!store.get('bamboo.visited2', false)) { toast('빛나는 잎을 눌러 누군가의 속마음을 듣고, 길을 눌러 산책해 보세요 🍃', 4500); store.set('bamboo.visited2', true); }
 });
 heartbeat();
 setInterval(() => load(false), 20000);
