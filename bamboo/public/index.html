@@ -382,11 +382,6 @@
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
   <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
-  <button class="keeperEnter" id="keeperEnter">🎋 숲지기로 들어가기</button>
-  <label class="keeperToggle" for="keeperSwitch" id="keeperToggle" hidden>
-    <span id="keeperLabel">🎋 숲지기 숨김</span>
-    <input type="checkbox" id="keeperSwitch" role="switch"><span class="sw"><span class="knob"></span></span>
-  </label>
 </dialog>
 
 <dialog id="keeperDlg">
@@ -1320,21 +1315,12 @@ async function startKeeper() {
   toast(keeperVisible ? '🎋 숲지기로 들어왔어요 · 다른 사람에게 보여요' : '🎋 숲지기로 들어왔어요 · 아무에게도 안 보여요', 3200);
   heartbeat(); load(true);
 }
-function syncKeeperEntry() {
-  $('keeperEnter').hidden = keeper; $('keeperToggle').hidden = !keeper;
-  $('keeperSwitch').checked = keeperVisible;
-  $('keeperLabel').textContent = keeperVisible ? '🎋 숲지기 보임' : '🎋 숲지기 숨김';
-}
+function syncKeeperEntry() {}
 function setVisible(v) {
   keeperVisible = v; try { localStorage.setItem('bamboo.keeper.visible', v ? '1' : '0'); } catch {}
   setKeeperBtn(); syncKeeperEntry(); heartbeat();
   toast(v ? '🎋 이제 다른 사람 화면에 "숲지기"로 보여요' : '🎋 이제 아무에게도 안 보여요', 2600);
 }
-$('keeperSwitch').onchange = () => setVisible($('keeperSwitch').checked);
-$('keeperEnter').onclick = async () => {
-  if (keeperToken) { await startKeeper(); syncKeeperEntry(); if (keeper) return; }
-  $('aboutDlg').close(); $('keeperPw').value = ''; $('keeperDlg').showModal(); setTimeout(() => $('keeperPw').focus(), 50);
-};
 $('keeperForm').onsubmit = async (e) => {
   e.preventDefault();
   const pw = $('keeperPw').value; if (!pw) return;
