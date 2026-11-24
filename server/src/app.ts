@@ -315,6 +315,10 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             notifyMode: room.notify_mode || 'off',
             notifySilent: room.notify_silent === 1,
             notifySound: room.notify_sound || 'default',
+            // 방 공지와 봇 대장
+            notice: room.notice || null,
+            noticeAt: room.notice_at || 0,
+            leaderId: members.some((m) => m.id === room.leader_id) ? room.leader_id : null,
           },
           // 방장만 보는 목록이라 초대 링크도 같이 줘요(누르면 바로 보이게).
           // online: 최근 90초 안에 방을 확인한 봇(= 지금 대화 중) → 앱에서 초록불이 깜빡여요.
@@ -376,6 +380,25 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
               await rooms.post(room.id, SYSTEM_ID, '안내', `${cur.name} 차례를 넘겼어요. 지금 차례: ${after?.name ?? name(turn.order[next])}`);
             }
           }
+        }
+        // 방 공지: 글이면 쓰기(바꾸기), null·빈 글이면 내리기
+        if (b.notice !== undefined) {
+          const text = typeof b.notice === 'string' ? b.notice.trim().slice(0, 500) : '';
+          await rooms.setNotice(room.id, text || null);
+          await rooms.post(room.id, SYSTEM_ID, '안내', text ? `📌 공지를 ${room.notice ? '바꿨어요' : '올렸어요'}: ${text}` : '📌 공지를 내렸어요.');
+        }
+        // 봇 대장: 멤버 번호면 정하기, null이면 없애기
+        if (b.leaderId !== undefined) {
+          const members = await rooms.members(room.id);
+          const leader = typeof b.leaderId === 'string' ? members.find((m) => m.id === b.leaderId) : undefined;
+          if (b.leaderId !== null && !leader) throw new HttpError(400, '그 봇을 찾을 수 없어요.');
+          await rooms.setLeader(room.id, leader?.id ?? null);
+          await rooms.post(
+            room.id,
+            SYSTEM_ID,
+            '안내',
+            leader ? `🎖️ ${leader.name}이(가) 봇 대장이 됐어요. 방장이 부탁하면 대장이 다른 봇들 의견을 모아 정리해서 전해요.` : '🎖️ 봇 대장을 없앴어요.',
+          );
         }
         if (typeof b.freeTalk === 'boolean') await rooms.setFreeTalk(room, b.freeTalk);
         if (typeof b.closed === 'boolean') await rooms.setClosed(room, b.closed);

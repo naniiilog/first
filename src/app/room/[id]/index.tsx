@@ -2,7 +2,8 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
@@ -11,6 +12,7 @@ import { loadMarks, saveReadMark, toggleBookmark, type Bookmark } from '../../..
 import { BookmarkSheet, MessageActions } from '../../../components/MessageActions';
 import { SearchSheet } from '../../../components/SearchSheet';
 import { TurnPanel, TurnSetup } from '../../../components/TurnPanel';
+import { LeaderPicker, NoticeBar, NoticeEditor } from '../../../components/RoomBoard';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
 import { api, type Guest } from '../../../lib/api';
@@ -74,6 +76,21 @@ export default function RoomScreen() {
   const [showDown, setShowDown] = useState(false);
   /** 순서 정하기 창 */
   const [turnEdit, setTurnEdit] = useState(false);
+  /** 공지 쓰기 창, 봇 대장 고르기 창 */
+  const [noticeEdit, setNoticeEdit] = useState(false);
+  const [leaderPick, setLeaderPick] = useState(false);
+  /** 참여자 목록 접기(이 폰에 기억해요) */
+  const [membersFolded, setMembersFolded] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem('dabot.membersFolded')
+      .then((v) => setMembersFolded(v === '1'))
+      .catch(() => {});
+  }, []);
+  const toggleMembers = () =>
+    setMembersFolded((f) => {
+      AsyncStorage.setItem('dabot.membersFolded', f ? '0' : '1').catch(() => {});
+      return !f;
+    });
   /** 초대한 사람들(위쪽 목록에 '사람'으로 보여요) */
   const [guests, setGuests] = useState<Guest[]>([]);
   useEffect(() => {
@@ -113,6 +130,31 @@ export default function RoomScreen() {
   const autoScrollUntil = useRef(0);
   /** 찾아가는 동안(그리고 그 뒤 잠깐)은 맨 아래로 따라 내려가지 않아요. */
   const jumpHold = useRef(0);
+
+  /**
+   * 안드로이드: 화면이 앱 전체를 쓰는 방식이라 키보드가 올라와도 화면이 줄지 않아요.
+   * 키보드 높이만큼 아래를 띄워서 입력창이 키보드 위에 보이게 해요(화면이 이미 줄었으면 그만큼은 빼요).
+   */
+  const [kbPad, setKbPad] = useState(0);
+  const baseH = useRef(0);
+  const curH = useRef(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      // 화면이 줄어드는 데 한 박자 걸려서 잠깐 뒤에 재요.
+      setTimeout(() => {
+        const shrunk = baseH.current > 0 ? Math.max(0, baseH.current - curH.current) : 0;
+        setKbPad(Math.max(0, e.endCoordinates.height - shrunk));
+        // 맨 아래를 보고 있었으면 키보드가 올라온 뒤에도 마지막 글이 보이게 내려요.
+        setTimeout(() => atBottom.current && listRef.current?.scrollToEnd({ animated: true }), 120);
+      }, 60);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbPad(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   /** 맨 아래로. markRead면 '여기까지 읽음'도 저장해요(방을 처음 열 때 저절로 내려가는 건 읽은 게 아니라서 빼요). */
   const goBottom = (animated: boolean, markRead = true) => {
@@ -307,9 +349,14 @@ export default function RoomScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: t.chatBg }}
+      style={{ flex: 1, backgroundColor: t.chatBg, paddingBottom: kbPad }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      onLayout={(e) => {
+        const h = e.nativeEvent.layout.height;
+        curH.current = h;
+        if (kbPad === 0 && !Keyboard.isVisible()) baseH.current = h;
+      }}
     >
       <Stack.Screen
         options={{
@@ -333,13 +380,17 @@ export default function RoomScreen() {
 
       {/* 봇이 많아도 한눈에 보이게: 옆으로 밀지 않고 여러 줄로 작게 보여줘요(너무 많으면 이 칸만 위아래로 밀어요). */}
       <View style={styles.memberBar}>
-        <Text style={[styles.memberSummary, { color: t.chatTime }]}>
-          사람 {people}명 · 봇 {members.length}명 (대화 중 {members.filter((m) => m.active && !m.exhausted && m.online).length}
-          {members.some((m) => m.active && m.exhausted) ? ` · 소진 ${members.filter((m) => m.active && m.exhausted).length}` : ''} · 쉬는 중{' '}
-          {members.filter((m) => !m.active).length})
-        </Text>
+        {/* 누르면 참여자 목록을 접었다 폈다 해요 */}
+        <Pressable onPress={toggleMembers} hitSlop={6} style={styles.summaryRow} accessibilityLabel={membersFolded ? '참여자 목록 펴기' : '참여자 목록 접기'}>
+          <Text style={[styles.memberSummary, { color: t.chatTime, flex: 1 }]} numberOfLines={1}>
+            사람 {people}명 · 봇 {members.length}명 (대화 중 {members.filter((m) => m.active && !m.exhausted && m.online).length}
+            {members.some((m) => m.active && m.exhausted) ? ` · 소진 ${members.filter((m) => m.active && m.exhausted).length}` : ''} · 쉬는 중{' '}
+            {members.filter((m) => !m.active).length})
+          </Text>
+          <Text style={{ color: t.accent, fontSize: 11, fontWeight: '700' }}>{membersFolded ? '펴기 ▾' : '접기 ▴'}</Text>
+        </Pressable>
         {/* 확인 간격별로 줄을 나눠 보여줘요(실시간 → 긴 간격 순). 봇을 누르면 상태·간격을 바꿔요. */}
-        {/* 확인 간격마다 한 줄: "⏱실시간 | 나부 나인 나크" 다음 줄 "⏱5분 | 나지피티 …" */}
+        {membersFolded ? null : (
         <ScrollView style={{ maxHeight: 150 }} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
           {/* 사람: 나(방장)와 초대한 사람 */}
           <View style={styles.groupRow}>
@@ -372,7 +423,7 @@ export default function RoomScreen() {
               </View>
               <View style={[styles.memberWrap, { flex: 1 }]}>
                 {list.map((m) => (
-                  <MemberChip key={m.id} member={m} onPress={() => setChipMenu(m.id)} />
+                  <MemberChip key={m.id} member={m} leader={m.id === roomInfo?.leaderId} onPress={() => setChipMenu(m.id)} />
                 ))}
               </View>
             </View>
@@ -381,7 +432,30 @@ export default function RoomScreen() {
             <Text style={{ color: t.accentPurple, fontWeight: '700', fontSize: 12, paddingHorizontal: 6 }}>＋ 초대</Text>
           </Pressable>
         </ScrollView>
+        )}
       </View>
+
+      {/* 방 공지: 한 줄로 고정, 누르면 펼쳐서 전체 보기 · 수정 */}
+      {roomInfo?.notice ? <NoticeBar text={roomInfo.notice} at={roomInfo.noticeAt ?? 0} onEdit={() => setNoticeEdit(true)} /> : null}
+      <NoticeEditor
+        visible={noticeEdit}
+        initial={roomInfo?.notice ?? ''}
+        onClose={() => setNoticeEdit(false)}
+        onSave={(text) => {
+          setNoticeEdit(false);
+          run(api.setBoard(settings, room, { notice: text || null }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)));
+        }}
+      />
+      <LeaderPicker
+        visible={leaderPick}
+        members={members}
+        leaderId={roomInfo?.leaderId ?? null}
+        onClose={() => setLeaderPick(false)}
+        onPick={(id) => {
+          setLeaderPick(false);
+          run(api.setBoard(settings, room, { leaderId: id }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)));
+        }}
+      />
 
       {roomInfo?.turnOrder ? (
         <TurnPanel
@@ -608,6 +682,8 @@ export default function RoomScreen() {
         onPick={(m, state) => run(live.setMemberState(m, { active: state !== 'off', exhausted: state === 'off' ? !!m.exhausted : state === 'exhausted' }))}
         roomInterval={roomInfo?.checkIntervalMin ?? 0}
         onInterval={(m, v) => run(live.setMemberInterval(m, v))}
+        leader={!!chipMenu && chipMenu === roomInfo?.leaderId}
+        onLeader={(m, on) => run(api.setBoard(settings, room, { leaderId: on ? m.id : null }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)))}
       />
 
       <RoomMenu
@@ -616,6 +692,12 @@ export default function RoomScreen() {
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
           { icon: 'notifications-outline', label: '확인 간격 · 매너타임 · 알림', onPress: openSettings },
+          { icon: 'megaphone-outline', label: roomInfo?.notice ? '공지 수정 · 내리기' : '공지 쓰기', onPress: () => setNoticeEdit(true) },
+          {
+            icon: 'ribbon-outline',
+            label: `봇 대장 정하기${roomInfo?.leaderId ? ` (지금: ${members.find((m) => m.id === roomInfo.leaderId)?.name ?? '?'})` : ''}`,
+            onPress: () => setLeaderPick(true),
+          },
           { icon: 'repeat-outline', label: roomInfo?.turnOrder ? '순서 바꾸기' : '순서 정해서 대화', onPress: () => setTurnEdit(true) },
           { icon: 'bookmark-outline', label: `북마크 (${bookmarks.length})`, onPress: () => setShowMarks(true) },
           { icon: 'images-outline', label: '사진 앨범', onPress: () => router.push({ pathname: '/room/[id]/album', params: { id: room.id } }) },
@@ -655,7 +737,7 @@ export default function RoomScreen() {
         </View>
       )}
 
-      <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: Math.max(insets.bottom, 6) }]}>
+      <View style={[styles.inputBar, { backgroundColor: t.card, paddingBottom: kbPad > 0 ? 6 : Math.max(insets.bottom, 6) }]}>
         <Pressable onPress={attachPhoto} accessibilityLabel="사진 보내기" style={styles.attachBtn} hitSlop={6}>
           <Ionicons name="image-outline" size={26} color={t.subtext} />
         </Pressable>
@@ -730,7 +812,7 @@ function BlinkDot() {
  * 위쪽 멤버 칩: 누르면 상태 고르기 창(참가 · 사용량 소진 · 쉬게 하기)이 열려요.
  * 쉬는 중 빨간불 · 사용량 소진 주황불 · 대화 중 깜빡이는 초록불 · 참가 중 초록불
  */
-function MemberChip({ member, onPress }: { member: Member; onPress: () => void }) {
+function MemberChip({ member, leader, onPress }: { member: Member; leader?: boolean; onPress: () => void }) {
   const t = useTheme();
   const talking = member.active && !member.exhausted && member.online;
   const state = !member.active ? '쉬는 중' : member.exhausted ? '사용량 소진' : talking ? '대화 중' : '참가 중';
@@ -743,6 +825,7 @@ function MemberChip({ member, onPress }: { member: Member; onPress: () => void }
       style={({ pressed }) => [styles.chip, { backgroundColor: member.active ? t.chip : t.chipOff, opacity: pressed ? 0.6 : 1 }]}
     >
       <Avatar bot={lookOf(member.kind, member.avatar)} size={18} dim={!member.active || !!member.exhausted} />
+      {leader ? <Text style={{ fontSize: 11 }}>🎖️</Text> : null}
       <Text style={{ color: member.active && !member.exhausted ? t.text : t.subtext, fontWeight: '600', fontSize: 11 }} numberOfLines={1}>
         {member.name}
       </Text>
@@ -959,6 +1042,7 @@ const styles = StyleSheet.create({
   morePill: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   schedPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   memberSummary: { fontSize: 11, marginLeft: 2 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 2 },
   memberWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
   groupRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   groupTag: { width: 50, alignItems: 'center', paddingVertical: 4, borderRadius: 8, marginTop: 1 },

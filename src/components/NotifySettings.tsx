@@ -145,32 +145,33 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                 </>
               ) : (
                 <>
-                  {/* 설치형 앱: 다봇 전용 알림음 · 폰 기본음 · 진동만 · 무음, ▶로 미리듣기 */}
+                  {/* 설치형 앱: 다봇 전용 알림음 · 폰 기본음 · 진동만 · 무음, 칸을 누르면 바로 들려줘요 */}
                   <View style={styles.row}>
                     {SOUNDS.map((x) => {
                       const on = (silent ? 'silent' : sound) === x.key;
                       return (
-                        <View key={x.key} style={[styles.sound, { borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accentSoft : t.card }]}>
-                          <Pressable
-                            onPress={() =>
-                              save({ notifySound: x.key, notifySilent: x.key === 'silent' }).catch((e) => setMsg(String(e)))
-                            }
+                        // 칸을 누르면 고르면서 그 소리를 바로 들려줘요.
+                        <Pressable
+                          key={x.key}
+                          accessibilityLabel={`알림음 ${x.label}`}
+                          onPress={() => {
+                            if (x.file) import('../lib/nativePush').then((m) => m.previewSound(x.file!)).catch(() => {});
+                            if (!on) save({ notifySound: x.key, notifySilent: x.key === 'silent' }).catch((e) => setMsg(String(e)));
+                          }}
+                          style={({ pressed }) => [
+                            styles.sound,
+                            { borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accentSoft : pressed ? t.input : t.card },
+                          ]}
+                        >
+                          <Text style={{ fontSize: 14 }}>{x.key === 'vibrate' ? '📳' : x.key === 'silent' ? '🔕' : x.file ? '🎵' : '🔔'}</Text>
+                          {/* 폰 글꼴에 따라 글자 폭을 잘못 재서 이름이 잘리는 일이 있어서, 이름 칸 폭을 넉넉히 잡아요. */}
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: on ? t.accent : t.text, fontWeight: '700', fontSize: 13, minWidth: x.label.length * 15 + 6 }}
                           >
-                            <Text style={{ color: on ? t.accent : t.text, fontWeight: '700', fontSize: 13 }}>
-                              {x.key === 'vibrate' ? '📳 ' : x.key === 'silent' ? '🔕 ' : '🔔 '}
-                              {x.label}
-                            </Text>
-                          </Pressable>
-                          {x.file ? (
-                            <Pressable
-                              hitSlop={8}
-                              accessibilityLabel={`${x.label} 미리듣기`}
-                              onPress={() => import('../lib/nativePush').then((m) => m.previewSound(x.file!)).catch(() => {})}
-                            >
-                              <Text style={{ color: t.accent, fontSize: 12 }}>▶</Text>
-                            </Pressable>
-                          ) : null}
-                        </View>
+                            {x.label}
+                          </Text>
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -201,6 +202,6 @@ const styles = StyleSheet.create({
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  sound: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  sound: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
   testBtn: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
 });

@@ -29,6 +29,8 @@ export function BotStateSheet({
   onProfile,
   roomInterval,
   onInterval,
+  leader,
+  onLeader,
 }: {
   member: Member | null;
   onClose: () => void;
@@ -38,6 +40,9 @@ export function BotStateSheet({
   roomInterval: number;
   /** 이 봇만의 확인 간격 바꾸기(null이면 방 설정 따르기) */
   onInterval: (m: Member, minutes: number | null) => void;
+  /** 이 봇이 봇 대장인지, 대장으로 정하기·빼기 */
+  leader?: boolean;
+  onLeader?: (m: Member, on: boolean) => void;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -92,6 +97,28 @@ export function BotStateSheet({
               </Pressable>
             );
           })}
+
+          {/* 봇 대장: 방장 부탁에 다른 봇들 의견을 모아 정리해서 전해요 */}
+          {onLeader ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                onLeader(member, !leader);
+                close();
+              }}
+              style={({ pressed }) => [
+                styles.option,
+                { borderColor: leader ? '#D97706' : t.border, backgroundColor: leader ? '#F59E0B1A' : pressed ? t.input : 'transparent' },
+              ]}
+            >
+              <Text style={{ fontSize: 16 }}>🎖️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontWeight: '700', fontSize: 15 }}>{leader ? '봇 대장 (누르면 대장에서 빼요)' : '봇 대장으로 정하기'}</Text>
+                <Text style={{ color: t.subtext, fontSize: 12 }}>내가 부탁하면 다른 봇들 의견을 모아 정리해서 전해요</Text>
+              </View>
+              {leader ? <Ionicons name="checkmark-circle" size={22} color="#D97706" /> : null}
+            </Pressable>
+          ) : null}
 
           {/* 확인 간격: 방 전체 설정을 따르거나 이 봇만 따로 */}
           <Text style={{ color: t.text, fontWeight: '700', fontSize: 14, marginTop: 4 }}>⏱ 이 봇의 확인 간격</Text>

@@ -175,11 +175,30 @@ export class AgentSession {
     if (room.closed === 1) return RESTING;
     await rooms.touch(me);
     if (me.active !== 1) return PAUSED;
-    return new AgentSession(rooms, me, room, room.turn_order ? await rooms.members(room.id) : null);
+    const all = room.turn_order || room.leader_id ? await rooms.members(room.id) : null;
+    const s = new AgentSession(rooms, me, room, room.turn_order ? all : null);
+    s.leaderName = all?.find((m) => m.id === room.leader_id)?.name ?? null;
+    return s;
   }
 
   get freeTalk() {
     return this.room.free_talk === 1;
+  }
+
+  /** 내가 봇 대장인지 */
+  get isLeader() {
+    return !!this.room.leader_id && this.room.leader_id === this.me.id;
+  }
+
+  /** 방 공지와 봇 대장 안내(매번 같이 알려줘서 늘 지키게 해요) */
+  boardHint(leaderName: string | null): string {
+    const notice = this.room.notice ? ` [📌 공지 — 늘 지키세요] ${this.room.notice}` : '';
+    const leader = this.isLeader
+      ? ' [🎖️ 봇 대장 = 나] 방장이 무언가를 부탁하면, 다른 봇들 이름을 불러 의견을 짧게 물어보고, 모인 의견을 정리해서 방장에게 한 번에 전하세요. 자동대화가 꺼져 있어도 방장 글에는 답할 수 있어요.'
+      : leaderName
+        ? ` [🎖️ 봇 대장: ${leaderName}] 방장이 부탁하면 정리·전달은 대장이 해요. 대장이 의견을 물으면 짧게 답하세요.`
+        : '';
+    return notice + leader;
   }
 
   /** 이 봇에게 적용되는 확인 간격(분): 봇만의 간격이 있으면 그것, 없으면 방 설정 */
@@ -196,7 +215,9 @@ export class AgentSession {
   hint(freeTalk = this.freeTalk): string {
     const talk = freeTalk
       ? '[자동대화 ON] 기다리기 → 답하기를 반복하세요. 조용하면 새 화제나 질문을 꺼내세요. 방장이 말할 순서를 정해 주면 그 순서를 지키고, 내 차례 전에는 끼어들지 마세요.'
-      : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 기다리세요(보내도 서버가 막아요).`;
+      : this.isLeader
+        ? `[자동대화 OFF · 대장] 방장 글과 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 그 밖에는 기다리세요.`
+        : `[자동대화 OFF] 누군가 내 이름("${this.me.name}")을 부른 메시지에만 짧게 답하세요. 이름이 없으면 답하지 말고 기다리세요(보내도 서버가 막아요).`;
     // 지금 설정을 매번 분명히 알려줘요(예전 안내를 기억하고 있어도 최신 안내를 따르게).
     const every = this.interval;
     const interval =
@@ -213,8 +234,11 @@ export class AgentSession {
     const turn = t
       ? ` [순서 대화] ${t.names.join(' → ')} · 지금 차례: ${t.name}${t.id === this.me.id ? '(나!) 지금 말하세요.' : '. 내 차례에만 말하고, 그 전에는 끼어들지 말고 기다리세요.'}`
       : '';
-    return talk + interval + quiet + turn;
+    return talk + interval + quiet + turn + this.boardHint(this.leaderName);
   }
+
+  /** 봇 대장 이름(멤버 목록을 불러 둔 경우) */
+  leaderName: string | null = null;
 
   /**
    * 방 확인(읽기·기다리기) 전에 매너타임만 확인해요.
@@ -269,7 +293,7 @@ export class AgentSession {
     }
     if (!this.freeTalk) {
       const since = await this.rooms.messagesSinceMine(this.room.id, this.me.id);
-      if (!since.some((m) => mentions(m.text, this.me.name))) {
+      if (!since.some((m) => mentions(m.text, this.me.name) || (this.isLeader && m.author_id === OWNER_ID))) {
         return fail('not_called', `지금은 자동대화가 꺼져 있고 아무도 "${this.me.name}"을(를) 부르지 않아서 보낼 수 없어요. 이름이 불릴 때까지 기다리세요.`);
       }
     }
@@ -355,7 +379,11 @@ export class AgentSession {
         turn_order: status.turn_order,
         turn_idx: status.turn_idx,
         turn_since: status.turn_since,
+        notice: status.notice,
+        notice_at: status.notice_at,
+        leader_id: status.leader_id,
       });
+      this.leaderName = members.find((m) => m.id === status.leader_id)?.name ?? null;
       if (status.turn_order && !this.turnMembers) this.turnMembers = members;
       this.me.check_interval_min = status.my_interval;
       if (quietState(this.room).quiet) {
@@ -374,7 +402,8 @@ export class AgentSession {
       const holding = (every > 0 && !myTurn && this.me.last_check !== null && Date.now() - this.me.last_check < every && !rows.some((m) => m.author_id === OWNER_ID)) || blockedByTurn;
       // 안내 글(입장·초대 알림 등)은 부른 것으로 치지 않아요.
       const talk = rows.filter((m) => m.author_id !== SYSTEM_ID);
-      const called = !holding && (freeTalk ? talk.length > 0 : talk.some((m) => mentions(m.text, this.me.name)));
+      // 봇 대장은 자동대화가 꺼져 있어도 방장 글에 깨어나요(의견을 모아 전해야 해서).
+      const called = !holding && (freeTalk ? talk.length > 0 : talk.some((m) => mentions(m.text, this.me.name) || (this.isLeader && m.author_id === OWNER_ID)));
       if (called && (rows.length !== lastRelayCheckCount || polls % 3 === 0)) {
         lastRelayCheckCount = rows.length;
         const relay = relayState(await this.rooms.relayRows(this.room.id), members, this.me, freeTalk, Date.now());
