@@ -39,3 +39,18 @@ CREATE TABLE IF NOT EXISTS settings (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL
 );
+
+-- numbers only: daily counters (visits, leaves per grove/mode, heard)
+CREATE TABLE IF NOT EXISTS daily_stats (
+  day TEXT NOT NULL,          -- YYYY-MM-DD, Korea time
+  metric TEXT NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, metric)
+);
+-- who was already counted today (daily-rotating hashed visitor id; kept 2 days)
+CREATE TABLE IF NOT EXISTS daily_seen (
+  day TEXT NOT NULL,
+  visitor TEXT NOT NULL,
+  what TEXT NOT NULL,
+  PRIMARY KEY (day, visitor, what)
+);

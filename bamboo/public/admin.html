@@ -23,6 +23,18 @@
   .meta { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .meta .sp { flex: 1; }
   .badge { color: var(--danger); font-weight: 700; }
+  .sec { font-size: 15px; color: var(--muted); margin: 22px 0 8px; font-weight: 700; }
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .stat .k { color: var(--muted); font-size: 12.5px; }
+  .stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .stat .s { color: var(--muted); font-size: 12.5px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat.live .v { color: var(--accent); }
+  table.t { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  table.t th, table.t td { white-space: nowrap; padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.t th:first-child, table.t td:first-child { text-align: left; }
+  table.t thead th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  table.t tr:last-child td { border-bottom: 0; }
   .danger { border-color: var(--danger); color: var(--danger); }
 </style>
 </head>
@@ -43,6 +55,8 @@
       <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="pwCancel">취소</button><button id="pwSave" style="border-color:var(--accent);color:var(--accent)">바꾸기</button></div>
       <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">바꾼 비밀번호는 암호화해서 저장돼서 아무도 볼 수 없어요. 잊어버리면 되찾을 수 없으니 꼭 기억해 두세요.</p>
     </form>
+    <section id="stats"></section>
+    <h2 class="sec">잎 목록</h2>
     <div id="list"></div>
   </div>
 </div>
@@ -59,10 +73,40 @@ async function call(path, post) {
   if (!res.ok) throw new Error(data.error || res.status);
   return data;
 }
+const n = (v) => (v || 0).toLocaleString('ko-KR');
+async function loadStats() {
+  try {
+    const d = await call('/api/admin/stats');
+    const L = d.live || {}, T = d.total || {}, D = d.todayStats || {};
+    const liveAll = (L.plaza || 0) + (L.g0 || 0) + (L.g1 || 0) + (L.g2 || 0);
+    const groves = [['🍃 바람 숲', 'g0'], ['🌙 달빛 숲', 'g1'], ['💧 이슬 숲', 'g2']];
+    $('stats').innerHTML = `
+      <h2 class="sec">숲 현황 <span style="font-weight:400">· ${d.today} 기준 (한국 시간)</span></h2>
+      <div class="cards">
+        <div class="stat live"><div class="k">지금 숲에 있는 사람</div><div class="v">${n(liveAll)}명</div><div class="s">광장 ${n(L.plaza)} · 바람 ${n(L.g0)} · 달빛 ${n(L.g1)} · 이슬 ${n(L.g2)}</div></div>
+        <div class="stat"><div class="k">방문자</div><div class="v">${n(D.visits)}명</div><div class="s">오늘 · 누적 ${n(T.visits)}명</div></div>
+        <div class="stat"><div class="k">털어놓은 말</div><div class="v">${n(D.leaves)}개</div><div class="s">오늘 · 누적 ${n(T.leaves)}개</div></div>
+        <div class="stat"><div class="k">🍃 들었어요</div><div class="v">${n(D.heard)}번</div><div class="s">오늘 · 누적 ${n(T.heard)}번</div></div>
+      </div>
+      <h2 class="sec">숲별</h2>
+      <table class="t"><thead><tr><th>숲</th><th>지금</th><th>방문<br><small>오늘 / 누적</small></th><th>털어놓은 말<br><small>오늘 / 누적</small></th></tr></thead><tbody>
+        ${groves.map(([name, g]) => `<tr><td>${name}</td><td>${n(L[g])}</td><td>${n(D['visits_' + g])} / ${n(T['visits_' + g])}</td><td>${n(D['leaves_' + g])} / ${n(T['leaves_' + g])}</td></tr>`).join('')}
+      </tbody></table>
+      <h2 class="sec">털어놓은 방식 (누적)</h2>
+      <table class="t"><tbody>
+        <tr><td>🤫 속삭임</td><td>${n(T.leaves_whisper)}개</td></tr><tr><td>📣 소리침</td><td>${n(T.leaves_shout)}개</td></tr><tr><td>😮‍💨 한숨</td><td>${n(T.leaves_sigh)}개</td></tr>
+      </tbody></table>
+      <h2 class="sec">최근 7일</h2>
+      <table class="t"><thead><tr><th>날짜</th><th>방문자</th><th>털어놓은 말</th></tr></thead><tbody>
+        ${d.week.slice().reverse().map((w) => `<tr><td>${w.day.slice(5).replace('-', '/')}${w.day === d.today ? ' (오늘)' : ''}</td><td>${n(w.visits)}</td><td>${n(w.leaves)}</td></tr>`).join('')}
+      </tbody></table>`;
+  } catch (e) { $('stats').innerHTML = `<p style="color:var(--muted)">숫자를 불러오지 못했어요: ${esc(e.message)}</p>`; }
+}
 async function load() {
   try {
     const { leaves, now } = await call('/api/admin/leaves');
     $('login').hidden = true; $('loginNote').hidden = true; $('panel').hidden = false;
+    loadStats();
     const hidden = leaves.filter((l) => l.hidden).length;
     $('summary').textContent = `잎 ${leaves.length}장 · 숨김 ${hidden}장 · 신고 있는 잎 ${leaves.filter((l) => l.reports).length}장`;
     $('list').innerHTML = leaves.map((l) => `<div class="item${l.hidden ? ' hidden' : ''}">

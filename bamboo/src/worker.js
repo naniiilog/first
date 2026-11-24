@@ -95,12 +95,23 @@ async function isAdmin(request, env) {
   return !!env.ADMIN_TOKEN && safeEqual(given, env.ADMIN_TOKEN);
 }
 
+// ---------- numbers only: daily counters (no personal data) ----------
+const kstDay = (t = Date.now()) => new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10);
+const bump = (env, day, metric, by = 1) =>
+  env.DB.prepare('INSERT INTO daily_stats (day, metric, n) VALUES (?, ?, ?) ON CONFLICT(day, metric) DO UPDATE SET n = n + excluded.n').bind(day, metric, by);
+// first time today for this (daily-rotating, hashed) visitor at this place? then count it once
+async function countOnce(env, day, visitor, what, metric) {
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO daily_seen (day, visitor, what) VALUES (?, ?, ?)').bind(day, visitor, what).run();
+  if (r.meta.changes) await bump(env, day, metric).run();
+}
+
 async function cleanup(env) {
   const cutoff = Date.now() - LIFETIME_MS;
   await env.DB.batch([
     env.DB.prepare('DELETE FROM reactions WHERE leaf_id IN (SELECT id FROM leaves WHERE created < ?)').bind(cutoff),
     env.DB.prepare('DELETE FROM leaves WHERE created < ?').bind(cutoff),
     env.DB.prepare('DELETE FROM presence WHERE seen < ?').bind(Date.now() - 3600 * 1000),
+    env.DB.prepare('DELETE FROM daily_seen WHERE day < ?').bind(kstDay(Date.now() - 2 * 86400 * 1000)),
   ]);
 }
 
@@ -137,6 +148,8 @@ async function handleApi(request, env, url) {
     const row = await env.DB.prepare(
       'INSERT INTO leaves (text, created, author, mode, grove) VALUES (?, ?, ?, ?, ?) RETURNING id, text, created, heard, mode, grove',
     ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper', [0, 1, 2].includes(body?.grove) ? body.grove : 0).first();
+    { const day = kstDay(now);
+      await env.DB.batch([bump(env, day, 'leaves'), bump(env, day, 'leaves_g' + row.grove), bump(env, day, 'leaves_' + row.mode)]); }
     return json({ leaf: row }, 201);
   }
 
@@ -152,7 +165,7 @@ async function handleApi(request, env, url) {
       .bind(id, visitor, kind).run();
     if (ins.meta.changes) {
       if (kind === 'heard') {
-        await env.DB.prepare('UPDATE leaves SET heard = heard + 1 WHERE id = ?').bind(id).run();
+        await env.DB.batch([env.DB.prepare('UPDATE leaves SET heard = heard + 1 WHERE id = ?').bind(id), bump(env, kstDay(now), 'heard')]);
       } else {
         await env.DB.prepare(
           'UPDATE leaves SET reports = reports + 1, hidden = CASE WHEN reports + 1 >= ? THEN 1 ELSE hidden END WHERE id = ?',
@@ -172,6 +185,9 @@ async function handleApi(request, env, url) {
     const place = PLACES.includes(body?.place) ? body.place : 'plaza';
     await env.DB.prepare('INSERT INTO presence (sid, seen, place) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen, place = excluded.place')
       .bind(sid, now, place).run();
+    { const day = kstDay(now), who = await visitorId(request, env);
+      await countOnce(env, day, who, 'site', 'visits');
+      if (place !== 'plaza') await countOnce(env, day, who, place, 'visits_' + place); }
     if (Math.random() < .05) await env.DB.prepare('DELETE FROM presence WHERE seen < ?').bind(now - 3600 * 1000).run();
     const { results } = await env.DB.prepare('SELECT sid, place FROM presence WHERE seen >= ? ORDER BY seen DESC LIMIT 60')
       .bind(now - PRESENCE_MS).all();
@@ -201,6 +217,19 @@ async function handleApi(request, env, url) {
       const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
       await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('admin_hash', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(`${salt}:${await pbkdf2(next, salt)}`).run();
       return json({ ok: true });
+    }
+    if (pathname === '/api/admin/stats' && method === 'GET') {
+      const today = kstDay(now), week = [...Array(7)].map((_, i) => kstDay(now - (6 - i) * 86400 * 1000));
+      const [live, tot, td, days] = await Promise.all([
+        env.DB.prepare('SELECT place, COUNT(*) AS n FROM presence WHERE seen >= ? GROUP BY place').bind(now - PRESENCE_MS).all(),
+        env.DB.prepare('SELECT metric, SUM(n) AS n FROM daily_stats GROUP BY metric').all(),
+        env.DB.prepare('SELECT metric, n FROM daily_stats WHERE day = ?').bind(today).all(),
+        env.DB.prepare("SELECT day, metric, n FROM daily_stats WHERE day >= ? AND metric IN ('visits', 'leaves')").bind(week[0]).all(),
+      ]);
+      const obj = (rows) => Object.fromEntries(rows.results.map((r) => [r.metric ?? r.place, r.n]));
+      const byDay = week.map((d) => ({ day: d, visits: 0, leaves: 0 }));
+      for (const r of days.results) { const x = byDay.find((b) => b.day === r.day); if (x) x[r.metric] = r.n; }
+      return json({ today, live: obj(live), total: obj(tot), todayStats: obj(td), week: byDay });
     }
     if (pathname === '/api/admin/leaves' && method === 'GET') {
       const { results } = await env.DB.prepare(
