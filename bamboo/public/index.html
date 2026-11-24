@@ -123,7 +123,7 @@
   .gstar { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; animation: twinkle var(--t) ease-in-out infinite; }
   @keyframes twinkle { 50% { opacity: .1; } }
   .mote.ff { width: 4px; height: 4px; background: #eaffa0; box-shadow: 0 0 10px 4px rgba(200, 255, 120, .6);
-    animation: mote var(--md) ease-in-out var(--mdl) infinite alternate, ffblink 2.8s ease-in-out var(--mdl) infinite; }
+    animation: mote0 8s ease-in-out infinite alternate, ffblink 2.8s ease-in-out infinite; }
   @keyframes ffblink { 0%, 100% { opacity: .05; } 50% { opacity: 1; } }
   .mistband { position: absolute; left: -30%; width: 160%; top: var(--mt); height: var(--mh); pointer-events: none;
     background: radial-gradient(ellipse 30% 50% at 20% 50%, rgba(var(--mc), .6), transparent 70%), radial-gradient(ellipse 25% 45% at 58% 55%, rgba(var(--mc), .5), transparent 70%), radial-gradient(ellipse 22% 50% at 90% 45%, rgba(var(--mc), .55), transparent 70%);
@@ -150,24 +150,42 @@
     animation: shimmer var(--bd) ease-in-out var(--bdl) infinite alternate; }
   @keyframes shimmer { from { opacity: .3; } to { opacity: .85; } }
   .mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fffbe0; box-shadow: 0 0 6px 2px rgba(255, 250, 210, .7);
-    pointer-events: none; animation: mote var(--md) ease-in-out var(--mdl) infinite alternate; }
-  @keyframes mote { to { transform: translate(var(--mx), var(--my)); opacity: .15; } }
+    pointer-events: none; animation: mote0 8s ease-in-out infinite alternate; }
+  @keyframes mote0 { to { transform: translate(60px, -40px); opacity: .15; } }
+  @keyframes mote1 { to { transform: translate(-50px, -60px); opacity: .15; } }
+  @keyframes mote2 { to { transform: translate(40px, 55px); opacity: .15; } }
+  @keyframes mote3 { to { transform: translate(-65px, 30px); opacity: .15; } }
+  .mote.m0 { animation-name: mote0; } .mote.m1 { animation-name: mote1; } .mote.m2 { animation-name: mote2; } .mote.m3 { animation-name: mote3; }
+  .mote.ff.m0 { animation-name: mote0, ffblink; } .mote.ff.m1 { animation-name: mote1, ffblink; } .mote.ff.m2 { animation-name: mote2, ffblink; } .mote.ff.m3 { animation-name: mote3, ffblink; }
+  .starset, .dewset { position: absolute; inset: 0; pointer-events: none; animation: twinkle 4s ease-in-out infinite; }
+  .starset i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; }
+  .dewset i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 2px rgba(220, 255, 255, .8); }
   .sw { animation: sway var(--d) ease-in-out var(--dl) infinite alternate; }
   .swayL { transform-origin: 50% 100%; will-change: transform; animation: lsw var(--lsd, 6s) ease-in-out infinite alternate; }
   .swayL.front { animation-duration: calc(var(--lsd, 6s) * .8); animation-delay: -2s; }
   @keyframes lsw { from { transform: rotate(calc(var(--lsa, .35deg) * -1)); } to { transform: rotate(var(--lsa, .35deg)); } }
   #grove.gust .swayL { --lsa: 1.1deg; --lsd: 1.6s; }
-  .layer > img { will-change: transform; }
-  @keyframes sway { from { transform: rotate(calc(var(--a) * -1)); } to { transform: rotate(var(--a)); } }
+  .stalk { position: absolute; pointer-events: none; will-change: transform; }
+  .stalk .stalkBmp { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .stalk .stalkMsgs { position: absolute; left: 0; top: 0; pointer-events: none; }
+  @keyframes sway { from { transform: rotate(calc(var(--a) * -1 * var(--g, 1))); } to { transform: rotate(calc(var(--a) * var(--g, 1))); } }
   #grove.gust .sw { --a: 2.6deg !important; }
   #groveChars { position: absolute; inset: 0; pointer-events: none; }
 
   /* message leaves: blink softly like fireflies */
-  .msg { pointer-events: auto; cursor: pointer; outline: none; }
-  .msg .flut { animation: flutter var(--d) ease-in-out var(--dl) infinite alternate; }
+  .msg { position: absolute; width: 0; height: 0; pointer-events: none; outline: none; }
+  .msg .stem { position: absolute; left: 0; top: -.9px; height: 1.8px; border-radius: 1px; transform-origin: 0 50%; }
+  .msg .rot { position: absolute; width: 0; height: 0; transform-origin: 0 0; }
+  .msg .flut, .msg .grow { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  .msg i { position: absolute; display: block; }
+  .msg .leafimg, .msg .lit { background-size: 100% 100%; }
+  .msg .glow { border-radius: 50%; background: radial-gradient(ellipse at center, rgba(182, 255, 156, .95), rgba(125, 255, 134, .45) 45%, rgba(125, 255, 134, 0) 70%); }
+  .msg .burst { border-radius: 50%; background: radial-gradient(circle, rgba(240, 255, 216, .95), rgba(240, 255, 216, 0) 70%); }
+  .msg .spark { width: 6.8px; height: 6.8px; border-radius: 50%; background: #f6ffe2; }
+  .msg .hit { pointer-events: auto; cursor: pointer; }
+
   @keyframes flutter { from { transform: rotate(-5deg); } to { transform: rotate(6deg); } }
   .msg .glow { opacity: .2; animation: ffly var(--fd) ease-in-out var(--fdl) infinite; }
-  .msg .lit { opacity: 0; animation: ffly2 var(--fd) ease-in-out var(--fdl) infinite; }
   @keyframes ffly { 0%, 100% { opacity: .18; } 10% { opacity: 1; } 18% { opacity: .45; } 26% { opacity: .9; } 40% { opacity: .2; } }
   @keyframes ffly2 { 0%, 100% { opacity: 0; } 10% { opacity: .45; } 18% { opacity: .12; } 26% { opacity: .35; } 40% { opacity: 0; } }
   .msg.mine .grow { transform: scale(1.18); }
@@ -188,8 +206,10 @@
   #kingBtn { left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%) scale(.9); opacity: 0; pointer-events: none;
     border: 0; border-radius: 999px; padding: 14px 26px; font-family: "Gowun Batang", serif; font-weight: 700; font-size: 18px; letter-spacing: .04em; color: #4a3108;
     background: linear-gradient(180deg, #ffe9a8, #f1c457); box-shadow: 0 8px 24px rgba(120, 80, 10, .35), inset 0 1px 0 rgba(255,255,255,.7); transition: .4s cubic-bezier(.2, 1.4, .4, 1); white-space: nowrap; }
-  #kingBtn.ready { opacity: 1; transform: translateX(-50%) scale(1); pointer-events: auto; animation: glowbtn 2.4s ease-in-out .4s infinite; }
-  @keyframes glowbtn { 50% { box-shadow: 0 8px 30px rgba(241, 196, 87, .8), inset 0 1px 0 rgba(255,255,255,.7); } }
+  #kingBtn.ready { opacity: 1; transform: translateX(-50%) scale(1); pointer-events: auto; }
+  #kingBtn::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 30px rgba(241, 196, 87, .85); opacity: 0; pointer-events: none; will-change: opacity; }
+  #kingBtn.ready::after { animation: glowop 2.4s ease-in-out .4s infinite; }
+  @keyframes glowop { 50% { opacity: 1; } }
 
   /* ================= sheets & dialogs ================= */
   dialog { border: 1px solid var(--line); border-radius: 22px; background: rgba(255, 255, 248, .95); color: var(--ink); padding: 22px 20px 18px;
@@ -270,11 +290,11 @@
   <div class="layer" id="gCel"></div>
   <svg class="layer" id="gL1"></svg>
   <div class="beams" id="beams"></div>
-  <div class="layer swayL" id="w2"><svg class="layer" id="gL2"></svg></div>
+  <div class="layer" id="w2"><svg class="layer" id="gL2"></svg></div>
   <div class="layer" id="gMist"></div>
   <svg class="layer" id="gGround"></svg>
   <div id="groveChars"></div>
-  <div class="layer swayL front" id="w3"><svg class="layer" id="gL3"></svg></div>
+  <div class="layer" id="w3"><svg class="layer" id="gL3"></svg></div>
   <div id="motes"></div>
 </div>
 
@@ -629,10 +649,15 @@ class Person {
       }
       if (!this.route.length && this.onArrive) { const f = this.onArrive; this.onArrive = null; this.rush = 0; setTimeout(f, 0); }
     } else if (this.idle) this.idle(this);
-    this.el.classList.toggle('walking', walking);
+    if (walking !== this._w) { this.el.classList.toggle('walking', walking); this._w = walking; }
     this.place();
   }
-  place() { this.el.style.setProperty('--inv', (1 / this.scale).toFixed(3)); this.el.style.transform = `translate(${f1(this.x)}px, ${f1(this.y)}px) scale(${this.scale.toFixed(3)})`; this.el.style.zIndex = Math.round(this.y); }
+  place() {
+    const key = `${f1(this.x)}|${f1(this.y)}|${this.scale.toFixed(3)}`;
+    if (key === this._k) return; this._k = key;
+    this.el.style.setProperty('--inv', (1 / this.scale).toFixed(3));
+    this.el.style.transform = `translate3d(${f1(this.x)}px, ${f1(this.y)}px, 0) scale(${this.scale.toFixed(3)})`; this.el.style.zIndex = Math.round(this.y);
+  }
   remove() { this.el.remove(); }
 }
 const EMOTES = ['🎵', '🍃', '☺️', '…', '✨', '🐦', '💭', '🌿'];
@@ -707,6 +732,7 @@ $('map').addEventListener('click', (e) => {
 });
 
 // ================= grove scene (front view) =================
+let stalkItems = [], swayLayers = [], swayGust = 1;
 let G = {}, hangers = [], grovePeople = new Map(), meG = null;
 // ================= time of day =================
 const PHASES = {
@@ -744,13 +770,17 @@ function buildGrove(k) {
   $('gsky').style.background = `radial-gradient(circle at ${f1(cx)}px ${f1(cy)}px, rgba(${P.cel === 'moon' ? '200,215,255' : '255,240,200'}, ${P.cel === 'moon' ? .25 : .55}), transparent ${small ? 45 : 35}%), linear-gradient(180deg, ${P.sky[0]} 0%, ${P.sky[1]} 50%, ${P.sky[2]} 100%)`;
   const rs = rng(77);
   let st = '';
-  if (P.stars) for (let i = 0; i < 80; i++) st += `<div class="gstar" style="left:${f1(rs() * 100)}%;top:${f1(rs() * 45)}%;opacity:${f1(P.stars * (.3 + rs() * .7))};--t:${f1(2.5 + rs() * 4)}s;animation-delay:${f1(-rs() * 5)}s"></div>`;
+  if (P.stars) for (let k = 0; k < 3; k++) {
+    let inner = '';
+    for (let i = 0; i < 27; i++) inner += `<i style="left:${f1(rs() * 100)}%;top:${f1(rs() * 45)}%;opacity:${f1(.3 + rs() * .7)}"></i>`;
+    st += `<div class="starset" style="opacity:${f1(P.stars)};animation-duration:${f1(3 + k * 1.7)}s;animation-delay:${f1(-k * 1.3)}s">${inner}</div>`;
+  }
   $('gsky').innerHTML = st;
   $('gCel').innerHTML = P.cel === 'moon'
     ? `<div class="moon" style="left:${f1(cx)}px;top:${f1(cy)}px"></div>`
     : `<div class="sun" style="left:${f1(cx)}px;top:${f1(cy)}px;--c1:${P.sun[0]};--c2:${P.sun[1]}"></div>`;
   const gap = W * (small ? .08 : .055);
-  hangers = [];
+  hangers = []; stalkItems = []; swayLayers = [];
   LAYERS.forEach((cfg, li) => {
     const svg = $(cfg.id); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const r = rng(500 + k * 97 + li * 31);
@@ -817,12 +847,16 @@ function buildGrove(k) {
         }
       }
       const amp = swayBase * S.sway * lerp(.5, 1.5, r());
-      const sway = amp ? ` class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(amp)}deg;--d:${f1((S.kind === 'wind' ? 2.2 : 3.5) + r() * 3)}s;--dl:${f1(-r() * 7)}s"` : '';
-      body += `<g${sway}>${g}<g class="msgs"></g></g>`;
+      const per = (S.kind === 'wind' ? 2.2 : 3.5) + r() * 3, ph = r() * Math.PI * 2;
+      if (amp) {
+        const R = cfg.leafLen[1] * 1.35 * (cfg.every ? 1 : G.scale) + 60;
+        const bx = Math.floor(Math.min(x0, x0 + lean) - R), by = Math.floor(Math.max(-80, topY - R * .6)), bw = Math.ceil(Math.abs(lean) + R * 2), bh = Math.ceil(Math.min(base + 4, H + 40) - by);
+        stalkItems.push({ li, si, grad: defs.slice(defs.lastIndexOf('<linearGradient')), g, x0, base, amp, per, ph, bx, by, bw, bh });
+      } else body += `<g>${g}</g>`;
       hangers.push({ layer: li, x0, lean, bow, base, h, topY, gi: si, skip: !cfg.hang || broken });
     });
     defs += '</defs>';
-    if (li === 3) {   // overhead canopy, with an opening for the sky
+    if (li === 3 && false) {   // (canopy handled below as its own swaying piece)
       let c = '';
       for (let x = -30; x < W + 40; x += small ? 26 : 32) {
         if (Math.abs(x - cx) < W * (small ? .12 : .08) && cy < H * .2) continue;
@@ -835,15 +869,56 @@ function buildGrove(k) {
       body += `<g class="sw" style="transform-origin:${W / 2}px -400px;--a:${S.kind === 'wind' ? .6 : .25}deg;--d:${S.kind === 'wind' ? 3 : 6}s;--dl:-2s">${c}</g>`;
     }
     const host = svg.parentElement;
-    host.querySelectorAll(`:scope > img[data-l="${li}"]`).forEach((im) => im.remove());
-    const img = svgImage(defs + body.replace(/ class="sw" style="[^"]*"/g, ''), W, H); img.dataset.l = li;
-    if (li <= 1) img.style.filter = li === 0 ? 'blur(3px)' : 'blur(1.2px)';
-    host.insertBefore(img, svg);
+    host.querySelectorAll(`:scope > img[data-l="${li}"], :scope > canvas`).forEach((im) => im.remove());
+    if (li === 3) {   // overhead canopy: one more swaying piece, pivoting far above
+      let c = '';
+      for (let x = -30; x < W + 40; x += small ? 26 : 32) {
+        if (Math.abs(x - cx) < W * (small ? .12 : .08) && cy < H * .2) continue;
+        const ccy = -14 + r() * 26, n = 6 + Math.floor(r() * 4);
+        for (let q = 0; q < n; q++) {
+          const L = lerp(50, 115, r()) * G.scale, ang = lerp(35, 145, r());
+          c += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(x + (r() - .5) * 20)} ${f1(ccy)}) rotate(${f1(ang)})" fill="${tone(mix('#123620', '#2c6638', r()))}"/>`;
+        }
+      }
+      stalkItems.push({ li, si: -1, grad: '', g: c, x0: W / 2, base: -400, amp: S.kind === 'wind' ? .6 : .25, per: S.kind === 'wind' ? 3 : 6, ph: 1, bx: -60, by: -140, bw: W + 120, bh: 300 });
+    }
+    if (body) {
+      const blur = li === 0 ? 3 : li === 1 ? 1.2 : 0;   // baked into the image once, not re-applied every frame
+      const img = svgImage(blur ? defs.replace('</defs>', `<filter id="lb${li}" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`) + `<g filter="url(#lb${li})">${body}</g>` : defs + body, W, H); img.dataset.l = li;
+      host.insertBefore(img, svg);
+    }
+    host.querySelectorAll(':scope > .stalk').forEach((e) => e.remove());
+    if (cfg.sway) {   // every stalk is its own little element, swaying on its own rhythm
+      for (const it of stalkItems.filter((x) => x.li === li)) {
+        const el = document.createElement('div'); el.className = 'stalk';
+        el.style.cssText = `left:${it.bx}px;top:${it.by}px;width:${it.bw}px;height:${it.bh}px;transform-origin:${f1(it.x0 - it.bx)}px ${f1(it.base - it.by)}px`;
+        host.insertBefore(el, svg); it.el = el;
+        // fixed angles (no CSS variables) so the GPU compositor can run it without the main thread
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          it.anim = el.animate([{ transform: `rotate(${f1(-it.amp)}deg)` }, { transform: `rotate(${f1(it.amp)}deg)` }],
+            { duration: it.per * 1000, delay: -it.ph / Math.PI * it.per * 1000, direction: 'alternate', iterations: Infinity, easing: 'ease-in-out' });
+        }
+      }
+    }
     svg.innerHTML = `<defs><radialGradient id="hg${li}"><stop offset="0" stop-color="#b6ff9c" stop-opacity=".95"/><stop offset=".45" stop-color="#7dff86" stop-opacity=".45"/><stop offset="1" stop-color="#7dff86" stop-opacity="0"/></radialGradient></defs><g class="msgs"></g>`;
     const layerMsgs = svg.querySelector('.msgs');
-    hangers.filter((s) => s.layer === li).forEach((s) => { s.el = layerMsgs; });
+    // story leaves get a group per stalk, so they sway together with their own stalk
+    hangers.filter((s) => s.layer === li).forEach((s) => {
+      const it = stalkItems.find((x) => x.li === li && x.si === s.gi);
+      // story leaves ride on their stalk's element, so they sway with it
+      if (it && it.el) { s.host = it.el; s.ox = it.bx; s.oy = it.by; } else { s.host = host; s.ox = 0; s.oy = 0; }
+    });
   });
   hangers = hangers.filter((s) => !s.skip);
+  const bscale = Math.min(1.5, devicePixelRatio || 1);
+  for (const it of stalkItems) {
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${it.bw}" height="${it.bh}" viewBox="0 0 ${it.bw} ${it.bh}"><defs>${it.grad}</defs><g transform="translate(${-it.bx} ${-it.by})">${it.g}</g></svg>`], { type: 'image/svg+xml' }));
+    img.className = 'stalkBmp'; img.alt = ''; img.decoding = 'async';
+    img.onload = () => setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (it.el) it.el.insertBefore(img, it.el.firstChild);
+    img.src = url; it.g = null;
+  }
   // ---- forest floor ----
   const r = rng(900 + k);
   const gr = P.ground.map(tone);
@@ -944,13 +1019,17 @@ function buildGrove(k) {
   let mi = '';
   const mistK = (S.kind === 'dew' ? 1.6 : .25) * P.mistK;
   for (let i = 0; i < (S.kind === 'dew' ? 6 : 2); i++) mi += `<div class="mistband" style="--mt:${f1(38 + i * 12 + rb() * 6)}%;--mh:${f1(16 + rb() * 10)}%;--mc:${P.mist};--md:${f1(40 + rb() * 40)}s;opacity:${f1(mistK * (.6 + rb() * .4))};animation-delay:${f1(-rb() * 30)}s"></div>`;
-  if (S.kind === 'dew') for (let i = 0; i < (small ? 22 : 40); i++) mi += `<div class="dew" style="left:${f1(rb() * 100)}%;top:${f1(8 + rb() * 55)}%;--t:${f1(1.8 + rb() * 3)}s;--dl:${f1(-rb() * 4)}s"></div>`;
+  if (S.kind === 'dew') for (let k = 0; k < 3; k++) {
+    let inner = '';
+    for (let i = 0; i < (small ? 8 : 13); i++) inner += `<i style="left:${f1(rb() * 100)}%;top:${f1(8 + rb() * 55)}%"></i>`;
+    mi += `<div class="dewset" style="animation-duration:${f1(2 + k * 1.1)}s;animation-delay:${f1(-k * .9)}s">${inner}</div>`;
+  }
   if (S.kind === 'wind') for (let i = 0; i < (small ? 6 : 10); i++) mi += `<div class="streak" style="top:${f1(10 + rb() * 70)}%;--sw:${f1(80 + rb() * 160)}px;--sd:${f1(2.5 + rb() * 3)}s;--sdl:${f1(-rb() * 5)}s"></div>`;
   $('gMist').innerHTML = mi;
   // ---- floating dust by day, fireflies by night ----
   let m = '';
-  const ff = P.motes === 'firefly', nm = ff ? (small ? 22 : 40) : (small ? 14 : 24);
-  for (let i = 0; i < nm; i++) { const v = () => (rb() * 140 - 70).toFixed(0) + 'px'; m += `<div class="mote${ff ? ' ff' : ''}" style="left:${f1(rb() * 100)}%;top:${f1(ff ? 30 + rb() * 60 : 10 + rb() * 60)}%;--md:${f1(6 + rb() * 8)}s;--mdl:${f1(-rb() * 8)}s;--mx:${v()};--my:${v()}"></div>`; }
+  const ff = P.motes === 'firefly', nm = ff ? (small ? 14 : 22) : (small ? 10 : 16);
+  for (let i = 0; i < nm; i++) m += `<div class="mote${ff ? ' ff' : ''} m${i % 4}" style="left:${f1(rb() * 100)}%;top:${f1(ff ? 30 + rb() * 60 : 10 + rb() * 60)}%;animation-duration:${f1(6 + rb() * 8)}s${ff ? `,2.8s` : ''};animation-delay:${f1(-rb() * 8)}s${ff ? `,${f1(-rb() * 3)}s` : ''}"></div>`;
   $('motes').innerHTML = m;
 }
 function stoneLantern(x, y, sc, lit, tone) {
@@ -1001,43 +1080,45 @@ function renderGroveLeaves() {
   document.querySelectorAll('.msg').forEach((m) => m.remove());
   for (const l of leaves) drawLeaf(l, false);
 }
+const LEAF_SVG = new Map();
+function leafSvgUrl(L, fill, stroke, vein) {
+  const key = [Math.round(L), fill, stroke, vein].join('|');
+  if (!LEAF_SVG.has(key)) {
+    const h = L * .4, d = leafPath(L, L * .15);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${f1(L + 4)}" height="${f1(h + 4)}" viewBox="-2 ${f1(-h / 2 - 2)} ${f1(L + 4)} ${f1(h + 4)}"><path d="${d}" fill="${fill}"/>${stroke ? `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="1.6"/>` : ''}${vein ? `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${vein}" stroke-width="1" fill="none" opacity=".6"/>` : ''}</svg>`;
+    LEAF_SVG.set(key, `url('data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}')`);
+  }
+  return LEAF_SVG.get(key);
+}
 function drawLeaf(leaf, bloom) {
   const a = leafAnchor(leaf); if (!a) return;
   const { s, x, y } = a, W = G.W;
   const side = x < W * .3 ? 1 : x > W * .7 ? -1 : (hash(leaf.id * 13 + 1) < .5 ? -1 : 1);
-  const L = (s.layer === 3 ? 74 : 58) * Math.max(.82, G.scale);
+  const L = (s.layer === 3 ? 74 : 58) * Math.max(.82, G.scale), h = L * .4;
   const droop = lerp(0, 45, hash(leaf.id * 5 + 2)), blen = lerp(12, 24, hash(leaf.id * 17));
   const bang = side > 0 ? -25 : -155;
   const bx = x + Math.cos(bang * Math.PI / 180) * blen, by = y + Math.sin(bang * Math.PI / 180) * blen;
   const ang = side > 0 ? droop : 180 - droop;
   const age = clamp((now() - leaf.created) / lifetime, 0, 1);
   const body = mix(s.layer === 3 ? '#2f7440' : '#3a8a48', '#7a8a3c', age * .4);
-  const g = document.createElementNS(SVGNS, 'g');
-  g.setAttribute('class', 'msg' + (mine.has(leaf.id) ? ' mine' : '') + (bloom ? ' bloom' : ''));
-  g.setAttribute('data-id', leaf.id); g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
-  g.setAttribute('aria-label', '누군가의 속마음 읽기');
-  g.style.setProperty('--d', (2.6 + hash(leaf.id * 3) * 2).toFixed(1) + 's');
-  g.style.setProperty('--dl', (-hash(leaf.id * 9) * 4).toFixed(1) + 's');
-  g.style.setProperty('--fd', (4.5 + hash(leaf.id * 11) * 5).toFixed(1) + 's');
-  g.style.setProperty('--fdl', (-hash(leaf.id * 19) * 9).toFixed(1) + 's');
+  const g = document.createElement('div');
+  g.className = 'msg' + (mine.has(leaf.id) ? ' mine' : '') + (bloom ? ' bloom' : '');
+  g.dataset.id = leaf.id; g.tabIndex = 0; g.setAttribute('role', 'button'); g.setAttribute('aria-label', '누군가의 속마음 읽기');
+  g.style.cssText = `left:${f1(x - s.ox)}px;top:${f1(y - s.oy)}px;--d:${(2.6 + hash(leaf.id * 3) * 2).toFixed(1)}s;--dl:${(-hash(leaf.id * 9) * 4).toFixed(1)}s;--fd:${(4.5 + hash(leaf.id * 11) * 5).toFixed(1)}s;--fdl:${(-hash(leaf.id * 19) * 9).toFixed(1)}s`;
+  const stem = `<div class="stem" style="width:${f1(blen)}px;transform:rotate(${f1(bang)}deg);background:${s.layer === 3 ? '#3c7837' : '#5a9a4b'}"></div>`;
   let sparks = '';
-  for (let i = 0; i < 9; i++) { const aa = i / 9 * 6.283; sparks += `<circle class="spark" cx="${f1(L * .55)}" cy="0" r="3.4" fill="#f6ffe2" style="--sx:${f1(Math.cos(aa) * 70)}px;--sy:${f1(Math.sin(aa) * 70)}px"/>`; }
-  g.innerHTML =
-    `<path d="M${f1(x)} ${f1(y)}L${f1(bx)} ${f1(by)}" stroke="${s.layer === 3 ? '#3c7837' : '#5a9a4b'}" stroke-width="1.8" stroke-linecap="round"/>` +
-    `<g transform="translate(${f1(bx)} ${f1(by)})"><g class="grow"><g class="flut"><g transform="rotate(${f1(ang)})">` +
-      `<g class="glow"><ellipse cx="${f1(L * .5)}" cy="0" rx="${f1(L * .95)}" ry="${f1(L * .55)}" fill="url(#hg${s.layer})"/>` +
-      `<path d="${leafPath(L, L * .15)}" fill="none" stroke="#c4ff9e" stroke-width="7" stroke-opacity=".35" stroke-linejoin="round"/></g>` +
-      `<path d="${leafPath(L, L * .15)}" fill="${body}"/>` +
-      `<path class="edge" d="${leafPath(L, L * .15)}" fill="none" stroke="#e9ffcf" stroke-width="1.6"/>` +
-      `<path class="lit" d="${leafPath(L, L * .15)}" fill="#d8ffb8"/>` +
-      `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${mix(body, '#20451c', .35)}" stroke-width="1" fill="none" opacity=".6"/>` +
-      `<circle class="burst" cx="${f1(L * .5)}" cy="0" r="${f1(L * .55)}" fill="url(#hg${s.layer})"/>` + sparks +
-      `<ellipse cx="${f1(L * .5)}" cy="0" rx="${f1(L * .62)}" ry="24" fill="transparent"/>` +
-    `</g></g></g></g>`;
+  for (let i = 0; i < 9; i++) { const aa = i / 9 * 6.283; sparks += `<i class="spark" style="left:${f1(L * .55 - 3.4)}px;top:-3.4px;--sx:${f1(Math.cos(aa) * 70)}px;--sy:${f1(Math.sin(aa) * 70)}px"></i>`; }
+  g.innerHTML = stem +
+    `<div class="rot" style="left:${f1(bx - x)}px;top:${f1(by - y)}px;transform:rotate(${f1(ang)}deg)"><div class="flut"><div class="grow" style="transform-origin:${f1(L * .5)}px 0">` +
+      `<i class="glow" style="left:${f1(L * .5 - L * .95)}px;top:${f1(-L * .55)}px;width:${f1(L * 1.9)}px;height:${f1(L * 1.1)}px"></i>` +
+      `<i class="leafimg" style="left:-2px;top:${f1(-h / 2 - 2)}px;width:${f1(L + 4)}px;height:${f1(h + 4)}px;background-image:${leafSvgUrl(L, body, '#e9ffcf', mix(body, '#20451c', .35))}"></i>` +
+      `<i class="burst" style="left:0;top:${f1(-L * .55)}px;width:${f1(L * 1.1)}px;height:${f1(L * 1.1)}px"></i>` + sparks +
+      `<i class="hit" style="left:-6px;top:-22px;width:${f1(L + 12)}px;height:44px"></i>` +
+    `</div></div></div>`;
   const open = () => openLeafDialog(leaf);
   g.addEventListener('click', (e) => { e.stopPropagation(); open(); });
   g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-  s.el.appendChild(g);
+  s.host.appendChild(g);
   if (bloom) setTimeout(() => g.classList.remove('bloom'), 3200);
 }
 
@@ -1126,7 +1207,7 @@ function perform(p, mode, isMe, reveal) {
   p.el.classList.add('back', 'm-' + mode);
   p.say(!isMe && M.other ? M.other : M.bubble, M.reveal + 900, M.cls);
   whoosh(M.wind);
-  if (mode === 'shout') { $('grove').classList.add('gust'); for (let i = 0; i < 14; i++) setTimeout(dropLeaf, i * 90); setTimeout(() => $('grove').classList.remove('gust'), 2200); }
+  if (mode === 'shout') { stalkItems.forEach((it) => it.anim && it.anim.updatePlaybackRate(2.4)); setTimeout(() => stalkItems.forEach((it) => it.anim && it.anim.updatePlaybackRate(1)), 2200); $('grove').classList.add('gust'); for (let i = 0; i < 14; i++) setTimeout(dropLeaf, i * 90); setTimeout(() => $('grove').classList.remove('gust'), 2200); }
   setTimeout(reveal, M.reveal);
   setTimeout(() => p.el.classList.remove('m-' + mode), M.reveal + 1200);
 }
@@ -1574,6 +1655,22 @@ $('soundBtn').onclick = () => {
 
 // ================= loop & boot =================
 let lastT = performance.now();
+function drawSway(t) {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  swayGust = lerp(swayGust, $('grove').classList.contains('gust') ? 2.8 : 1, .05);
+  for (const L of swayLayers) {
+    const c = L.cx2d; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, L.cv.width, L.cv.height);
+    for (const it of L.items) {
+      const a = reduce ? 0 : it.amp * swayGust * Math.sin(t / 1000 * Math.PI / it.per + it.ph) * Math.PI / 180;
+      if (it.bmp) {
+        c.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+        c.translate(it.x0, it.base); c.rotate(a); c.translate(-it.x0, -it.base);
+        c.drawImage(it.bmp, it.bx, it.by, it.bw, it.bh);
+      }
+      if (it.grp && it.grp.firstChild) it.grp.setAttribute('transform', `rotate(${(a * 180 / Math.PI).toFixed(3)} ${f1(it.x0)} ${f1(it.base)})`);
+    }
+  }
+}
 function tick(t) {
   const dt = Math.min(.05, (t - lastT) / 1000); lastT = t;
   if (scene === 'map') { me && me.step(dt); for (const p of mapPeople.values()) p.step(dt); if (me) camTarget(me); }
