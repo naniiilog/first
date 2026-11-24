@@ -1221,8 +1221,8 @@ function startSound() {
   windBus.gain.linearRampToValueAtTime(2.6, ctx.currentTime + 3);
   // 1) the wind itself: a soft "휘이…" that swells with each gust and settles back
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
-  const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 320; filter.Q.value = .7;
-  const gain = ctx.createGain(); gain.gain.value = WIND * .12;
+  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 420; filter.Q.value = .2;
+  const gain = ctx.createGain(); gain.gain.value = WIND * .25;
   src.connect(filter).connect(gain).connect(windBus); src.start();
   audio = { ctx, gain };
   const windiness = () => scene !== 'grove' ? .7 : [1.4, .55, .8][groveIdx] ?? .7;
@@ -1244,10 +1244,10 @@ function startSound() {
     if (ctx.state !== 'running') return;
     const now = ctx.currentTime, lvl = now < gustUntil ? gustLevel : 0;
     const rate = .6 + lvl * 9;                                  // rustles per second
-    if (Math.random() < rate * .25) rustle(now + Math.random() * .25, (.012 + lvl * .03) * lerp(.6, 1, Math.random()));
+    if (false) rustle(now + Math.random() * .25, (.012 + lvl * .03) * lerp(.6, 1, Math.random()));
   }, 250);
   // 3) 딱 / 따닥: two dry canes clacking — short filtered-noise hits, no pure tones (pure tones read as water drops)
-  const knock = (t, vel = 1) => {
+  const knock = () => {}; const knockOld = (t, vel = 1) => {
     const hits = Math.random() < .3 ? 1 : Math.random() < .75 ? 2 : 3;
     const body = lerp(230, 380, Math.random());               // the hollow cane: low and dull
     for (let n = 0; n < hits; n++) {
@@ -1266,7 +1266,7 @@ function startSound() {
     }
   };
   // 4) 삐걱: a cane bending under the wind, a stick-slip creak
-  const creak = (t) => {
+  const creak = () => {}; const creakOld = (t) => {
     const dur = lerp(.5, 1.1, Math.random()), f = lerp(110, 190, Math.random());
     const o = ctx.createOscillator(), bp = ctx.createBiquadFilter(), am = ctx.createGain(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
     o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * lerp(1.15, 1.4, Math.random()), t + dur);
@@ -1281,9 +1281,9 @@ function startSound() {
     const t = ctx.currentTime, up = lerp(1.8, 3.2, Math.random()), hold = lerp(.6, 1.8, Math.random()), down = lerp(2.5, 4.5, Math.random());
     const k = Math.min(1.4, strength * lerp(.65, 1, Math.random()));
     gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t);
-    gain.gain.linearRampToValueAtTime(WIND * (.2 + k * 1.1), t + up); gain.gain.setValueAtTime(WIND * (.2 + k * 1.1), t + up + hold); gain.gain.linearRampToValueAtTime(WIND * .12, t + up + hold + down);
+    gain.gain.linearRampToValueAtTime(WIND * (.3 + k * .55), t + up); gain.gain.setValueAtTime(WIND * (.3 + k * .55), t + up + hold); gain.gain.linearRampToValueAtTime(WIND * .25, t + up + hold + down);
     filter.frequency.cancelScheduledValues(t); filter.frequency.setValueAtTime(filter.frequency.value, t);
-    filter.frequency.linearRampToValueAtTime(320 + 520 * k, t + up); filter.frequency.linearRampToValueAtTime(320, t + up + hold + down);
+    filter.frequency.linearRampToValueAtTime(420 + 260 * k, t + up); filter.frequency.linearRampToValueAtTime(420, t + up + hold + down);
     // the rustle follows the gust's shape
     const steps = 12;
     for (let i = 0; i <= steps; i++) {
@@ -1342,7 +1342,7 @@ function startSound() {
   const water = ctx.createGain(); water.gain.value = 0; water.connect(master);
   const ws = ctx.createBufferSource(); ws.buffer = white; ws.loop = true;
   const wbp = ctx.createBiquadFilter(); wbp.type = 'bandpass'; wbp.frequency.value = 900; wbp.Q.value = .8;
-  const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 2400;
+  const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 1300;
   const wam = ctx.createGain(); wam.gain.value = .6;
   for (const fr of [.31, .53, 1.7, 2.9]) { const lf = ctx.createOscillator(), lg3 = ctx.createGain(); lf.frequency.value = fr; lg3.gain.value = .12; lf.connect(lg3).connect(wam.gain); lf.start(); }
   const wfm = ctx.createOscillator(), wfg = ctx.createGain(); wfm.frequency.value = .7; wfg.gain.value = 260; wfm.connect(wfg).connect(wbp.frequency); wfm.start();
@@ -1358,7 +1358,7 @@ function startSound() {
     if (ctx.state !== 'running') return;
     const want = placeKey() === 'dew' ? .22 : 0, now = ctx.currentTime;
     if (want !== wet) { water.gain.cancelScheduledValues(now); water.gain.setValueAtTime(water.gain.value, now); water.gain.linearRampToValueAtTime(want, now + 3); wet = want; }
-    if (wet) { const n = 2 + Math.floor(Math.random() * 5); for (let i = 0; i < n; i++) bubble(now + Math.random() * .5); }
+
   }, 500);
 
   audio.gust = gust;
