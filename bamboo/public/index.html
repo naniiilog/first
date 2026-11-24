@@ -93,7 +93,34 @@
   /* ================= grove ================= */
   #grove .layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
   #gL0 { filter: blur(3px); } #gL1 { filter: blur(1.2px); }
-  #grove .beams { opacity: .45; }
+  .beam { transform: rotate(var(--rot, 22deg)) !important; background: linear-gradient(180deg, rgba(var(--bc, 255,255,230), .95), rgba(var(--bc, 255,255,230), .3) 60%, transparent) !important; }
+  .sun { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%;
+    background: radial-gradient(circle, var(--c1) 0 42%, var(--c2) 60%, transparent 71%);
+    box-shadow: 0 0 80px 40px rgba(255, 240, 190, .45), 0 0 220px 130px rgba(255, 235, 170, .22); }
+  .moon { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 38%, #fffdf2, #f1ebcc 60%, #d9d0a8);
+    box-shadow: 0 0 40px 14px rgba(230, 240, 255, .35), 0 0 180px 90px rgba(170, 195, 255, .14); }
+  .moon::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(ellipse 22% 16% at 62% 34%, rgba(205, 190, 145, .16), transparent), radial-gradient(ellipse 30% 20% at 42% 70%, rgba(205, 190, 145, .12), transparent); }
+  .gstar { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; animation: twinkle var(--t) ease-in-out infinite; }
+  @keyframes twinkle { 50% { opacity: .1; } }
+  .mote.ff { width: 4px; height: 4px; background: #eaffa0; box-shadow: 0 0 10px 4px rgba(200, 255, 120, .6);
+    animation: mote var(--md) ease-in-out var(--mdl) infinite alternate, ffblink 2.8s ease-in-out var(--mdl) infinite; }
+  @keyframes ffblink { 0%, 100% { opacity: .05; } 50% { opacity: 1; } }
+  .mistband { position: absolute; left: -30%; width: 160%; top: var(--mt); height: var(--mh); pointer-events: none; filter: blur(8px);
+    background: radial-gradient(ellipse 30% 50% at 20% 50%, rgba(var(--mc), .6), transparent 70%), radial-gradient(ellipse 25% 45% at 58% 55%, rgba(var(--mc), .5), transparent 70%), radial-gradient(ellipse 22% 50% at 90% 45%, rgba(var(--mc), .55), transparent 70%);
+    animation: mdrift var(--md) ease-in-out infinite alternate; }
+  @keyframes mdrift { to { transform: translateX(-18%); } }
+  .dew { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 2px rgba(220, 255, 255, .8); animation: twinkle var(--t) ease-in-out var(--dl) infinite; }
+  .streak { position: absolute; left: 0; height: 1.5px; width: var(--sw); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); animation: streak var(--sd) linear var(--sdl) infinite; }
+  @keyframes streak { from { transform: translateX(-30vw); opacity: 0; } 20% { opacity: 1; } to { transform: translateX(130vw); opacity: 0; } }
+  .lampglow { animation: flicker 2.6s ease-in-out infinite alternate; }
+  @keyframes flicker { 50% { filter: brightness(.8); } }
+  .ripple { stroke-dasharray: 18 30; animation: ripple 3s linear infinite; }
+  @keyframes ripple { to { stroke-dashoffset: -96; } }
+  #gCel, #gMist { pointer-events: none; }
+  #mapLights { position: absolute; left: 0; top: 0; mix-blend-mode: screen; pointer-events: none; transition: opacity 2s; }
+  #mapSvg { transition: filter 2s; }
   .gsky { position: absolute; inset: 0; }
   .beams { position: absolute; inset: -20% -10% 0 0; pointer-events: none; mix-blend-mode: soft-light; }
   .beam { position: absolute; top: -10%; width: var(--bw); height: 130%; left: var(--bx); transform: rotate(22deg); transform-origin: top;
@@ -192,16 +219,18 @@
 
 <!-- ============ entrance map ============ -->
 <div class="view" id="map">
-  <div id="world"><svg id="mapSvg"></svg><div id="mapChars"></div></div>
+  <div id="world"><svg id="mapSvg"></svg><svg id="mapLights"></svg><div id="mapChars"></div></div>
 </div>
 
 <!-- ============ grove at the end of a path ============ -->
 <div class="view" id="grove" hidden>
   <div class="gsky" id="gsky"></div>
   <svg class="layer" id="gL0"></svg>
+  <div class="layer" id="gCel"></div>
   <svg class="layer" id="gL1"></svg>
   <div class="beams" id="beams"></div>
   <svg class="layer" id="gL2"></svg>
+  <div class="layer" id="gMist"></div>
   <svg class="layer" id="gGround"></svg>
   <div id="groveChars"></div>
   <svg class="layer" id="gL3"></svg>
@@ -343,6 +372,7 @@ const GROVES = [
 GROVES.forEach((g) => { g.poly = catmull(g.pts); g.end = g.poly[g.poly.length - 1]; });
 const GATE_POLY = catmull([[600, WH + 40], [600, 1640], [600, 1560]], 4);
 
+const MAP_LAMPS = [];
 function buildMap() {
   const r = rng(2024);
   const svg = $('mapSvg');
@@ -389,7 +419,7 @@ function buildMap() {
   // benches & lanterns around the plaza
   const bench = (x, y, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-38" y="-12" width="76" height="24" rx="5" fill="#8a6234"/><rect x="-36" y="-10" width="72" height="6" rx="2" fill="#b98a52"/><rect x="-36" y="-2" width="72" height="6" rx="2" fill="#b98a52"/><rect x="-36" y="6" width="72" height="4" rx="2" fill="#a77b45"/></g>`;
   s += bench(420, 1430, -78) + bench(780, 1430, 78);
-  const lamp = (x, y) => `<circle cx="${x}" cy="${y}" r="34" fill="url(#lamp)"/><rect x="${x - 9}" y="${y - 9}" width="18" height="18" rx="4" fill="#cfc8b8" stroke="#a49c8b" stroke-width="2"/><rect x="${x - 4}" y="${y - 4}" width="8" height="8" rx="2" fill="#ffe7a0"/>`;
+  const lamp = (x, y) => (MAP_LAMPS.push([x, y]), '') + `<circle cx="${x}" cy="${y}" r="34" fill="url(#lamp)"/><rect x="${x - 9}" y="${y - 9}" width="18" height="18" rx="4" fill="#cfc8b8" stroke="#a49c8b" stroke-width="2"/><rect x="${x - 4}" y="${y - 4}" width="8" height="8" rx="2" fill="#ffe7a0"/>`;
   s += lamp(450, 1350) + lamp(750, 1350) + lamp(450, 1555) + lamp(750, 1555);
   // lanterns along the paths
   for (const g of GROVES) {
@@ -432,7 +462,10 @@ function buildMap() {
   for (let i = 0; i < 70; i++) s += `<ellipse cx="${f1(r() * WW)}" cy="${f1(r() * WH)}" rx="${f1(40 + r() * 80)}" ry="${f1(30 + r() * 60)}" fill="url(#dapple)"/>`;
   s += `</g>`;
   svg.innerHTML = s;
+  const L = $('mapLights'); L.setAttribute('viewBox', `0 0 ${WW} ${WH}`); L.setAttribute('width', WW); L.setAttribute('height', WH);
+  L.innerHTML = `<defs><radialGradient id="mlg"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".9"/><stop offset=".4" stop-color="#ffc760" stop-opacity=".35"/><stop offset="1" stop-color="#ffb040" stop-opacity="0"/></radialGradient></defs>` + MAP_LAMPS.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="70" fill="url(#mlg)"/>`).join('');
 }
+function applyMapPhase() { const P = PHASES[phase]; $('mapSvg').style.filter = P.map; $('mapLights').style.opacity = P.lamp; }
 
 // one bamboo clump seen from above: shadow, leaf sprays, cane tops
 function clump(x, y, sc, r) {
@@ -590,6 +623,25 @@ $('map').addEventListener('click', (e) => {
 
 // ================= grove scene (front view) =================
 let G = {}, hangers = [], grovePeople = new Map(), meG = null;
+// ================= time of day =================
+const PHASES = {
+  dawn:  { label: '🌅 새벽',   sky: ['#e7a7a8', '#f3cfae', '#bfd9a4'], tint: '#e8c0aa', ta: .12, light: .6, beam: '255,226,206', cel: 'sun', cx: .2, cy: .26, sun: ['#fff4dc', '#ffcfa0'], ground: ['#36502f', '#45472f', '#353727'], motes: 'dust', lamp: .5, stars: 0, mist: '255,236,226', mistK: 1, map: 'brightness(.96) sepia(.12) hue-rotate(-8deg)' },
+  day:   { label: '☀️ 낮',     sky: ['#86c3ea', '#c9e6e4', '#a5d196'], tint: '#d6f5ae', ta: .22, light: .85, beam: '255,255,232', cel: 'sun', cx: .68, cy: .1, sun: ['#fffef4', '#fff1b0'], ground: ['#40703a', '#506039', '#3d482c'], motes: 'dust', lamp: .15, stars: 0, mist: '240,255,250', mistK: .6, map: 'none' },
+  dusk:  { label: '🌇 해질녘', sky: ['#3b3d70', '#c4776e', '#efb37a'], tint: '#a0603f', ta: .22, light: .55, beam: '255,188,128', cel: 'sun', cx: .82, cy: .3, sun: ['#ffe8bc', '#ff9a5a'], ground: ['#30402a', '#3e3a28', '#2b2a1f'], motes: 'dust', lamp: .8, stars: .35, mist: '255,214,190', mistK: .7, map: 'brightness(.82) sepia(.3) saturate(1.1) hue-rotate(-12deg)' },
+  night: { label: '🌙 밤',     sky: ['#050a1e', '#0e1a37', '#132835'], tint: '#0c1838', ta: .48, light: .22, beam: '190,215,255', cel: 'moon', cx: .64, cy: .12, sun: ['#fbf8e6', '#e6e2c8'], ground: ['#15231e', '#1a211f', '#111714'], motes: 'firefly', lamp: 1, stars: 1, mist: '170,190,230', mistK: .55, map: 'brightness(.5) saturate(.75) hue-rotate(14deg)' },
+};
+function phaseNow() {
+  try { const q = new URLSearchParams(location.search).get('t'); if (PHASES[q]) return q; } catch {}
+  const h = new Date().getHours();
+  return h >= 5 && h < 7 ? 'dawn' : h >= 7 && h < 17 ? 'day' : h >= 17 && h < 19 ? 'dusk' : 'night';
+}
+let phase = phaseNow();
+// each grove has its own character
+const GSTYLE = [
+  { kind: 'wind',    tint: '#74c455', ta: .14, sway: 2.1, widthK: .72, everyK: .8,  fall: 700 },   // 바람 숲: slender, restless, leaves flying
+  { kind: 'lantern', tint: '#2d5d78', ta: .14, sway: .5,  widthK: 1.35, everyK: 1.25, fall: 4000 }, // 달빛 숲: tall thick canes, stone lanterns
+  { kind: 'dew',     tint: '#2a8a7a', ta: .2,  sway: .8,  widthK: 1,   everyK: 1,   fall: 2600 },   // 이슬 숲: mist, a stream, dew sparkles
+];
 const LAYERS = [
   { id: 'gL0', every: 8,  w: [3, 6],   h: [.62, .98], cane: '#2b5143', node: '#3b6656', leaf: '#2a5445', leafLen: [16, 30], density: .95, sway: 0 },
   { id: 'gL1', every: 15, w: [6, 10],  h: [.72, 1.02], cane: '#285a3e', node: '#3e7556', leaf: '#265a3c', rim: '#3a7650', leafLen: [26, 44], density: .95, sway: 0 },
@@ -600,61 +652,73 @@ function buildGrove(k) {
   const W = innerWidth, H = innerHeight, small = W < 600;
   const groundY = H * (small ? .8 : .78);
   G = { W, H, groundY, small, scale: Math.min(1, Math.max(.72, W / 1100)) };
-  const sky = GROVES[k].sky;
-  $('gsky').style.background = `radial-gradient(ellipse 45% 40% at 55% 0%, rgba(200, 235, 180, .28), transparent 70%), linear-gradient(180deg, ${sky[0]} 0%, ${sky[1]} 50%, ${sky[2]} 100%)`;
+  const P = PHASES[phase], S = GSTYLE[k];
+  const tone = (c) => mix(mix(c, S.tint, S.ta), P.tint, P.ta);
+  const cx = W * P.cx, cy = Math.max(H * P.cy, small ? 170 : 0);
+  // sky, sun / moon, stars
+  $('gsky').style.background = `radial-gradient(circle at ${f1(cx)}px ${f1(cy)}px, rgba(${P.cel === 'moon' ? '200,215,255' : '255,240,200'}, ${P.cel === 'moon' ? .25 : .55}), transparent ${small ? 45 : 35}%), linear-gradient(180deg, ${P.sky[0]} 0%, ${P.sky[1]} 50%, ${P.sky[2]} 100%)`;
+  const rs = rng(77);
+  let st = '';
+  if (P.stars) for (let i = 0; i < 80; i++) st += `<div class="gstar" style="left:${f1(rs() * 100)}%;top:${f1(rs() * 45)}%;opacity:${f1(P.stars * (.3 + rs() * .7))};--t:${f1(2.5 + rs() * 4)}s;animation-delay:${f1(-rs() * 5)}s"></div>`;
+  $('gsky').innerHTML = st;
+  $('gCel').innerHTML = P.cel === 'moon'
+    ? `<div class="moon" style="left:${f1(cx)}px;top:${f1(cy)}px"></div>`
+    : `<div class="sun" style="left:${f1(cx)}px;top:${f1(cy)}px;--c1:${P.sun[0]};--c2:${P.sun[1]}"></div>`;
+  const gap = W * (small ? .08 : .055);
   hangers = [];
   LAYERS.forEach((cfg, li) => {
     const svg = $(cfg.id); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const r = rng(500 + k * 97 + li * 31);
+    const every = cfg.every * S.everyK;
     // stalks grow in loose clumps, not a picket fence
     let xs = [];
     if (cfg.every) {
-      let x = -cfg.every * r();
-      while (x < W + cfg.every) {
+      let x = -every * r();
+      while (x < W + every) {
         const n = r() < .35 ? 1 : r() < .7 ? 2 : 3;
-        for (let q = 0; q < n; q++) xs.push(x + (r() - .5) * cfg.every * .9);
-        x += cfg.every * n * lerp(.7, 1.5, r());
+        for (let q = 0; q < n; q++) xs.push(x + (r() - .5) * every * .9);
+        x += every * n * lerp(.7, 1.5, r());
       }
+      if (li >= 1) xs = xs.filter((x) => Math.abs(x - cx) > gap);   // an opening where the sun / moon shows through
     } else xs = (small ? [0, .08, .18, .82, .92, 1] : [0, .05, .11, .18, .82, .89, .95, 1]).map((q) => W * (q + (r() - .5) * .03));
-    // each stalk gets its own character: age, tint, thickness, bend, node rhythm, foliage
-    const TINTS = ['#6f8a2c', '#1e5c55', '#4a5a2a', '#5f9a3c', '#2f6a3b', '#7a7a3a'];
+    const TINTS = ['#3f8a3c', '#1e5c55', '#2f6a3b', '#4f9a4c', '#2a6e5a', '#356f3f'];
     let defs = '<defs>';
     if (cfg.hang) defs += `<filter id="ffg${li}" x="-80%" y="-250%" width="260%" height="600%"><feGaussianBlur stdDeviation="${li === 3 ? 9 : 7}"/></filter><filter id="eg${li}" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="2.4"/></filter>`;
     let body = '';
+    const swayBase = cfg.sway || (S.kind === 'wind' && li === 1 ? .35 : 0);
     xs.forEach((x0, si) => {
-      const age = r();                                   // 0 young … 1 old
+      const age = r();
       const tint = TINTS[Math.floor(r() * TINTS.length)];
-      const cane = mix(cfg.cane, tint, .15 + r() * .3);
+      const cane = tone(mix(cfg.cane, tint, .15 + r() * .3));
       const gid = `cg${li}_${si}`, hl = lerp(.4, .65, r());
-      defs += `<linearGradient id="${gid}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cane, '#0d2010', .35)}"/><stop offset="${f1(hl - .25)}" stop-color="${cane}"/><stop offset="${f1(hl)}" stop-color="${mix(cane, age < .4 ? '#eaffd0' : '#d8d8a8', .35 + (1 - age) * .2)}"/><stop offset="${f1(hl + .22)}" stop-color="${cane}"/><stop offset="1" stop-color="${mix(cane, '#0d2010', .3)}"/></linearGradient>`;
-      const w = lerp(cfg.w[0], cfg.w[1], r()) * lerp(.65, 1.45, r()) * (cfg.every ? 1 : G.scale);
+      defs += `<linearGradient id="${gid}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cane, '#0d2010', .35)}"/><stop offset="${f1(hl - .25)}" stop-color="${cane}"/><stop offset="${f1(hl)}" stop-color="${mix(cane, '#e4f8d2', .3 + (1 - age) * .2)}"/><stop offset="${f1(hl + .22)}" stop-color="${cane}"/><stop offset="1" stop-color="${mix(cane, '#0d2010', .3)}"/></linearGradient>`;
+      const w = lerp(cfg.w[0], cfg.w[1], r()) * lerp(.65, 1.45, r()) * S.widthK * (cfg.every ? 1 : G.scale);
       const base = cfg.every ? groundY - (3 - li) * 14 + r() * 8 : H + 10;
-      const broken = cfg.every && li >= 1 && r() < .08;
+      const broken = cfg.every && li >= 1 && r() < .06;
       const h = lerp(cfg.h[0], cfg.h[1], r()) * H * (broken ? lerp(.35, .6, r()) : 1);
       const lean = (r() - .5) * H * lerp(.02, .09, r()), bow = (r() - .5) * H * (r() < .25 ? .06 : .02), topY = base - h;
       const at = (y) => { const t = clamp((base - y) / h, 0, 1); return { x: x0 + lean * t * t + bow * 4 * t * (1 - t), w: w * (1 - lerp(.15, .4, age) * t) }; };
-      // cane outline follows the bend exactly
       const N = 12, L1 = [], R1 = [];
       for (let i = 0; i <= N; i++) { const y = base - h * i / N, p = at(y); L1.push(`${f1(p.x - p.w / 2)} ${f1(y)}`); R1.unshift(`${f1(p.x + p.w / 2)} ${f1(y)}`); }
       let g = `<path d="M${L1.join('L')}L${R1.join('L')}Z" fill="url(#${gid})"/>`;
-      if (broken) { const p = at(topY); g += `<path d="M${f1(p.x - p.w / 2)} ${f1(topY)}l${f1(p.w * .3)} -6 ${f1(p.w * .25)} 5 ${f1(p.w * .45)} -3v4h${f1(-p.w)}z" fill="${mix(cane, '#c9b98a', .5)}"/>`; }
+      if (broken) { const p = at(topY); g += `<path d="M${f1(p.x - p.w / 2)} ${f1(topY)}l${f1(p.w * .3)} -6 ${f1(p.w * .25)} 5 ${f1(p.w * .45)} -3v4h${f1(-p.w)}z" fill="${mix(cane, '#bfe0a8', .45)}"/>`; }
       const seg = lerp(.055, .12, r()) * H * (li === 3 ? 1.3 : 1);
-      const sheath = r() < .14, chalk = age < .5 && r() < .6, spotty = age > .7;
-      const node = mix(cfg.node, tint, .2);
+      const chalk = age < .5 && r() < .6, spotty = age > .75;
+      const node = tone(mix(cfg.node, tint, .2));
       let side = r() < .5 ? -1 : 1; const fol = [];
       const dens = cfg.density * lerp(.35, 1.15, r());
-      for (let y = base - seg * (1 + r() * .6), n = 0; y > topY + 4; y -= seg * lerp(.8, 1.2, r()), n++) {
+      for (let y = base - seg * (1 + r() * .6); y > topY + 4; y -= seg * lerp(.8, 1.2, r())) {
         const p = at(y);
         g += `<rect x="${f1(p.x - p.w / 2 - 1.2)}" y="${f1(y - 1.6)}" width="${f1(p.w + 2.4)}" height="3.2" rx="1.6" fill="${node}" opacity=".9"/>`;
-        if (chalk) g += `<rect x="${f1(p.x - p.w / 2)}" y="${f1(y + 1.6)}" width="${f1(p.w)}" height="${f1(Math.min(8, seg * .12))}" fill="#d8ecd0" opacity=".22"/>`;
-        if (sheath && n === 0 && li >= 1) g += `<path d="M${f1(p.x - p.w / 2 - .8)} ${f1(y)}L${f1(p.x - p.w / 2)} ${f1(y - seg * .5)}Q${f1(p.x)} ${f1(y - seg * .42)} ${f1(p.x + p.w * .1)} ${f1(y - seg * .3)}L${f1(p.x + p.w / 2 + .8)} ${f1(y)}Z" fill="${mix(cane, '#9a8456', .55)}" opacity=".6"/>`;
-        if (spotty) for (let q = 0; q < 3; q++) g += `<ellipse cx="${f1(p.x + (r() - .5) * p.w * .6)}" cy="${f1(y - r() * seg * .8)}" rx="${f1(.6 + r() * 1.4)}" ry="${f1(.5 + r())}" fill="#1a2a14" opacity=".35"/>`;
+        if (chalk) g += `<rect x="${f1(p.x - p.w / 2)}" y="${f1(y + 1.6)}" width="${f1(p.w)}" height="${f1(Math.min(8, seg * .12))}" fill="#d8ecd0" opacity=".2"/>`;
+        if (spotty) for (let q = 0; q < 3; q++) g += `<ellipse cx="${f1(p.x + (r() - .5) * p.w * .6)}" cy="${f1(y - r() * seg * .8)}" rx="${f1(.6 + r() * 1.4)}" ry="${f1(.5 + r())}" fill="#10221a" opacity=".3"/>`;
         if ((base - y) / h > lerp(.2, .45, r()) && r() < dens) { fol.push({ y, p, side }); side = r() < .8 ? -side : side; }
       }
       if (!broken) fol.push({ y: topY + 2, p: at(topY), side: r() < .5 ? -1 : 1, crown: true });
-      const leafK = lerp(.75, 1.3, r()), droopK = lerp(.6, 1.4, r());
-      const leafBase = mix(cfg.leaf, tint, .15 + r() * .2), leafHi = mix(cfg.rim || cfg.node, tint, .15);
+      const leafK = lerp(.75, 1.3, r()) * (S.kind === 'wind' ? .85 : 1), droopK = lerp(.6, 1.4, r());
+      const leafBase = tone(mix(cfg.leaf, tint, .15 + r() * .2)), leafHi = tone(mix(cfg.rim || cfg.node, tint, .15));
       const leafLen = (q) => lerp(cfg.leafLen[0], cfg.leafLen[1], q) * leafK * (cfg.every ? 1 : G.scale);
+      const windTilt = S.kind === 'wind' ? 18 : 0;   // leaves streaming one way in the wind grove
       for (const f of fol) {
         const blen = lerp(8, 38, r()) * (li >= 2 ? 1.4 : 1) * (f.crown ? .4 : 1);
         const bang = (f.crown ? -90 + f.side * 25 : f.side > 0 ? -20 - r() * 35 : -160 + r() * 35) * Math.PI / 180;
@@ -663,54 +727,106 @@ function buildGrove(k) {
         const nl = f.crown ? 7 + Math.floor(r() * 6) : 3 + Math.floor(r() * 6);
         for (let q = 0; q < nl; q++) {
           const L = leafLen(r()) * (f.crown ? 1.1 : 1), dir = f.crown ? (q % 2 ? 1 : -1) : f.side;
-          const droop = (f.crown ? lerp(-70, 50, r()) : lerp(-15, 70, r())) * droopK, ang = dir > 0 ? droop : 180 - droop;
-          const shade = mix(leafBase, leafHi, r() * .6);
-          g += `<path d="${leafPath(L, L * lerp(.1, .15, r()))}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${age > .8 && r() < .15 ? mix(shade, '#a89a4a', .45) : shade}"/>`;
+          const droop = (f.crown ? lerp(-70, 50, r()) : lerp(-15, 70, r())) * droopK, ang = (dir > 0 ? droop : 180 - droop) + (dir > 0 ? -windTilt : windTilt) * .3 - windTilt * .5;
+          g += `<path d="${leafPath(L, L * lerp(.1, .15, r()))}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${mix(leafBase, leafHi, r() * .6)}"/>`;
         }
       }
-      const sway = cfg.sway ? ` class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(cfg.sway * lerp(.5, 1.5, r()))}deg;--d:${f1(3.5 + r() * 4)}s;--dl:${f1(-r() * 7)}s"` : '';
+      const amp = swayBase * S.sway * lerp(.5, 1.5, r());
+      const sway = amp ? ` class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(amp)}deg;--d:${f1((S.kind === 'wind' ? 2.2 : 3.5) + r() * 3)}s;--dl:${f1(-r() * 7)}s"` : '';
       body += `<g${sway}>${g}<g class="msgs"></g></g>`;
-      if (cfg.hang && !broken) hangers.push({ layer: li, x0, lean, bow, base, h, topY, gi: si });
-      else if (cfg.hang) hangers.push({ layer: li, x0, lean, bow, base, h, topY, gi: si, skip: true });
+      hangers.push({ layer: li, x0, lean, bow, base, h, topY, gi: si, skip: !cfg.hang || broken });
     });
     defs += '</defs>';
-    if (li === 3) {
+    if (li === 3) {   // overhead canopy, with an opening for the sky
       let c = '';
       for (let x = -30; x < W + 40; x += small ? 26 : 32) {
-        const cy = -14 + r() * 26, n = 6 + Math.floor(r() * 4);
+        if (Math.abs(x - cx) < W * (small ? .12 : .08) && cy < H * .2) continue;
+        const ccy = -14 + r() * 26, n = 6 + Math.floor(r() * 4);
         for (let q = 0; q < n; q++) {
           const L = lerp(50, 115, r()) * G.scale, ang = lerp(35, 145, r());
-          c += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(x + (r() - .5) * 20)} ${f1(cy)}) rotate(${f1(ang)})" fill="${mix('#123620', '#2c6638', r())}"/>`;
+          c += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(x + (r() - .5) * 20)} ${f1(ccy)}) rotate(${f1(ang)})" fill="${tone(mix('#123620', '#2c6638', r()))}"/>`;
         }
       }
-      body += `<g class="sw" style="transform-origin:${W / 2}px -400px;--a:.25deg;--d:6s;--dl:-2s">${c}</g>`;
+      body += `<g class="sw" style="transform-origin:${W / 2}px -400px;--a:${S.kind === 'wind' ? .6 : .25}deg;--d:${S.kind === 'wind' ? 3 : 6}s;--dl:-2s">${c}</g>`;
     }
     svg.innerHTML = defs + body;
-    if (cfg.hang) { const gs = svg.querySelectorAll(':scope > g'); hangers.filter((s) => s.layer === li).forEach((s) => { s.el = gs[s.gi].querySelector('.msgs'); }); hangers = hangers.filter((s) => !s.skip); }
+    const gs = svg.querySelectorAll(':scope > g');
+    hangers.filter((s) => s.layer === li).forEach((s) => { s.el = gs[s.gi].querySelector('.msgs'); });
   });
-  // forest floor clearing
+  hangers = hangers.filter((s) => !s.skip);
+  // ---- forest floor ----
   const r = rng(900 + k);
-  let s = `<defs><linearGradient id="gfloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c4a2b"/><stop offset=".4" stop-color="#3a432b"/><stop offset="1" stop-color="#2b3221"/></linearGradient>
-    <radialGradient id="glight" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="#d8f0b8" stop-opacity=".2"/><stop offset="1" stop-color="#fff7d0" stop-opacity="0"/></radialGradient></defs>`;
+  const gr = P.ground.map(tone);
+  let s = `<defs><linearGradient id="gfloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${gr[0]}"/><stop offset=".4" stop-color="${gr[1]}"/><stop offset="1" stop-color="${gr[2]}"/></linearGradient>
+    <radialGradient id="glight" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="rgb(${P.beam})" stop-opacity="${f1(.08 + P.light * .18)}"/><stop offset="1" stop-color="rgb(${P.beam})" stop-opacity="0"/></radialGradient>
+    <radialGradient id="lampg"><stop offset="0" stop-color="#ffe7a6" stop-opacity=".95"/><stop offset=".35" stop-color="#ffcf6a" stop-opacity=".45"/><stop offset="1" stop-color="#ffb84a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tone('#7cc3c8')}"/><stop offset="1" stop-color="${tone('#3f8a95')}"/></linearGradient></defs>`;
   s += `<path d="M0 ${f1(groundY)}${Array.from({ length: Math.ceil(W / 20) + 2 }, (_, i) => `L${i * 20} ${f1(groundY + Math.sin(i * .5) * 4)}`).join('')}L${W + 40} ${H}L0 ${H}Z" fill="url(#gfloor)"/>`;
   s += `<ellipse cx="${W / 2}" cy="${f1(groundY + (H - groundY) * .55)}" rx="${f1(W * .38)}" ry="${f1((H - groundY) * .5)}" fill="url(#glight)"/>`;
-  for (let i = 0; i < W / 9; i++) { const x = r() * W, y = groundY + r() * 14, hh = 6 + r() * 14; s += `<path d="M${f1(x)} ${f1(y)}q${f1(2 + r() * 3)} ${f1(-hh * .6)} ${f1(r() * 6 - 1)} ${f1(-hh)}" stroke="${mix('#24502a', '#477f40', r())}" stroke-width="2" fill="none" stroke-linecap="round"/>`; }
-  for (let i = 0; i < 26; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 20, H, r()))}" rx="${f1(3 + r() * 9)}" ry="${f1(2 + r() * 3)}" fill="#4b4a33" opacity=".6"/>`;
-  for (let i = 0; i < 6; i++) { const x = r() < .5 ? r() * W * .25 : W - r() * W * .25, y = lerp(groundY + 10, H - 20, r()); s += fern(x, y, lerp(.7, 1.2, r()), r); }
+  const blades = S.kind === 'wind' ? W / 4 : W / 9;
+  for (let i = 0; i < blades; i++) {
+    const x = r() * W, y = groundY + r() * (S.kind === 'wind' ? 40 : 14), hh = (S.kind === 'wind' ? 14 : 6) + r() * (S.kind === 'wind' ? 26 : 14), bend = S.kind === 'wind' ? 6 + r() * 8 : r() * 6 - 1;
+    s += `<path d="M${f1(x)} ${f1(y)}q${f1(2 + r() * 3)} ${f1(-hh * .6)} ${f1(bend)} ${f1(-hh)}" stroke="${tone(mix('#2c6a32', '#5a9a48', r()))}" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  }
+  for (let i = 0; i < 20; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 20, H, r()))}" rx="${f1(3 + r() * 9)}" ry="${f1(2 + r() * 3)}" fill="${tone('#3e4a34')}" opacity=".6"/>`;
+  const nf = S.kind === 'dew' ? 12 : 6;
+  for (let i = 0; i < nf; i++) { const x = r() < .5 ? r() * W * .28 : W - r() * W * .28, y = lerp(groundY + 10, H - 20, r()); s += fern(x, y, lerp(.7, 1.25, r()), r, tone); }
+  if (S.kind === 'wind') {
+    for (let i = 0; i < 40; i++) { const x = r() * W, y = groundY + 6 + r() * 30; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.6 + r() * 1.6)}" fill="${['#ffffff', '#fff3a0', '#f7d9ff'][Math.floor(r() * 3)]}" opacity="${f1(.5 + P.light * .5)}"/>`; }
+  }
+  if (S.kind === 'lantern') {
+    // stepping stones to the clearing and stone lanterns
+    for (let i = 0; i < 6; i++) { const t = i / 5, y = lerp(groundY + 18, H - 30, t), x = W / 2 + Math.sin(i * 1.3) * W * .04; s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(lerp(18, 40, t))}" ry="${f1(lerp(5, 11, t))}" fill="${tone('#8a8a80')}" opacity=".75"/>`; }
+    const spots = small ? [[.13, .86], [.87, .86]] : [[.24, groundY / H + .045], [.76, groundY / H + .045], [.1, .9], [.9, .9]];
+    for (const [qx, qy] of spots) s += stoneLantern(W * qx, H * qy, (qy > .88 ? 1.25 : .85) * Math.max(.8, G.scale), P.lamp, tone);
+  }
+  if (S.kind === 'dew') {
+    const sy = groundY + (H - groundY) * (small ? .1 : .08), amp = 6;
+    const top = Array.from({ length: Math.ceil(W / 24) + 2 }, (_, i) => `L${i * 24} ${f1(sy + Math.sin(i * .45) * amp)}`).join('');
+    const bot = Array.from({ length: Math.ceil(W / 24) + 2 }, (_, i) => { const x = (Math.ceil(W / 24) + 1 - i) * 24; return `L${x} ${f1(sy + 26 + Math.sin(x / 24 * .45 + 1) * amp)}`; }).join('');
+    s += `<path d="M0 ${f1(sy)}${top}${bot}Z" fill="url(#water)" opacity=".9"/>`;
+    for (let i = 0; i < 7; i++) { const yy = sy + 6 + i * 3; s += `<path class="ripple" d="M0 ${f1(yy)}${Array.from({ length: Math.ceil(W / 24) + 2 }, (_, j) => `L${j * 24} ${f1(yy + Math.sin(j * .45) * amp)}`).join('')}" stroke="rgba(255,255,255,${f1(.25 + P.light * .3)})" stroke-width="1.2" fill="none" style="animation-duration:${f1(2.5 + i * .4)}s"/>`; }
+    for (let i = 0; i < 16; i++) { const x = r() * W, y = sy + (r() < .5 ? -4 : 26) + Math.sin(x / 24 * .45) * amp; s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(6 + r() * 12)}" ry="${f1(4 + r() * 5)}" fill="${tone(mix('#6f7a70', '#9aa59a', r()))}"/>`; }
+    for (let i = 0; i < 30; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 4, H, r()))}" rx="${f1(10 + r() * 22)}" ry="${f1(3 + r() * 5)}" fill="${tone('#2f6a3a')}" opacity=".5"/>`;
+  }
   $('gGround').setAttribute('viewBox', `0 0 ${W} ${H}`); $('gGround').innerHTML = s;
-  // light
+  // ---- light beams from the sun / moon side ----
   const rb = rng(3 + k); let b = '';
-  for (let i = 0; i < (small ? 4 : 7); i++) b += `<div class="beam" style="--bx:${f1(25 + (i / 7) * 80 + rb() * 6)}%;--bw:${f1(40 + rb() * 90)}px;--bd:${f1(5 + rb() * 5)}s;--bdl:${f1(-rb() * 6)}s"></div>`;
-  $('beams').innerHTML = b;
+  const dir = P.cx > .5 ? 1 : -1, nb = small ? 4 : 7;
+  for (let i = 0; i < nb; i++) b += `<div class="beam" style="--bx:${f1(P.cx * 100 - dir * (i / nb) * 70 + rb() * 6)}%;--bw:${f1(40 + rb() * 90)}px;--bd:${f1(5 + rb() * 5)}s;--bdl:${f1(-rb() * 6)}s;--rot:${dir * 22}deg;--bc:${P.beam}"></div>`;
+  $('beams').innerHTML = b; $('beams').style.opacity = P.light;
+  // ---- mist, dew, wind streaks ----
+  let mi = '';
+  const mistK = (S.kind === 'dew' ? 1 : .25) * P.mistK;
+  for (let i = 0; i < (S.kind === 'dew' ? 4 : 2); i++) mi += `<div class="mistband" style="--mt:${f1(38 + i * 12 + rb() * 6)}%;--mh:${f1(16 + rb() * 10)}%;--mc:${P.mist};--md:${f1(40 + rb() * 40)}s;opacity:${f1(mistK * (.6 + rb() * .4))};animation-delay:${f1(-rb() * 30)}s"></div>`;
+  if (S.kind === 'dew') for (let i = 0; i < (small ? 22 : 40); i++) mi += `<div class="dew" style="left:${f1(rb() * 100)}%;top:${f1(8 + rb() * 55)}%;--t:${f1(1.8 + rb() * 3)}s;--dl:${f1(-rb() * 4)}s"></div>`;
+  if (S.kind === 'wind') for (let i = 0; i < (small ? 6 : 10); i++) mi += `<div class="streak" style="top:${f1(10 + rb() * 70)}%;--sw:${f1(80 + rb() * 160)}px;--sd:${f1(2.5 + rb() * 3)}s;--sdl:${f1(-rb() * 5)}s"></div>`;
+  $('gMist').innerHTML = mi;
+  // ---- floating dust by day, fireflies by night ----
   let m = '';
-  for (let i = 0; i < (small ? 14 : 24); i++) { const v = () => (rb() * 120 - 60).toFixed(0) + 'px'; m += `<div class="mote" style="left:${f1(rb() * 100)}%;top:${f1(10 + rb() * 60)}%;--md:${f1(6 + rb() * 8)}s;--mdl:${f1(-rb() * 8)}s;--mx:${v()};--my:${v()}"></div>`; }
+  const ff = P.motes === 'firefly', nm = ff ? (small ? 22 : 40) : (small ? 14 : 24);
+  for (let i = 0; i < nm; i++) { const v = () => (rb() * 140 - 70).toFixed(0) + 'px'; m += `<div class="mote${ff ? ' ff' : ''}" style="left:${f1(rb() * 100)}%;top:${f1(ff ? 30 + rb() * 60 : 10 + rb() * 60)}%;--md:${f1(6 + rb() * 8)}s;--mdl:${f1(-rb() * 8)}s;--mx:${v()};--my:${v()}"></div>`; }
   $('motes').innerHTML = m;
 }
-function fern(x, y, sc, r) {
+function stoneLantern(x, y, sc, lit, tone) {
+  const st = tone('#9a9a90'), dk = tone('#6e6e66');
+  const u = (n) => f1(n * sc);
+  return `<g transform="translate(${f1(x)} ${f1(y)})">
+    <ellipse cx="0" cy="${u(-40)}" rx="${u(70)}" ry="${u(55)}" fill="url(#lampg)" opacity="${f1(lit)}" class="lampglow"/>
+    <ellipse cx="0" cy="2" rx="${u(22)}" ry="${u(5)}" fill="#000" opacity=".25"/>
+    <rect x="${u(-16)}" y="${u(-8)}" width="${u(32)}" height="${u(9)}" rx="2" fill="${dk}"/>
+    <rect x="${u(-6)}" y="${u(-34)}" width="${u(12)}" height="${u(27)}" fill="${st}"/>
+    <rect x="${u(-15)}" y="${u(-40)}" width="${u(30)}" height="${u(7)}" rx="2" fill="${dk}"/>
+    <rect x="${u(-12)}" y="${u(-62)}" width="${u(24)}" height="${u(22)}" fill="${st}"/>
+    <rect x="${u(-6)}" y="${u(-58)}" width="${u(12)}" height="${u(13)}" fill="#ffd77a" opacity="${f1(.35 + lit * .65)}"/>
+    <path d="M${u(-24)} ${u(-62)}Q0 ${u(-74)} ${u(24)} ${u(-62)}L${u(14)} ${u(-74)}L${u(-14)} ${u(-74)}Z" fill="${dk}"/>
+    <circle cx="0" cy="${u(-78)}" r="${u(4)}" fill="${dk}"/></g>`;
+}
+function fern(x, y, sc, r, tone = (c) => c) {
   let g = '';
   for (let i = 0; i < 7; i++) {
     const ang = -160 + i * 23 + (r() - .5) * 10, L = (28 + r() * 16) * sc;
-    g += `<path d="${leafPath(L, L * .22)}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})" fill="${mix('#1c4424', '#3c7638', r())}"/>`;
+    g += `<path d="${leafPath(L, L * .22)}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})" fill="${tone(mix('#1c4424', '#3c7638', r()))}"/>`;
   }
   return g;
 }
@@ -920,10 +1036,10 @@ $('aboutBtn').onclick = () => $('aboutDlg').showModal();
 // ================= data & presence =================
 function updateStatus() {
   const total = others.size + 1;
-  if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `입구 광장 · ${total}명 · 깜빡이는 잎 ${leaves.length}장`; }
+  if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `${PHASES[phase].label} · 입구 광장 · ${total}명 · 잎 ${leaves.length}장`; }
   else {
     const g = GROVES[groveIdx], n = leaves.length, here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).length + 1;
-    $('title').textContent = `${g.icon} ${g.name}`; $('status').textContent = innerWidth < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
+    $('title').textContent = `${g.icon} ${g.name}`; $('title').title = PHASES[phase].label; $('status').textContent = innerWidth < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
   }
 }
 async function load(first) {
@@ -959,7 +1075,7 @@ function dropLeaf() {
   const L = 14 + Math.random() * 14, el = document.createElementNS(SVGNS, 'svg');
   el.setAttribute('width', L); el.setAttribute('height', L * .4); el.setAttribute('viewBox', `0 ${-L * .2} ${L} ${L * .4}`);
   el.style.cssText = `position:fixed;z-index:4;pointer-events:none;overflow:visible;left:${Math.random() * innerWidth}px;top:-20px;transition:transform ${11 + Math.random() * 6}s linear, opacity 1s`;
-  el.innerHTML = `<path d="${leafPath(L, L * .14)}" fill="${Math.random() < .6 ? '#8cc46c' : '#d9c77a'}"/>`;
+  el.innerHTML = `<path d="${leafPath(L, L * .14)}" fill="${['#6fae5a', '#8cc46c', '#5a9a4a', '#4f8f52'][Math.floor(Math.random() * 4)]}"/>`;
   document.body.appendChild(el);
   requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `translate(${Math.random() * 240 - 120}px, ${innerHeight + 40}px) rotate(${400 + Math.random() * 300}deg)`; }));
   setTimeout(() => el.remove(), 18000);
@@ -1007,9 +1123,15 @@ addEventListener('resize', () => {
     if (scene === 'grove') { const k = groveIdx; buildGrove(k); renderGroveLeaves(); if (meG) { meG.x = G.W / 2; meG.y = G.H - (G.small ? 92 : 70); meG.scale = G.small ? 2 : 2.4; } }
   }, 200);
 });
-setInterval(() => { if (scene === 'grove' && Math.random() < .5) dropLeaf(); }, 2400);
+setInterval(() => { if (scene === 'grove' && Math.random() < 400 / GSTYLE[groveIdx].fall) dropLeaf(); }, 400);
+setInterval(() => {
+  const p = phaseNow(); if (p === phase) return;
+  phase = p; applyMapPhase();
+  if (scene === 'grove') { buildGrove(groveIdx); renderGroveLeaves(); }
+  updateStatus();
+}, 60000);
 
-buildMap(); layoutMap();
+buildMap(); applyMapPhase(); layoutMap();
 me = new Person('me', $('mapChars'), { me: true, x: 600, y: WH + 20, scale: charScale });
 camTarget(me, true);
 me.go([{ x: 600, y: 1600 }, { x: 600, y: 1535 }], () => {
