@@ -50,7 +50,7 @@ export function GuestInvites({ settings, room }: { settings: Settings; room: Loc
           ].join('\n')
         : '👀 이 초대는 "보기만" 할 수 있어요. 대화를 구경할 수 있고, 글은 못 써요.',
       '',
-      g.expiresAt ? `⏰ 이 링크는 ${untilText(g.expiresAt)}까지 쓸 수 있어요.` : '⏰ 이 링크는 기한 없이 쓸 수 있어요.',
+      g.expiresAt ? `⏰ ${untilText(g.expiresAt)}까지 들어와 주세요! 그 뒤에는 링크가 막혀요.` : '⏰ 언제든 들어오면 돼요(기한 없음).',
       '',
       '📌 알아 두세요',
       '· 이 링크로는 이 방 하나만 보여요.',
