@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS reactions (
 CREATE TABLE IF NOT EXISTS presence (
   sid TEXT PRIMARY KEY,
   seen INTEGER NOT NULL,
-  place TEXT NOT NULL DEFAULT 'plaza'  -- plaza | g0 | g1 | g2
+  place TEXT NOT NULL DEFAULT 'plaza', -- plaza | g0 | g1 | g2
+  keeper INTEGER NOT NULL DEFAULT 0    -- 1 = the forest keeper (admin), shown with a badge, never counted
 );
 CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(seen);
 

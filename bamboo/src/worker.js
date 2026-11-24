@@ -90,14 +90,22 @@ async function pbkdf2(password, saltB64) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
   return b64(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256));
 }
+const adminOk = new Map();   // sha256(password + stored hash) -> expiry; avoids re-running PBKDF2 on every request
 async function isAdmin(request, env) {
   let given = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   try { given = decodeURIComponent(given); } catch {}   // passwords may be Korean: the page sends them URI-encoded
   if (!given) return false;
   const row = await env.DB.prepare("SELECT v FROM settings WHERE k = 'admin_hash'").first();
-  if (row) { const [salt, hash] = row.v.split(':'); return safeEqual(await pbkdf2(given, salt), hash); }
-  return !!env.ADMIN_TOKEN && safeEqual(given, env.ADMIN_TOKEN);
+  const key = b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(given + '|' + (row ? row.v : 'env'))));
+  if ((adminOk.get(key) || 0) > Date.now()) return true;
+  let ok;
+  if (row) { const [salt, hash] = row.v.split(':'); ok = safeEqual(await pbkdf2(given, salt), hash); }
+  else ok = !!env.ADMIN_TOKEN && safeEqual(given, env.ADMIN_TOKEN);
+  if (ok) adminOk.set(key, Date.now() + 10 * 60 * 1000);
+  return ok;
 }
+// a request from the forest keeper (logged-in admin walking the site)? only checked when a password is sent
+const isKeeper = (request, env) => (request.headers.get('authorization') ? isAdmin(request, env) : Promise.resolve(false));
 
 // ---------- numbers only: daily counters (no personal data) ----------
 const kstDay = (t = Date.now()) => new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -181,9 +189,10 @@ async function handleApi(request, env, url, ctx) {
     const row = await env.DB.prepare(
       'INSERT INTO leaves (text, created, author, mode, grove) VALUES (?, ?, ?, ?, ?) RETURNING id, text, created, heard, mode, grove',
     ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper', [0, 1, 2].includes(body?.grove) ? body.grove : 0).first();
-    { const day = kstDay(now);
+    const keeperPost = await isKeeper(request, env);
+    if (!keeperPost) { const day = kstDay(now);
       await env.DB.batch([bump(env, day, 'leaves'), bump(env, day, 'leaves_g' + row.grove), bump(env, day, 'leaves_' + row.mode)]); }
-    later(notify(env, `🎋 새 사연 · ${GROVE_NAME[row.grove] || ''}`, `${MODE_NAME[row.mode] || ''}  ${clip(row.text)}`));
+    if (!keeperPost) later(notify(env, `🎋 새 사연 · ${GROVE_NAME[row.grove] || ''}`, `${MODE_NAME[row.mode] || ''}  ${clip(row.text)}`));
     return json({ leaf: row }, 201);
   }
 
@@ -199,7 +208,8 @@ async function handleApi(request, env, url, ctx) {
       .bind(id, visitor, kind).run();
     if (ins.meta.changes) {
       if (kind === 'heard') {
-        await env.DB.batch([env.DB.prepare('UPDATE leaves SET heard = heard + 1 WHERE id = ?').bind(id), bump(env, kstDay(now), 'heard')]);
+        const kp = await isKeeper(request, env);
+        await env.DB.batch([env.DB.prepare('UPDATE leaves SET heard = heard + 1 WHERE id = ?').bind(id), ...(kp ? [] : [bump(env, kstDay(now), 'heard')])]);
       } else {
         await env.DB.prepare(
           'UPDATE leaves SET reports = reports + 1, hidden = CASE WHEN reports + 1 >= ? THEN 1 ELSE hidden END WHERE id = ?',
@@ -219,17 +229,24 @@ async function handleApi(request, env, url, ctx) {
     const sid = String(body?.sid || '');
     if (!/^[a-z0-9]{12,40}$/.test(sid)) return fail(400, '잘못된 요청이에요.');
     const place = PLACES.includes(body?.place) ? body.place : 'plaza';
-    await env.DB.prepare('INSERT INTO presence (sid, seen, place) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen, place = excluded.place')
-      .bind(sid, now, place).run();
-    { const day = kstDay(now), who = await visitorId(request, env);
+    const keeper = await isKeeper(request, env);
+    if (keeper && body?.keeper !== 'visible') {
+      await env.DB.prepare('DELETE FROM presence WHERE sid = ?').bind(sid).run();           // invisible keeper: not stored, not shown
+    } else {
+      await env.DB.prepare('INSERT INTO presence (sid, seen, place, keeper) VALUES (?, ?, ?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen, place = excluded.place, keeper = excluded.keeper')
+        .bind(sid, now, place, keeper ? 1 : 0).run();
+    }
+    if (!keeper) {
+      const day = kstDay(now), who = await visitorId(request, env);
       await countOnce(env, day, who, 'site', 'visits');
-      if (place !== 'plaza') await countOnce(env, day, who, place, 'visits_' + place); }
+      if (place !== 'plaza') await countOnce(env, day, who, place, 'visits_' + place);
+    }
     if (Math.random() < .05) await env.DB.prepare('DELETE FROM presence WHERE seen < ?').bind(now - 3600 * 1000).run();
-    const { results } = await env.DB.prepare('SELECT sid, place FROM presence WHERE seen >= ? ORDER BY seen DESC LIMIT 60')
+    const { results } = await env.DB.prepare('SELECT sid, place, keeper FROM presence WHERE seen >= ? ORDER BY seen DESC LIMIT 60')
       .bind(now - PRESENCE_MS).all();
     // other strollers only, as short one-way hashes (enough to tell them apart)
     const short = (x) => { let h = 2166136261; for (const c of x) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(36); };
-    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => ({ id: short(r.sid), place: r.place })) });
+    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => ({ id: short(r.sid), place: r.place, keeper: r.keeper ? 1 : 0 })) });
   }
 
   // ---- admin ----
@@ -254,6 +271,7 @@ async function handleApi(request, env, url, ctx) {
       await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('admin_hash', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(`${salt}:${await pbkdf2(next, salt)}`).run();
       return json({ ok: true });
     }
+    if (pathname === '/api/admin/ping' && method === 'GET') return json({ ok: true });
     if (pathname === '/api/admin/push/key' && method === 'GET') return json({ key: env.VAPID_PUBLIC || null });
     if (pathname === '/api/admin/push/subscribe' && method === 'POST') {
       let body; try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }
@@ -276,7 +294,7 @@ async function handleApi(request, env, url, ctx) {
     if (pathname === '/api/admin/stats' && method === 'GET') {
       const today = kstDay(now), week = [...Array(7)].map((_, i) => kstDay(now - (6 - i) * 86400 * 1000));
       const [live, tot, td, days] = await Promise.all([
-        env.DB.prepare('SELECT place, COUNT(*) AS n FROM presence WHERE seen >= ? GROUP BY place').bind(now - PRESENCE_MS).all(),
+        env.DB.prepare('SELECT place, COUNT(*) AS n FROM presence WHERE seen >= ? AND keeper = 0 GROUP BY place').bind(now - PRESENCE_MS).all(),
         env.DB.prepare('SELECT metric, SUM(n) AS n FROM daily_stats GROUP BY metric').all(),
         env.DB.prepare('SELECT metric, n FROM daily_stats WHERE day = ?').bind(today).all(),
         env.DB.prepare("SELECT day, metric, n FROM daily_stats WHERE day >= ? AND metric IN ('visits', 'leaves')").bind(week[0]).all(),
@@ -334,7 +352,7 @@ export default {
     await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('notified_visits', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(String(tot.n)).run();
     const diff = tot.n - prev;
     if (last && diff > 0) {
-      const live = await env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE seen >= ?').bind(Date.now() - PRESENCE_MS).first();
+      const live = await env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE seen >= ? AND keeper = 0').bind(Date.now() - PRESENCE_MS).first();
       await notify(env, `👣 지난 1시간 새 방문자 ${diff}명`, `지금 숲에 ${live.n}명 · 오늘까지 누적 ${tot.n}명`);
     }
   },
