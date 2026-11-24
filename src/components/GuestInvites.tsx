@@ -50,7 +50,7 @@ export function GuestInvites({ settings, room }: { settings: Settings; room: Loc
           ].join('\n')
         : '👀 이 초대는 "보기만" 할 수 있어요. 대화를 구경할 수 있고, 글은 못 써요.',
       '',
-      g.expiresAt ? `⏰ ${untilText(g.expiresAt)}까지 들어와 주세요! 그 뒤에는 링크가 막혀요.` : '⏰ 언제든 들어오면 돼요(기한 없음).',
+      g.expiresAt ? `⏰ ${untilText(g.expiresAt)}까지 들어와 주세요! 한 번 들어오면 그 뒤로도 계속 쓸 수 있어요.` : '⏰ 언제든 들어오면 돼요(기한 없음).',
       '',
       '📌 알아 두세요',
       '· 이 링크로는 이 방 하나만 보여요.',
@@ -138,23 +138,27 @@ export function GuestInvites({ settings, room }: { settings: Settings; room: Loc
             <Text style={{ color: t.subtext, fontSize: 12 }}>
               {g.canPost ? '같이 대화' : '보기만'} · {g.joined ? '들어온 적 있음' : '아직 안 들어옴'}
             </Text>
-            {/* 기한: 지났으면 빨갛게, 누르면 지금부터 7일 더 */}
-            <Text style={{ color: expired(g) ? t.danger : t.subtext, fontSize: 12 }}>
-              ⏰ {g.expiresAt ? (expired(g) ? '기한 지남 (링크 안 열려요)' : `${untilText(g.expiresAt)}까지`) : '기한 없음'}
-              {'  '}
-              <Text
-                onPress={() =>
-                  api
-                    .setGuestDays(settings, room, g.id, 7)
-                    .then(load)
-                    .then(() => setNote(`${g.name} 님 링크를 지금부터 7일 동안 쓸 수 있게 했어요.`))
-                    .catch((e) => setNote(e instanceof Error ? e.message : String(e)))
-                }
-                style={{ color: t.accent, fontWeight: '700' }}
-              >
-                {expired(g) ? '7일 다시 열기' : '7일 연장'}
+            {/* 기한: 한 번 들어온 사람은 계속 써요. 안 들어왔으면 언제까지 들어와야 하는지, 지났으면 빨갛게 */}
+            {g.joined ? (
+              <Text style={{ color: t.subtext, fontSize: 12 }}>⏰ 들어왔어요 · 계속 쓸 수 있어요</Text>
+            ) : (
+              <Text style={{ color: expired(g) ? t.danger : t.subtext, fontSize: 12 }}>
+                ⏰ {g.expiresAt ? (expired(g) ? '기한 지남 (아직 못 들어옴)' : `${untilText(g.expiresAt)}까지 들어오기`) : '기한 없음'}
+                {'  '}
+                <Text
+                  onPress={() =>
+                    api
+                      .setGuestDays(settings, room, g.id, 7)
+                      .then(load)
+                      .then(() => setNote(`${g.name} 님이 지금부터 7일 안에 들어올 수 있게 했어요.`))
+                      .catch((e) => setNote(e instanceof Error ? e.message : String(e)))
+                  }
+                  style={{ color: t.accent, fontWeight: '700' }}
+                >
+                  {expired(g) ? '7일 다시 열기' : '7일 연장'}
+                </Text>
               </Text>
-            </Text>
+            )}
           </View>
           <Pressable onPress={() => copy(g)} style={[styles.small, { borderColor: t.accent }]}>
             <Text style={{ color: t.accent, fontWeight: '700', fontSize: 12 }}>링크 복사</Text>
@@ -171,7 +175,8 @@ export function GuestInvites({ settings, room }: { settings: Settings; room: Loc
 
 const DAYS = [1, 3, 7, 30, 0];
 const daysLabel = (d: number) => (d === 0 ? '기한 없음' : `${d}일`);
-const expired = (g: Guest) => !!g.expiresAt && Date.now() > g.expiresAt;
+/** 기한 안에 한 번도 안 들어와서 막힌 링크 */
+const expired = (g: Guest) => !g.joined && !!g.expiresAt && Date.now() > g.expiresAt;
 /** "11월 30일 오후 3시" */
 function untilText(at: number) {
   const d = new Date(at);

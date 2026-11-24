@@ -179,7 +179,8 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
       checkRate(`guest:${parts[1]}`, 240);
       const g = await rooms.guestByToken(parts[1]);
       if (!g) throw new HttpError(404, '초대가 없거나 거둬졌어요.');
-      if (g.expires_at && Date.now() > g.expires_at) throw new HttpError(410, '초대 기한이 지났어요. 방장에게 기한을 늘려 달라고 해 주세요.');
+      // 기한은 '언제까지 들어와야 하는지'예요. 기한 안에 한 번 들어온 사람은 계속 써요.
+      if (g.expires_at && g.last_seen === null && Date.now() > g.expires_at) throw new HttpError(410, '들어올 수 있는 기한이 지났어요. 방장에게 기한을 늘려 달라고 해 주세요.');
       const room = await rooms.room(g.room_id);
       if (!room) throw new HttpError(404, '방이 없어졌어요.');
       await rooms.touchGuest(g);
