@@ -255,6 +255,8 @@
   #keeperBtn.on { background: #e9f6e4; border-color: var(--accent); }
   .person .tag.keeperTag { background: #b8892f; }
   .msg.hiddenLeaf { opacity: .35; }
+  .keeperEnter { display: block; margin: 14px auto 0; background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; }
+  .keeperToggle[hidden] { display: none; }
   .keeperToggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; cursor: pointer; user-select: none; }
   .keeperToggle span:first-child { font-weight: 700; font-size: 15px; }
   .keeperToggle input { position: absolute; opacity: 0; pointer-events: none; }
@@ -380,8 +382,9 @@
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
   <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
-  <label class="keeperToggle" for="keeperSwitch">
-    <span id="keeperLabel">🎋 숲지기 모드 끔</span>
+  <button class="keeperEnter" id="keeperEnter">🎋 숲지기로 들어가기</button>
+  <label class="keeperToggle" for="keeperSwitch" id="keeperToggle" hidden>
+    <span id="keeperLabel">🎋 숲지기 숨김</span>
     <input type="checkbox" id="keeperSwitch" role="switch"><span class="sw"><span class="knob"></span></span>
   </label>
 </dialog>
@@ -474,7 +477,6 @@ function toast(msg, ms = 2800) {
 // ---------- 🎋 숲지기 (the admin walking the forest) ----------
 let keeperToken = ''; try { keeperToken = localStorage.getItem('bamboo.admin') || ''; } catch {}
 let keeper = false;
-let keeperOn = true; try { keeperOn = localStorage.getItem('bamboo.keeper.on') !== '0'; } catch {}
 let adminDevice = false; try { adminDevice = localStorage.getItem('bamboo.adminDevice') === '1'; } catch {}
 let keeperVisible = false; try { keeperVisible = localStorage.getItem('bamboo.keeper.visible') === '1'; } catch {}
 async function api(path, body) {
@@ -1311,24 +1313,25 @@ function setKeeperBtn() { const b = $('keeperBtn'); b.hidden = !keeper; b.textCo
 async function startKeeper() {
   if (!keeperToken) return;
   try { await api('/api/admin/ping'); } catch { keeperChecking = false; keeperToken = ''; try { localStorage.removeItem('bamboo.admin'); } catch {} heartbeat(); return; }
-  keeper = true; keeperChecking = false; keeperOn = true; try { localStorage.setItem('bamboo.keeper.on', '1'); } catch {} setKeeperBtn();
+  keeper = true; keeperChecking = false; setKeeperBtn();
   if (!adminDevice) { adminDevice = true; try { localStorage.setItem('bamboo.adminDevice', '1'); } catch {} }
   api('/api/admin/uncount-me', {}).catch(() => {});
   if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나 · 🎋'; }
   toast(keeperVisible ? '🎋 숲지기로 들어왔어요 · 다른 사람에게 보여요' : '🎋 숲지기로 들어왔어요 · 아무에게도 안 보여요', 3200);
   heartbeat(); load(true);
 }
-function syncKeeperEntry() { $('keeperSwitch').checked = keeper; $('keeperLabel').textContent = keeper ? '🎋 숲지기 모드 켬' : '🎋 숲지기 모드 끔'; }
-async function keeperOff() {
-  keeper = false; keeperOn = false; try { localStorage.setItem('bamboo.keeper.on', '0'); } catch {}   // the password stays saved, so turning it back on is one tap
-  setKeeperBtn(); syncKeeperEntry();
-  if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나'; }
-  toast('🎋 숲지기 모드를 껐어요', 2200);
-  await heartbeat(); await load(true); if (scene === 'grove') renderGroveLeaves();
+function syncKeeperEntry() {
+  $('keeperEnter').hidden = keeper; $('keeperToggle').hidden = !keeper;
+  $('keeperSwitch').checked = keeperVisible;
+  $('keeperLabel').textContent = keeperVisible ? '🎋 숲지기 보임' : '🎋 숲지기 숨김';
 }
-$('keeperSwitch').onchange = async () => {
-  if (!$('keeperSwitch').checked) { await keeperOff(); return; }
-  syncKeeperEntry();                                   // stays off until the password is confirmed
+function setVisible(v) {
+  keeperVisible = v; try { localStorage.setItem('bamboo.keeper.visible', v ? '1' : '0'); } catch {}
+  setKeeperBtn(); syncKeeperEntry(); heartbeat();
+  toast(v ? '🎋 이제 다른 사람 화면에 "숲지기"로 보여요' : '🎋 이제 아무에게도 안 보여요', 2600);
+}
+$('keeperSwitch').onchange = () => setVisible($('keeperSwitch').checked);
+$('keeperEnter').onclick = async () => {
   if (keeperToken) { await startKeeper(); syncKeeperEntry(); if (keeper) return; }
   $('aboutDlg').close(); $('keeperPw').value = ''; $('keeperDlg').showModal(); setTimeout(() => $('keeperPw').focus(), 50);
 };
@@ -1344,11 +1347,7 @@ $('keeperForm').onsubmit = async (e) => {
   } catch (err) { toast(err.message, 3500); }
 };
 $('aboutBtn').addEventListener('click', syncKeeperEntry);
-$('keeperBtn').onclick = () => {
-  keeperVisible = !keeperVisible; try { localStorage.setItem('bamboo.keeper.visible', keeperVisible ? '1' : '0'); } catch {}
-  setKeeperBtn(); heartbeat();
-  toast(keeperVisible ? '🎋 이제 다른 사람 화면에 "숲지기"로 보여요' : '🎋 이제 아무에게도 안 보여요', 2600);
-};
+$('keeperBtn').onclick = () => setVisible(!keeperVisible);
 $('kHide').onclick = () => keeperAct(openLeaf && openLeaf.hidden ? 'unhide' : 'hide');
 $('kDel').onclick = () => keeperAct('delete');
 
@@ -1418,7 +1417,7 @@ async function load(first) {
     renderPathPanel(); updateStatus();
   } catch (e) { if (first) $('status').textContent = '숲에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
 }
-let keeperChecking = !!keeperToken && keeperOn;
+let keeperChecking = !!keeperToken;
 async function heartbeat() {
   if (keeperChecking && !keeper) return;
   try {
@@ -1849,7 +1848,7 @@ me.go([{ x: 600, y: 1600 }, { x: 600, y: 1535 }], () => {
 me.idle = null;
 renderPathPanel();
 requestAnimationFrame(tick);
-load(true); if (keeperToken && keeperOn) startKeeper(); else heartbeat();   // the keeper is confirmed before the first heartbeat, so it is never counted
+load(true); if (keeperToken) startKeeper(); else heartbeat();   // the keeper is confirmed before the first heartbeat, so it is never counted
 setInterval(() => load(false), 20000);
 setInterval(heartbeat, 20000);
 </script>
