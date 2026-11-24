@@ -5,125 +5,160 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>대나무숲</title>
 <meta name="description" content="임금님 귀는 당나귀 귀! 하고 싶은 말을 외치면 대나무 잎이 되어 하루 동안 숲에 머물다 바람에 날아가요.">
-<meta name="theme-color" content="#0b1a17">
+<meta name="theme-color" content="#0d1530">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎋</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <style>
   :root {
-    --sky-top: #07110f; --sky-bottom: #12302a; --mist: rgba(170, 220, 200, .06);
-    --stalk: #2f6b4f; --stalk-light: #4f8f6c; --stalk-node: #1f4a37;
-    --leaf: #7fcf96; --leaf-old: #c9b66a; --glow: rgba(160, 255, 190, .55);
-    --ink: #e9f3ec; --muted: #9db8ab; --panel: rgba(12, 28, 24, .86); --line: rgba(160, 220, 190, .18);
-    --accent: #8fe0a6; --danger: #ff9a8a;
+    --ink: #eef4f0; --muted: #a9bfc0; --panel: rgba(14, 24, 40, .62); --line: rgba(220, 240, 235, .16);
+    --accent: #b6ecc8; --accent-ink: #10231c; --danger: #ffab9c; --gold: #f4d58d;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    background: linear-gradient(var(--sky-top), var(--sky-bottom)); color: var(--ink);
+    background: #0d1530; color: var(--ink); overflow: hidden; -webkit-tap-highlight-color: transparent;
     font-family: "Gowun Dodum", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-    overflow: hidden; -webkit-tap-highlight-color: transparent;
   }
   button { font: inherit; color: inherit; cursor: pointer; }
 
-  /* ---------- sky ---------- */
-  .moon { position: fixed; top: 9vh; right: 12vw; width: 74px; height: 74px; border-radius: 50%;
-    background: radial-gradient(circle at 38% 38%, #fffbe8, #f1e6b8 60%, #d9cb92);
-    box-shadow: 0 0 60px 18px rgba(255, 244, 200, .18); }
-  .star { position: fixed; width: 2px; height: 2px; background: #fff; border-radius: 50%; opacity: .6; animation: twinkle 4s ease-in-out infinite; }
+  /* ---------- scene ---------- */
+  #scene { position: fixed; inset: 0; overflow: hidden; }
+  .sky { position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 45% at var(--mx) var(--my), rgba(255, 240, 200, .16), transparent 70%),
+      linear-gradient(180deg, #0b1129 0%, #142650 38%, #23506a 72%, #3d7477 100%); }
+  .moon { position: absolute; width: 86px; height: 86px; border-radius: 50%; left: var(--mx); top: var(--my); transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 40% 38%, #fffdf2 0%, #fbf1cf 55%, #e9d9a6 100%);
+    box-shadow: 0 0 40px 10px rgba(255, 243, 205, .35), 0 0 140px 60px rgba(255, 236, 190, .12); }
+  .moon::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(ellipse 22% 16% at 62% 34%, rgba(205, 190, 145, .16), transparent), radial-gradient(ellipse 30% 20% at 42% 70%, rgba(205, 190, 145, .12), transparent), radial-gradient(circle at 74% 64%, rgba(205, 190, 145, .1) 0 5%, transparent 9%); }
+  .star { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; animation: twinkle var(--t) ease-in-out infinite; }
   @keyframes twinkle { 50% { opacity: .15; } }
-  .fog { position: fixed; left: 0; right: 0; bottom: 0; height: 40vh; pointer-events: none; z-index: 3;
-    background: linear-gradient(transparent, rgba(10, 26, 22, .95)); }
+
+  .layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .mist { position: absolute; left: -20%; right: -20%; pointer-events: none; }
+  .mist.a { bottom: 0; height: 75%; background: linear-gradient(to top, rgba(120, 170, 175, .55), rgba(110, 160, 170, .12) 55%, transparent); }
+  .mist.b { bottom: 0; height: 55%; background: linear-gradient(to top, rgba(70, 120, 125, .55), transparent 80%); }
+  .mist.c { bottom: 0; height: 35%; background: linear-gradient(to top, rgba(20, 45, 50, .8), transparent); }
+  .drift { position: absolute; height: 26%; width: 140%; left: -20%; pointer-events: none; opacity: .5;
+    background: radial-gradient(ellipse 30% 50% at 20% 50%, rgba(200, 230, 230, .22), transparent 70%),
+                radial-gradient(ellipse 25% 40% at 65% 60%, rgba(200, 230, 230, .18), transparent 70%),
+                radial-gradient(ellipse 20% 45% at 95% 40%, rgba(200, 230, 230, .2), transparent 70%);
+    animation: drift 70s linear infinite alternate; }
+  @keyframes drift { to { transform: translateX(-18%); } }
+  .vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 55%, rgba(3, 8, 18, .55)),
+                linear-gradient(rgba(5, 10, 28, .55), transparent 18%); }
+
+  .sw { animation: sway var(--d) ease-in-out var(--dl) infinite alternate; }
+  @keyframes sway { from { transform: rotate(calc(var(--a) * -1)); } to { transform: rotate(var(--a)); } }
+
+  /* message leaves */
+  .msg { pointer-events: auto; cursor: pointer; outline: none; }
+  .msg .flut { animation: flutter var(--d) ease-in-out var(--dl) infinite alternate; }
+  @keyframes flutter { from { transform: rotate(-5deg); } to { transform: rotate(6deg); } }
+  .msg .halo { animation: breathe 3.6s ease-in-out var(--dl) infinite; transition: opacity .2s; }
+  @keyframes breathe { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
+  .msg:hover .halo, .msg:focus-visible .halo { opacity: 1; animation: none; }
+  .msg:hover .body, .msg:focus-visible .body { filter: brightness(1.15); }
+  .msg.fresh .halo { animation: fresh 1.2s ease-out 4; }
+  @keyframes fresh { 0% { opacity: 1; transform: scale(1); } 100% { opacity: .5; transform: scale(1.6); } }
+
+  .firefly { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #fff6c4; pointer-events: none;
+    box-shadow: 0 0 8px 3px rgba(255, 240, 160, .6); animation: fly var(--fd) ease-in-out var(--fdl) infinite alternate, blink 3s ease-in-out var(--fdl) infinite; }
+  @keyframes fly { 0% { transform: translate(0, 0); } 33% { transform: translate(var(--x1), var(--y1)); } 66% { transform: translate(var(--x2), var(--y2)); } 100% { transform: translate(var(--x3), var(--y3)); } }
+  @keyframes blink { 0%, 100% { opacity: .1; } 45%, 60% { opacity: 1; } }
+
+  .falling { position: fixed; z-index: 4; pointer-events: none; animation: fall var(--fd) linear forwards; }
+  @keyframes fall { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 10% { opacity: .75; }
+    50% { transform: translate(calc(var(--fx) * .5 + 40px), 55vh) rotate(260deg); }
+    100% { transform: translate(var(--fx), 112vh) rotate(560deg); opacity: 0; } }
 
   /* ---------- header ---------- */
-  header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding: max(14px, env(safe-area-inset-top)) 16px 10px;
+  header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding: max(16px, env(safe-area-inset-top)) 18px 10px;
     display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; pointer-events: none; }
   header > * { pointer-events: auto; }
-  h1 { margin: 0; font-family: "Gowun Batang", serif; font-size: 26px; letter-spacing: .04em; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  h1 { margin: 0; font-family: "Gowun Batang", serif; font-weight: 700; font-size: 26px; letter-spacing: .12em; text-shadow: 0 2px 14px rgba(0,0,0,.5); }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; text-shadow: 0 1px 8px rgba(0,0,0,.8); }
   .tools { display: flex; gap: 6px; }
-  .iconbtn { white-space: nowrap; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-size: 14px; backdrop-filter: blur(4px); }
-  .iconbtn:hover { border-color: var(--accent); }
+  .iconbtn { white-space: nowrap; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; font-size: 14px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: border-color .2s; }
+  .iconbtn:hover { border-color: rgba(220, 240, 235, .45); }
 
-  /* ---------- forest ---------- */
-  #forest { position: fixed; inset: 0; z-index: 2; }
-  .stalk { position: absolute; bottom: -10px; width: var(--w); transform-origin: 50% 100%;
-    animation: sway var(--dur) ease-in-out var(--delay) infinite alternate; }
-  .stalk .cane { position: absolute; inset: 0; border-radius: 6px 6px 0 0;
-    background:
-      repeating-linear-gradient(to top, transparent 0 calc(var(--seg) - 4px), var(--stalk-node) calc(var(--seg) - 4px) var(--seg)),
-      linear-gradient(90deg, var(--stalk-node), var(--stalk) 30%, var(--stalk-light) 55%, var(--stalk) 80%, var(--stalk-node)); }
-  .stalk.far { filter: brightness(.45) saturate(.7); z-index: 0; }
-  .stalk.mid { filter: brightness(.7); z-index: 1; }
-  .stalk.near { z-index: 2; }
-  .twig { position: absolute; left: 50%; width: 46px; height: 2px; background: var(--stalk); transform-origin: 0 50%; opacity: .8; }
-  @keyframes sway { from { transform: rotate(calc(var(--amp) * -1)); } to { transform: rotate(var(--amp)); } }
-
-  .leaf { position: absolute; left: 50%; width: 58px; height: 18px; border: 0; padding: 0; background: none; transform-origin: 0 50%; z-index: 4; }
-  .leaf::before { content: ""; position: absolute; inset: 0; border-radius: 0 100% 0 100% / 0 100% 0 100%;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--leaf-old) calc(var(--age) * 100%), var(--leaf)), color-mix(in srgb, var(--leaf-old) calc(var(--age) * 100%), #b5f0c4));
-    opacity: calc(1 - var(--age) * .55); box-shadow: 0 0 14px var(--glow); transition: transform .2s; }
-  .leaf::after { content: ""; position: absolute; left: 4px; right: 8px; top: 50%; height: 1px; background: rgba(20, 60, 40, .45); }
-  .leaf:hover::before, .leaf:focus-visible::before { transform: scale(1.18); box-shadow: 0 0 22px 4px var(--glow); }
-  .leaf:focus-visible { outline: none; }
-  .leaf.new::before { animation: newleaf 1.6s ease-out 3; }
-  @keyframes newleaf { 0% { box-shadow: 0 0 0 0 rgba(200,255,210,.9); } 100% { box-shadow: 0 0 30px 14px rgba(200,255,210,0); } }
-
-  .falling { position: fixed; width: 30px; height: 10px; border-radius: 0 100% 0 100% / 0 100% 0 100%; background: var(--leaf-old); opacity: .5; z-index: 3; pointer-events: none;
-    animation: fall var(--fd) linear forwards; }
-  @keyframes fall { to { transform: translate(var(--fx), 110vh) rotate(720deg); opacity: 0; } }
-
-  .empty { position: fixed; top: 38vh; left: 0; right: 0; text-align: center; color: var(--muted); z-index: 5; font-family: "Gowun Batang", serif; font-size: 17px; line-height: 1.7; padding: 0 16px; text-shadow: 0 1px 8px #000; }
+  .empty { position: fixed; top: 40vh; left: 0; right: 0; text-align: center; color: var(--ink); opacity: .85; z-index: 5; font-family: "Gowun Batang", serif; font-size: 17px; line-height: 1.8; padding: 0 16px; text-shadow: 0 1px 10px #000; pointer-events: none; }
 
   /* ---------- composer ---------- */
-  .composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
-  .composer form { max-width: 620px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 8px; backdrop-filter: blur(8px); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 10px 16px max(16px, env(safe-area-inset-bottom)); }
+  .composer form { max-width: 600px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 8px 8px 8px 12px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 10px 40px rgba(0, 0, 0, .35); transition: border-color .2s; }
+  .composer form:focus-within { border-color: rgba(182, 236, 200, .5); }
   .composer textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink);
-    font: 16px/1.5 "Gowun Batang", serif; padding: 8px 6px; max-height: 120px; }
+    font: 16px/1.5 "Gowun Batang", serif; padding: 8px 4px; max-height: 120px; }
   .composer textarea::placeholder { color: var(--muted); }
   .count { font-size: 12px; color: var(--muted); align-self: center; min-width: 52px; text-align: right; }
   .count.over { color: var(--danger); }
-  .shout { border: 0; border-radius: 12px; padding: 10px 16px; background: var(--accent); color: #0b1a17; font-weight: 700; white-space: nowrap; }
-  .shout:disabled { opacity: .5; cursor: default; }
+  .shout { border: 0; border-radius: 16px; padding: 10px 18px; background: var(--accent); color: var(--accent-ink); font-weight: 700; white-space: nowrap;
+    box-shadow: 0 0 18px rgba(182, 236, 200, .35); transition: transform .15s, opacity .2s; }
+  .shout:active { transform: scale(.96); }
+  .shout:disabled { opacity: .45; box-shadow: none; cursor: default; }
 
   /* ---------- dialog ---------- */
-  dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink); padding: 22px 20px 16px;
-    width: min(440px, calc(100vw - 32px)); backdrop-filter: blur(10px); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-  dialog::backdrop { background: rgba(0, 8, 6, .55); }
-  .leaf-text { font-family: "Gowun Batang", serif; font-size: 18px; line-height: 1.75; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 14px; }
-  .meta { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  dialog { border: 1px solid var(--line); border-radius: 22px; background: rgba(16, 26, 44, .82); color: var(--ink); padding: 24px 22px 18px;
+    width: min(440px, calc(100vw - 32px)); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 24px 70px rgba(0, 0, 0, .55); }
+  dialog[open] { animation: rise .25s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+  dialog::backdrop { background: rgba(4, 8, 20, .45); }
+  .leaf-text { font-family: "Gowun Batang", serif; font-size: 19px; line-height: 1.8; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 18px; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 0 24px 14px 0; }
   .actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-  .heard { border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 9px 16px; font-weight: 700; }
-  .heard.done { background: var(--accent); color: #0b1a17; }
+  .heard { border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 9px 18px; font-weight: 700; transition: .2s; }
+  .heard.done { background: var(--accent); color: var(--accent-ink); }
+  .heard:disabled { cursor: default; }
   .linkbtn { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 6px; text-decoration: underline; }
-  .care { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(143, 224, 166, .1); border: 1px solid var(--line); font-size: 14px; line-height: 1.6; }
+  .care { margin: 0 0 16px; padding: 11px 13px; border-radius: 12px; background: rgba(182, 236, 200, .08); border: 1px solid var(--line); font-size: 14px; line-height: 1.65; }
   .care a { color: var(--accent); }
-  .about h2 { font-family: "Gowun Batang", serif; margin: 0 0 10px; font-size: 20px; }
-  .about ul { padding-left: 18px; margin: 0 0 14px; line-height: 1.8; font-size: 14.5px; }
-  .close { float: right; margin: -10px -6px 0 0; background: none; border: 0; color: var(--muted); font-size: 20px; }
+  .about h2 { font-family: "Gowun Batang", serif; margin: 0 0 12px; font-size: 21px; letter-spacing: .06em; }
+  .about ul { padding-left: 18px; margin: 0 0 16px; line-height: 1.85; font-size: 14.5px; }
+  .close { position: absolute; top: 12px; right: 12px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; padding: 6px; }
 
-  .toast { position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 10px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
-    padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px; }
+  .toast { position: fixed; left: 50%; bottom: 100px; transform: translate(-50%, 10px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 11px 18px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none;
+    max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
   @media (max-width: 520px) {
-    h1 { font-size: 22px; } .moon { width: 52px; height: 52px; top: 11vh; }
+    h1 { font-size: 22px; } .moon { width: 60px; height: 60px; }
     .count { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .stalk, .star, .falling, .leaf.new::before { animation: none !important; }
+    .sw, .flut, .halo, .star, .firefly, .drift, .falling { animation: none !important; }
   }
 </style>
 </head>
 <body>
-<div class="moon" aria-hidden="true"></div>
-<div id="sky" aria-hidden="true"></div>
+<div id="scene" aria-hidden="false">
+  <div class="sky"></div>
+  <div id="stars"></div>
+  <div class="moon"></div>
+  <svg class="layer" id="L0"></svg>
+  <div class="mist a"></div>
+  <div class="drift" style="bottom:38%"></div>
+  <svg class="layer" id="L1"></svg>
+  <div class="mist b"></div>
+  <div class="drift" style="bottom:12%;animation-duration:90s;opacity:.35"></div>
+  <svg class="layer" id="L2"></svg>
+  <div id="fireflies"></div>
+  <div class="mist c"></div>
+  <svg class="layer" id="L3"></svg>
+  <div class="vignette"></div>
+</div>
 
 <header>
   <div>
-    <h1>🎋 대나무숲</h1>
+    <h1>대나무숲</h1>
     <div class="sub" id="status">바람 소리를 듣는 중…</div>
   </div>
   <div class="tools">
@@ -132,8 +167,6 @@
   </div>
 </header>
 
-<main id="forest" aria-label="대나무숲. 잎을 누르면 누군가의 외침을 읽을 수 있어요."></main>
-<div class="fog" aria-hidden="true"></div>
 <div class="empty" id="empty" hidden>아직 숲이 조용해요.<br>임금님 귀는 당나귀 귀! 처음으로 외쳐 보세요.</div>
 
 <div class="composer">
@@ -160,7 +193,7 @@
   <h2>숲 이야기</h2>
   <ul>
     <li>여기는 <b>임금님 귀는 당나귀 귀</b>를 외치는 숲이에요.</li>
-    <li>외친 말은 대나무 잎이 되어 <b>24시간 동안</b> 숲에 머물다 바람에 날아가요.</li>
+    <li>외친 말은 빛나는 대나무 잎이 되어 <b>24시간 동안</b> 숲에 머물다 바람에 날아가요.</li>
     <li>다른 사람은 <b>🍃 들었어요</b>로만 대답할 수 있어요. 댓글은 없어요.</li>
     <li>가입도 이름도 없어요. IP 주소는 저장하지 않아요.</li>
     <li>전화번호·이메일 같은 개인정보, 링크, 거친 말은 남길 수 없어요.</li>
@@ -174,10 +207,11 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const MAX = 200;
+const SVGNS = 'http://www.w3.org/2000/svg';
 let leaves = [];
 let lifetime = 24 * 3600 * 1000;
 let serverOffset = 0;
-let stalks = [];
+let hangers = [];        // stalks that can hold message leaves
 let openLeaf = null;
 
 const store = {
@@ -192,81 +226,172 @@ function toast(msg, ms = 2600) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), ms);
 }
-function hash(n) { // deterministic 0..1 from an integer
-  let x = (n * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
+function hash(n) {
+  let x = (n * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; x = Math.imul(x, 3266489917) >>> 0; x ^= x >>> 16;
   return (x >>> 0) / 4294967296;
 }
-function rand(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function rng(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const lerp = (a, b, t) => a + (b - a) * t;
+const f1 = (n) => Math.round(n * 10) / 10;
+function mix(c1, c2, t) {
+  const p = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const a = p(c1), b = p(c2);
+  return '#' + a.map((v, i) => Math.round(lerp(v, b[i], t)).toString(16).padStart(2, '0')).join('');
+}
+
+// leaf shape pointing along +x, length L
+function leafPath(L, w) {
+  return `M0 0C${f1(L * .18)} ${f1(-w)} ${f1(L * .62)} ${f1(-w * .9)} ${f1(L)} 0C${f1(L * .62)} ${f1(w * .55)} ${f1(L * .2)} ${f1(w * .7)} 0 0Z`;
+}
 
 // ---------- sky ----------
-(function stars() {
-  const r = rand(7); const sky = $('sky');
-  for (let i = 0; i < 60; i++) {
-    const s = document.createElement('div'); s.className = 'star';
-    s.style.left = r() * 100 + 'vw'; s.style.top = r() * 45 + 'vh';
-    s.style.animationDelay = (r() * 4) + 's'; sky.appendChild(s);
+function buildSky() {
+  const W = innerWidth, H = innerHeight;
+  const mx = W < 600 ? W * .72 : W * .68, my = H * (W < 600 ? .2 : .2);
+  document.documentElement.style.setProperty('--mx', mx + 'px');
+  document.documentElement.style.setProperty('--my', my + 'px');
+  const r = rng(11); let html = '';
+  for (let i = 0; i < 70; i++) {
+    const sz = r() < .15 ? 2.4 : 1.4;
+    html += `<div class="star" style="left:${r() * 100}%;top:${r() * 48}%;width:${sz}px;height:${sz}px;opacity:${.3 + r() * .6};--t:${3 + r() * 4}s;animation-delay:${-r() * 6}s"></div>`;
   }
-})();
+  $('stars').innerHTML = html;
+  const rf = rng(5); let ff = '';
+  const nFly = W < 600 ? 10 : 18;
+  for (let i = 0; i < nFly; i++) {
+    const v = () => (rf() * 160 - 80).toFixed(0) + 'px';
+    ff += `<div class="firefly" style="left:${rf() * 100}%;top:${45 + rf() * 45}%;--fd:${9 + rf() * 9}s;--fdl:${-rf() * 10}s;--x1:${v()};--y1:${v()};--x2:${v()};--y2:${v()};--x3:${v()};--y3:${v()}"></div>`;
+  }
+  $('fireflies').innerHTML = ff;
+}
 
 // ---------- forest ----------
+// far → near. colors blend into the mist for depth.
+const LAYERS = [
+  { id: 'L0', every: 34, w: [3, 5],   h: [.42, .7],  cane: '#4d7b88', node: '#6d97a0', leaf: '#4f8088', leafLen: [16, 26], sway: .35, density: .55 },
+  { id: 'L1', every: 58, w: [5, 8],   h: [.6, .92],  cane: '#2f6168', node: '#4f8687', leaf: '#336b66', leafLen: [24, 38], sway: .55, density: .65 },
+  { id: 'L2', every: 96, w: [8, 12],  h: [.85, 1.15], cane: '#1e4f45', node: '#3f7f69', leaf: '#245a46', rim: '#6fae8b', leafLen: [36, 56], sway: .8, density: .75, hang: true },
+  { id: 'L3', every: 0,  w: [14, 20], h: [1.15, 1.3], cane: '#123a2e', node: '#2f6a50', leaf: '#174632', rim: '#5f9e7a', leafLen: [60, 92], sway: 1.1, density: .85, hang: true },
+];
+
 function buildForest() {
-  const forest = $('forest'); forest.innerHTML = ''; stalks = [];
-  const W = innerWidth; const r = rand(42);
-  const layers = [['far', 34, 6, 9], ['mid', 52, 9, 13], ['near', 78, 13, 19]];
-  for (const [cls, gap, wMin, wMax] of layers) {
-    const n = Math.max(4, Math.round(W / gap));
-    for (let i = 0; i < n; i++) {
-      const el = document.createElement('div'); el.className = 'stalk ' + cls;
-      const w = wMin + r() * (wMax - wMin);
-      const h = (cls === 'far' ? 62 : cls === 'mid' ? 78 : 92) + r() * 14;
-      el.style.left = ((i + .15 + r() * .7) / n) * W - w / 2 + 'px';
-      el.style.height = h + 'vh';
-      el.style.setProperty('--w', w + 'px');
-      el.style.setProperty('--seg', (46 + r() * 30) + 'px');
-      el.style.setProperty('--amp', (.6 + r() * 1.4) + 'deg');
-      el.style.setProperty('--dur', (3.5 + r() * 3) + 's');
-      el.style.setProperty('--delay', (-r() * 6) + 's');
-      el.innerHTML = '<div class="cane"></div>';
-      for (let t = 0; t < 3; t++) {
-        const tw = document.createElement('div'); tw.className = 'twig';
-        tw.style.top = (8 + r() * 40) + '%';
-        tw.style.transform = `rotate(${r() < .5 ? -150 - r() * 20 : -30 + r() * 20}deg)`;
-        el.appendChild(tw);
-      }
-      forest.appendChild(el);
-      if (cls !== 'far') stalks.push({ el, h, cls });
+  const W = innerWidth, H = innerHeight;
+  const scale = Math.min(1, Math.max(.7, W / 1100));
+  hangers = [];
+  LAYERS.forEach((cfg, li) => {
+    const svg = $(cfg.id);
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const r = rng(100 + li * 31);
+    let xs = [];
+    if (cfg.every) {
+      const n = Math.max(5, Math.round(W / cfg.every));
+      for (let i = 0; i < n; i++) xs.push(((i + .2 + r() * .6) / n) * W);
+      // keep a clear window around the moon for the middle layers
+      if (li === 1 || li === 2) { const mx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--mx')); const gap = W < 600 ? 55 : 95; xs = xs.filter((x) => Math.abs(x - mx) > gap); }
+    } else {
+      // near stalks frame the view at the edges
+      xs = W < 600 ? [W * (.02 + r() * .06), W * (.9 + r() * .08)] : [W * (.03 + r() * .05), W * (.16 + r() * .05), W * (.84 + r() * .04), W * (.95 + r() * .04)];
     }
-  }
-  // hang leaves only on stalks within the visible band (avoid header & composer)
-  stalks.sort((a, b) => a.el.offsetLeft - b.el.offsetLeft);
+    const gid = `g${li}`;
+    let defs = `<defs><linearGradient id="${gid}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cfg.cane, '#000000', .35)}"/><stop offset=".35" stop-color="${cfg.cane}"/><stop offset=".55" stop-color="${mix(cfg.cane, cfg.node, .7)}"/><stop offset=".8" stop-color="${cfg.cane}"/><stop offset="1" stop-color="${mix(cfg.cane, '#000000', .3)}"/></linearGradient>`;
+    if (cfg.hang) defs += `<filter id="glow${li}" x="-60%" y="-200%" width="220%" height="500%"><feGaussianBlur stdDeviation="${li === 3 ? 9 : 6}"/></filter>`;
+    defs += '</defs>';
+    let body = '';
+    xs.forEach((x0, si) => {
+      const w = lerp(cfg.w[0], cfg.w[1], r()) * (cfg.every ? 1 : scale);
+      const h = lerp(cfg.h[0], cfg.h[1], r()) * H;
+      const lean = (r() - .5) * H * .06;
+      const base = H + 8, topY = base - h, topX = x0 + lean;
+      const at = (y) => { const t = (base - y) / h; return { x: x0 + lean * t * t, w: w * (1 - .3 * t) }; };
+      // cane (tapered, gently curved)
+      const midY = base - h / 2, m = at(midY), tp = at(topY);
+      let g = `<path d="M${f1(x0 - w / 2)} ${base}Q${f1(m.x - m.w / 2)} ${f1(midY)} ${f1(tp.x - tp.w / 2)} ${f1(topY)}L${f1(tp.x + tp.w / 2)} ${f1(topY)}Q${f1(m.x + m.w / 2)} ${f1(midY)} ${f1(x0 + w / 2)} ${base}Z" fill="url(#${gid})"/>`;
+      // nodes, branches, foliage
+      const seg = lerp(.07, .11, r()) * H * (li === 3 ? 1.3 : 1);
+      let side = r() < .5 ? -1 : 1;
+      const leafLen = (k) => lerp(cfg.leafLen[0], cfg.leafLen[1], k) * (cfg.every ? 1 : scale);
+      const fol = [];
+      for (let y = base - seg * (1.3 + r() * .5); y > topY + 4; y -= seg * lerp(.85, 1.15, r())) {
+        const p = at(y);
+        g += `<rect x="${f1(p.x - p.w / 2 - 1)}" y="${f1(y - 1.5)}" width="${f1(p.w + 2)}" height="3" rx="1.5" fill="${cfg.node}" opacity=".75"/>`;
+        const t = (base - y) / h;
+        if (t > .38 && r() < cfg.density) { fol.push({ y, p, t, side }); side = -side; }
+      }
+      // crown
+      fol.push({ y: topY + 2, p: tp, t: 1, side: r() < .5 ? -1 : 1, crown: true });
+      for (const f of fol) {
+        const blen = lerp(10, 34, r()) * (li >= 2 ? 1.4 : 1) * (f.crown ? .4 : 1);
+        const bang = (f.crown ? -90 + f.side * 25 : f.side > 0 ? -28 - r() * 22 : -152 + r() * 22) * Math.PI / 180;
+        const bx = f.p.x + Math.cos(bang) * blen, by = f.y + Math.sin(bang) * blen;
+        g += `<path d="M${f1(f.p.x)} ${f1(f.y)}L${f1(bx)} ${f1(by)}" stroke="${cfg.cane}" stroke-width="${li >= 2 ? 1.6 : 1}" stroke-linecap="round"/>`;
+        const nLeaves = f.crown ? 7 + Math.floor(r() * 4) : 3 + Math.floor(r() * 4);
+        for (let k = 0; k < nLeaves; k++) {
+          const L = leafLen(r()) * (f.crown ? 1.1 : 1);
+          const dir = f.crown ? (k % 2 ? 1 : -1) : f.side;
+          const droop = f.crown ? lerp(-70, 50, r()) : lerp(-10, 65, r());
+          const ang = dir > 0 ? droop : 180 - droop;
+          const shade = mix(cfg.leaf, cfg.rim || cfg.node, r() * .45);
+          g += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${shade}" opacity="${f1(.82 + r() * .18)}"/>`;
+        }
+      }
+      const amp = cfg.sway * lerp(.6, 1.3, r());
+      body += `<g class="sw" style="transform-origin:${f1(x0)}px ${base}px;--a:${f1(amp)}deg;--d:${f1(4 + r() * 3)}s;--dl:${f1(-r() * 7)}s" data-stalk="${si}">${g}<g class="msgs"></g></g>`;
+      if (cfg.hang) hangers.push({ layer: li, x0, lean, base, h, topY, w });
+    });
+    svg.innerHTML = defs + body;
+    // remember where each stalk's message group lives
+    if (cfg.hang) {
+      const groups = svg.querySelectorAll('.sw');
+      hangers.filter((s) => s.layer === li).forEach((s, i) => { s.el = groups[i].querySelector('.msgs'); });
+    }
+  });
   renderLeaves();
 }
 
 function now() { return Date.now() + serverOffset; }
 
-function renderLeaves(newId) {
-  document.querySelectorAll('.leaf').forEach((l) => l.remove());
+function renderLeaves(freshId) {
+  document.querySelectorAll('.msg').forEach((m) => m.remove());
   $('empty').hidden = leaves.length > 0;
-  const usable = stalks.filter((s) => s.el.offsetLeft > 12 && s.el.offsetLeft < innerWidth - 40);
+  const W = innerWidth, H = innerHeight;
+  const usable = hangers.filter((s) => s.x0 > -10 && s.x0 < W + 10);
   if (!usable.length) return;
+  const scale = Math.min(1, Math.max(.75, W / 1100));
   for (const leaf of leaves) {
     const s = usable[Math.floor(hash(leaf.id) * usable.length)];
-    const stalkPx = s.h / 100 * innerHeight;
-    // y measured from stalk top; keep leaves between ~16vh and ~70vh of the screen
-    const minTop = Math.max(0, stalkPx - innerHeight * .80);
-    const maxTop = Math.max(minTop + 1, stalkPx - innerHeight * .30);
-    const top = minTop + hash(leaf.id * 7 + 3) * (maxTop - minTop);
-    const right = hash(leaf.id * 13 + 1) < .5;
-    const ang = right ? -20 + hash(leaf.id * 5) * 40 : 160 + hash(leaf.id * 5) * 40;
+    const yMin = Math.max(s.topY + 30, H * .17), yMax = H * .66;
+    const y = lerp(yMin, Math.max(yMin, yMax), hash(leaf.id * 7 + 3));
+    const t = (s.base - y) / s.h;
+    const x = s.x0 + s.lean * t * t;
+    let side = x < W * .3 ? 1 : x > W * .7 ? -1 : (hash(leaf.id * 13 + 1) < .5 ? -1 : 1);
+    const L = (s.layer === 3 ? 66 : 54) * scale;
+    const droop = lerp(-5, 40, hash(leaf.id * 5 + 2));
+    const blen = lerp(12, 26, hash(leaf.id * 17));
+    const bang = side > 0 ? -25 : -155;
+    const bx = x + Math.cos(bang * Math.PI / 180) * blen, by = y + Math.sin(bang * Math.PI / 180) * blen;
+    const ang = side > 0 ? droop : 180 - droop;
     const age = Math.min(1, Math.max(0, (now() - leaf.created) / lifetime));
-    const b = document.createElement('button');
-    b.className = 'leaf' + (leaf.id === newId ? ' new' : '');
-    b.style.top = top + 'px';
-    b.style.transform = `rotate(${ang}deg)`;
-    b.style.setProperty('--age', age.toFixed(2));
-    b.setAttribute('aria-label', '누군가의 외침: ' + leaf.text.slice(0, 40));
-    b.onclick = () => openLeafDialog(leaf);
-    s.el.appendChild(b);
+    const fill = mix('#d9ffe6', '#f2c977', age);
+    const glow = mix('#9dffc4', '#ffcf73', age);
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'msg' + (leaf.id === freshId ? ' fresh' : ''));
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', '누군가의 외침 읽기: ' + leaf.text.slice(0, 30));
+    g.style.setProperty('--d', (2.6 + hash(leaf.id * 3) * 2).toFixed(1) + 's');
+    g.style.setProperty('--dl', (-hash(leaf.id * 9) * 4).toFixed(1) + 's');
+    g.innerHTML =
+      `<path d="M${f1(x)} ${f1(y)}L${f1(bx)} ${f1(by)}" stroke="#4f8f72" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<g transform="translate(${f1(bx)} ${f1(by)})"><g class="flut"><g transform="rotate(${f1(ang)})">` +
+        `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .6)}" ry="${f1(L * .22)}" fill="${glow}" filter="url(#glow${s.layer})" style="transform-origin:${f1(L * .5)}px 0"/>` +
+        `<path class="body" d="${leafPath(L, L * .15)}" fill="${fill}" opacity="${(1 - age * .35).toFixed(2)}"/>` +
+        `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${mix(fill, '#2d6b50', .45)}" stroke-width="1" fill="none" opacity=".6"/>` +
+        `<ellipse cx="${f1(L * .5)}" cy="0" rx="${f1(L * .62)}" ry="22" fill="transparent"/>` +
+      `</g></g></g>`;
+    const open = () => openLeafDialog(leaf);
+    g.addEventListener('click', open);
+    g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    s.el.appendChild(g);
   }
 }
 
@@ -310,7 +435,7 @@ async function api(path, body) {
 
 $('heardBtn').onclick = async () => {
   const leaf = openLeaf; if (!leaf || heardSet.has(leaf.id)) return;
-  heardSet.add(leaf.id); store.set('bamboo.heard', [...heardSet]);
+  heardSet.add(leaf.id); store.set('bamboo.heard', [...heardSet].slice(-500));
   leaf.heard++; updateHeardBtn(); whoosh(.25);
   try { const d = await api(`/api/leaves/${leaf.id}/heard`, {}); leaf.heard = d.heard; if (openLeaf === leaf) updateHeardBtn(); }
   catch (e) { toast(e.message); }
@@ -321,7 +446,7 @@ $('reportBtn').onclick = async () => {
   if (!confirm('이 잎을 신고할까요?\n개인정보 노출, 특정인 비방, 혐오 표현 같은 경우에 신고해 주세요.')) return;
   try {
     await api(`/api/leaves/${leaf.id}/report`, {});
-    reportedSet.add(leaf.id); store.set('bamboo.reported', [...reportedSet]);
+    reportedSet.add(leaf.id); store.set('bamboo.reported', [...reportedSet].slice(-500));
     toast('신고했어요. 알려줘서 고마워요.');
   } catch (e) { toast(e.message); }
 };
@@ -349,7 +474,7 @@ $('form').addEventListener('submit', async (e) => {
     mine.add(leaf.id); store.set('bamboo.mine', [...mine].slice(-200));
     leaves.unshift(leaf); ta.value = ''; syncCount();
     renderLeaves(leaf.id); updateStatus(); whoosh(.6);
-    toast('외침이 대나무 잎이 되었어요. 반짝이는 잎을 찾아보세요 🍃');
+    toast('외침이 빛나는 잎이 되었어요 🍃');
   } catch (err) { toast(err.message, 3500); }
   finally { syncCount(); }
 });
@@ -357,7 +482,7 @@ $('form').addEventListener('submit', async (e) => {
 // ---------- data ----------
 function updateStatus() {
   const n = leaves.length;
-  $('status').textContent = n ? `지금 숲에 잎 ${n}장 · 하루 뒤 바람에 날아가요` : '잎은 하루 뒤 바람에 날아가요';
+  $('status').textContent = n ? `빛나는 잎 ${n}장 · 하루 뒤 날아가요` : '잎은 하루 뒤 바람에 날아가요';
 }
 async function load(first) {
   try {
@@ -371,14 +496,18 @@ async function load(first) {
   } catch (e) { if (first) $('status').textContent = '숲에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
 }
 
-// a few old leaves drifting down, for atmosphere
+// leaves drifting down, for atmosphere
 function dropLeaf() {
   if (document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const f = document.createElement('div'); f.className = 'falling';
-  f.style.left = Math.random() * innerWidth + 'px'; f.style.top = '-20px';
-  f.style.setProperty('--fx', (Math.random() * 200 - 100) + 'px');
-  f.style.setProperty('--fd', (9 + Math.random() * 6) + 's');
-  document.body.appendChild(f); f.addEventListener('animationend', () => f.remove());
+  const L = 14 + Math.random() * 14;
+  const el = document.createElementNS(SVGNS, 'svg');
+  el.setAttribute('class', 'falling'); el.setAttribute('width', L); el.setAttribute('height', L * .4);
+  el.setAttribute('viewBox', `0 ${-L * .2} ${L} ${L * .4}`); el.style.overflow = 'visible';
+  el.innerHTML = `<path d="${leafPath(L, L * .14)}" fill="${Math.random() < .5 ? '#7fb08f' : '#c9b675'}"/>`;
+  el.style.left = Math.random() * innerWidth + 'px'; el.style.top = '-20px';
+  el.style.setProperty('--fx', (Math.random() * 240 - 120) + 'px');
+  el.style.setProperty('--fd', (11 + Math.random() * 7) + 's');
+  document.body.appendChild(el); el.addEventListener('animationend', () => el.remove());
 }
 
 // ---------- wind sound (generated, no files) ----------
@@ -389,7 +518,7 @@ function startWind() {
   let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
   const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 500; filter.Q.value = .7;
-  const gain = ctx.createGain(); gain.gain.value = .0;
+  const gain = ctx.createGain(); gain.gain.value = 0;
   const lfo = ctx.createOscillator(); lfo.frequency.value = .08; const lfoGain = ctx.createGain(); lfoGain.gain.value = 300;
   lfo.connect(lfoGain).connect(filter.frequency);
   src.connect(filter).connect(gain).connect(ctx.destination); src.start(); lfo.start();
@@ -408,12 +537,18 @@ $('soundBtn').onclick = () => {
   else { audio.ctx.resume(); btn.textContent = '🔊'; btn.setAttribute('aria-pressed', 'true'); }
 };
 
-let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(buildForest, 200); });
-buildForest(); syncCount(); load(true).then(() => {
+let lastW = innerWidth, resizeT;
+addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { buildSky(); buildForest(); lastW = innerWidth; }, 200);
+});
+if (innerWidth < 520) ta.placeholder = '못 한 말을 숲에 외쳐 보세요';
+buildSky(); buildForest(); syncCount();
+load(true).then(() => {
   if (leaves.length && !store.get('bamboo.visited', false)) { toast('빛나는 잎을 눌러 누군가의 외침을 들어 보세요 🍃', 4000); store.set('bamboo.visited', true); }
 });
 setInterval(() => load(false), 30000);
-setInterval(dropLeaf, 2500);
+setInterval(dropLeaf, 3000);
 </script>
 </body>
 </html>
