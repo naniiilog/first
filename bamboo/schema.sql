@@ -16,3 +16,10 @@ CREATE TABLE IF NOT EXISTS reactions (
   kind TEXT NOT NULL,                -- 'heard' | 'report'
   PRIMARY KEY (leaf_id, visitor, kind)
 );
+
+-- who is strolling in the forest right now (random per-tab id, no personal data)
+CREATE TABLE IF NOT EXISTS presence (
+  sid TEXT PRIMARY KEY,
+  seen INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_presence_seen ON presence(seen);

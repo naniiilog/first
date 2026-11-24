@@ -7,6 +7,7 @@ const MAX_LEN = 200;
 const POSTS_PER_10MIN = 3;
 const POSTS_PER_DAY = 20;
 const AUTO_HIDE_REPORTS = 3;
+const PRESENCE_MS = 75 * 1000;
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -67,6 +68,7 @@ async function cleanup(env) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM reactions WHERE leaf_id IN (SELECT id FROM leaves WHERE created < ?)').bind(cutoff),
     env.DB.prepare('DELETE FROM leaves WHERE created < ?').bind(cutoff),
+    env.DB.prepare('DELETE FROM presence WHERE seen < ?').bind(Date.now() - 3600 * 1000),
   ]);
 }
 
@@ -127,6 +129,22 @@ async function handleApi(request, env, url) {
     }
     const after = await env.DB.prepare('SELECT heard FROM leaves WHERE id = ?').bind(id).first();
     return json({ ok: true, heard: after?.heard ?? 0, already: !ins.meta.changes });
+  }
+
+  // ---- presence: who is strolling right now ----
+  if (pathname === '/api/presence' && method === 'POST') {
+    let body;
+    try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }
+    const sid = String(body?.sid || '');
+    if (!/^[a-z0-9]{12,40}$/.test(sid)) return fail(400, '잘못된 요청이에요.');
+    await env.DB.prepare('INSERT INTO presence (sid, seen) VALUES (?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen')
+      .bind(sid, now).run();
+    if (Math.random() < .05) await env.DB.prepare('DELETE FROM presence WHERE seen < ?').bind(now - 3600 * 1000).run();
+    const { results } = await env.DB.prepare('SELECT sid FROM presence WHERE seen >= ? ORDER BY seen DESC LIMIT 40')
+      .bind(now - PRESENCE_MS).all();
+    // other strollers only, as short one-way hashes (enough to tell them apart)
+    const short = (x) => { let h = 2166136261; for (const c of x) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(36); };
+    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => short(r.sid)) });
   }
 
   // ---- admin ----
