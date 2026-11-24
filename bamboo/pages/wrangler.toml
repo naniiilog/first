@@ -1,0 +1,9 @@
+# Cloudflare Pages project (bamboo-forest.pages.dev); build with: node scripts/build-pages.mjs
+name = "bamboo-forest"
+pages_build_output_dir = "./dist"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bamboo"
+database_id = "93a64235-5c48-4f82-b02f-e21764777ca5"

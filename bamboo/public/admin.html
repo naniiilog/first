@@ -35,7 +35,14 @@
   </form>
   <p id="loginNote" style="color:var(--muted);font-size:13px;margin:8px 2px 0">한 번 들어가면 이 기기에서는 기억해 둬요. 다른 사람과 같이 쓰는 기기라면 다 보고 나서 "나가기"를 눌러 주세요.</p>
   <div id="panel" hidden>
-    <div class="bar"><span id="summary"></span><span><button id="refresh">새로고침</button> <button id="logout">나가기</button></span></div>
+    <div class="bar"><span id="summary"></span><span><button id="refresh">새로고침</button> <button id="pwBtn">비밀번호 바꾸기</button> <button id="logout">나가기</button></span></div>
+    <form id="pwForm" class="item" hidden autocomplete="off">
+      <div style="font-weight:700;margin-bottom:8px">새 비밀번호 정하기</div>
+      <input type="password" id="pw1" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" style="width:100%;margin-bottom:6px">
+      <input type="password" id="pw2" placeholder="한 번 더 입력" autocomplete="new-password" style="width:100%;margin-bottom:8px">
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="pwCancel">취소</button><button id="pwSave" style="border-color:var(--accent);color:var(--accent)">바꾸기</button></div>
+      <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">바꾼 비밀번호는 암호화해서 저장돼서 아무도 볼 수 없어요. 잊어버리면 되찾을 수 없으니 꼭 기억해 두세요.</p>
+    </form>
     <div id="list"></div>
   </div>
 </div>
@@ -47,7 +54,7 @@ const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? '방금' 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function call(path, post) {
-  const res = await fetch(path, { method: post ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: post ? '{}' : undefined });
+  const res = await fetch(path, { method: post ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + encodeURIComponent(token), 'content-type': 'application/json' }, body: post ? '{}' : undefined });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.status);
   return data;
@@ -72,6 +79,20 @@ async function load() {
 $('login').onsubmit = (e) => { e.preventDefault(); token = $('token').value.trim(); try { localStorage.setItem('bamboo.admin', token); } catch {} load(); };
 $('logout').onclick = () => { token = ''; try { localStorage.removeItem('bamboo.admin'); } catch {} $('token').value = ''; load(); };
 $('refresh').onclick = load;
+$('pwBtn').onclick = () => { $('pwForm').hidden = !$('pwForm').hidden; $('pw1').value = $('pw2').value = ''; if (!$('pwForm').hidden) $('pw1').focus(); };
+$('pwCancel').onclick = () => { $('pwForm').hidden = true; };
+$('pwForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const a = $('pw1').value, b = $('pw2').value;
+  if (a.length < 6) { alert('비밀번호는 6자 이상으로 해 주세요.'); return; }
+  if (a !== b) { alert('두 번 입력한 비밀번호가 서로 달라요.'); return; }
+  try {
+    const res = await fetch('/api/admin/password', { method: 'POST', headers: { authorization: 'Bearer ' + encodeURIComponent(token), 'content-type': 'application/json' }, body: JSON.stringify({ next: a }) });
+    const d = await res.json().catch(() => ({})); if (!res.ok) throw new Error(d.error || res.status);
+    token = a; try { localStorage.setItem('bamboo.admin', token); } catch {}
+    $('pwForm').hidden = true; alert('비밀번호를 바꿨어요. 이 기기에서는 계속 로그인돼 있어요.');
+  } catch (err) { alert(err.message); }
+};
 $('list').onclick = async (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   if (b.dataset.act === 'delete' && !confirm('이 잎을 완전히 삭제할까요?')) return;

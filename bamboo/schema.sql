@@ -33,3 +33,9 @@ CREATE TABLE IF NOT EXISTS admin_fails (
   ts INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_admin_fails ON admin_fails(visitor, ts);
+
+-- small key/value settings (the admin password is stored only as a salted PBKDF2 hash)
+CREATE TABLE IF NOT EXISTS settings (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);

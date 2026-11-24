@@ -77,9 +77,20 @@ function safeEqual(a, b) {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
-function isAdmin(request, env) {
-  const auth = request.headers.get('authorization') || '';
-  return !!env.ADMIN_TOKEN && safeEqual(auth.replace(/^Bearer\s+/i, ''), env.ADMIN_TOKEN);
+// admin password: once the admin sets their own, only a salted PBKDF2 hash is stored (nobody can read it back)
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+async function pbkdf2(password, saltB64) {
+  const salt = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  return b64(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256));
+}
+async function isAdmin(request, env) {
+  let given = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  try { given = decodeURIComponent(given); } catch {}   // passwords may be Korean: the page sends them URI-encoded
+  if (!given) return false;
+  const row = await env.DB.prepare("SELECT v FROM settings WHERE k = 'admin_hash'").first();
+  if (row) { const [salt, hash] = row.v.split(':'); return safeEqual(await pbkdf2(given, salt), hash); }
+  return !!env.ADMIN_TOKEN && safeEqual(given, env.ADMIN_TOKEN);
 }
 
 async function cleanup(env) {
@@ -173,12 +184,21 @@ async function handleApi(request, env, url) {
     const since = now - 15 * 60 * 1000;
     const fails = await env.DB.prepare('SELECT COUNT(*) AS n FROM admin_fails WHERE visitor = ? AND ts >= ?').bind(who, since).first();
     if ((fails?.n || 0) >= 5) return fail(429, '비밀번호를 여러 번 틀려서 15분 동안 잠겼어요. 잠시 뒤에 다시 시도해 주세요.');
-    if (!isAdmin(request, env)) {
+    if (!(await isAdmin(request, env))) {
       await env.DB.batch([
         env.DB.prepare('INSERT INTO admin_fails (visitor, ts) VALUES (?, ?)').bind(who, now),
         env.DB.prepare('DELETE FROM admin_fails WHERE ts < ?').bind(now - 24 * 3600 * 1000),
       ]);
       return fail(401, `관리자 비밀번호가 맞지 않아요. (남은 시도 ${Math.max(0, 4 - (fails?.n || 0))}번)`);
+    }
+    if (pathname === '/api/admin/password' && method === 'POST') {
+      let body; try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }
+      const next = typeof body?.next === 'string' ? body.next : '';
+      if ([...next].length < 6) return fail(400, '비밀번호는 6자 이상으로 해 주세요.');
+      if ([...next].length > 64) return fail(400, '비밀번호가 너무 길어요.');
+      const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+      await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('admin_hash', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(`${salt}:${await pbkdf2(next, salt)}`).run();
+      return json({ ok: true });
     }
     if (pathname === '/api/admin/leaves' && method === 'GET') {
       const { results } = await env.DB.prepare(
