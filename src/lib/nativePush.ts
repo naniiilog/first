@@ -22,7 +22,8 @@ async function ensureChannels() {
   for (const k of CUSTOM) {
     const ch = await Notifications.setNotificationChannelAsync(`s2_${k}`, { ...base, name: `대화 알림(${LABEL[k]})`, sound: `${k}.wav` });
     // 이 앱에 소리 파일이 없으면(예전 버전 앱) 기본음으로 굳어버리니 칸을 지워 둬요. 새 버전을 설치하면 제대로 다시 만들어요.
-    if (ch && !(ch.sound ?? '').includes(`/raw/${k}`)) await Notifications.deleteNotificationChannelAsync(`s2_${k}`).catch(() => {});
+    // (폰은 소리 이름 대신 'custom'(앱 소리)·'default'(기본음)로만 알려줘요)
+    if (ch && ch.sound !== 'custom') await Notifications.deleteNotificationChannelAsync(`s2_${k}`).catch(() => {});
   }
   // 예전 칸(소리가 안 붙었거나 폰 설정에서 바뀐 것)은 지우고 새 칸(s2_)을 써요.
   for (const k of [...REMOVED, ...CUSTOM]) await Notifications.deleteNotificationChannelAsync(`snd_${k}`).catch(() => {});
@@ -44,7 +45,8 @@ export async function channelSoundState(key: string): Promise<'ok' | 'changed' |
   if (!ch) return key === 'silent' || key === 'vibrate' ? null : 'missing';
   const uri = ch.sound ?? '';
   if (key === 'silent' || key === 'vibrate') return uri ? 'changed' : 'ok';
-  return uri.includes(`/${key}`) || uri.endsWith(`/${key}.wav`) ? 'ok' : 'changed';
+  // 'custom'이면 다봇 소리가 붙어 있어요. 'default'면 폰 기본음으로 돼 있어요.
+  return uri === 'custom' ? 'ok' : 'changed';
 }
 
 /** 알림 소리 미리듣기(설치형 앱) */

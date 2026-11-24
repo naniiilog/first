@@ -201,7 +201,7 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                       : chState === 'missing'
                         ? '⚠️ 이 소리 파일이 지금 앱에 없어요. 앱 버전 5(다봇 소리가 들어 있는 앱)를 설치해 주세요. 설치 전까지는 폰 기본음이 나요.'
                         : chState === 'changed'
-                        ? '⚠️ 폰 설정에서 이 칸의 "소리"가 바뀌어 있어요. 그래서 여기서 고른 이름과 다른 소리가 나요. 폰 소리를 쓰려면 "폰 기본음"을 골라 그 칸에서 바꾸세요.'
+                        ? '⚠️ 이 칸의 소리가 폰 기본음으로 바뀌어 있어요(폰 설정에서 바꾼 것 같아요). 폰 소리를 쓰려면 "폰 기본음"을 골라 그 칸에서 바꾸세요.'
                         : '✅ 소리는 여기서 고른 대로 나요. 폰 설정에서는 잠금화면·팝업·진동만 바꾸고, "소리"는 건드리지 마세요(바꾸면 이름과 다른 소리가 나요).'}
                   </Text>
                   <Pressable onPress={() => openChannelSettings(picked)} style={[styles.testBtn, { borderColor: t.border }]}>
