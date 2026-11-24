@@ -1270,18 +1270,18 @@ function startSound() {
     const hits = Math.random() < .3 ? 1 : Math.random() < .75 ? 2 : 3;
     const body = lerp(230, 380, Math.random());               // the hollow cane: low and dull
     for (let n = 0; n < hits; n++) {
-      const st = t + n * lerp(.035, .09, Math.random()), v = vel * (n ? lerp(.55, .85, Math.random()) : 1);
+      const st = t + n * lerp(.08, .2, Math.random()), v = vel * (n ? lerp(.6, .85, Math.random()) : 1);
       // the hard contact: a very short mid-band click
       const c = ctx.createBufferSource(), cbp = ctx.createBiquadFilter(), cg = ctx.createGain();
       c.buffer = white; cbp.type = 'bandpass'; cbp.frequency.value = lerp(1100, 1800, Math.random()); cbp.Q.value = 1.2;
-      cg.gain.setValueAtTime(.16 * v, st); cg.gain.exponentialRampToValueAtTime(.0002, st + .018);
+      cg.gain.setValueAtTime(.05 * v, st); cg.gain.exponentialRampToValueAtTime(.0002, st + .014);
       c.connect(cbp).connect(cg).connect(windBus); c.start(st, Math.random()); c.stop(st + .03);
       // the dull hollow thud of the tube: resonant noise, dies away fast
       const r = ctx.createBufferSource(), rbp = ctx.createBiquadFilter(), rbp2 = ctx.createBiquadFilter(), rg = ctx.createGain();
       r.buffer = white; rbp.type = 'bandpass'; rbp.frequency.value = body * lerp(.97, 1.03, Math.random()); rbp.Q.value = 9;
       rbp2.type = 'lowpass'; rbp2.frequency.value = 900;
-      rg.gain.setValueAtTime(.5 * v, st); rg.gain.exponentialRampToValueAtTime(.0002, st + .07);
-      r.connect(rbp).connect(rbp2).connect(rg).connect(windBus); r.start(st, Math.random()); r.stop(st + .09);
+      rg.gain.setValueAtTime(.75 * v, st); rg.gain.exponentialRampToValueAtTime(.0002, st + .12);
+      r.connect(rbp).connect(rbp2).connect(rg).connect(windBus); r.start(st, Math.random()); r.stop(st + .14);
     }
   };
   // 4) 삐걱: a cane bending under the wind, a stick-slip creak
@@ -1309,7 +1309,7 @@ function startSound() {
       const tt = (up + hold + down) * i / steps, shape = tt < up ? tt / up : tt < up + hold ? 1 : 1 - (tt - up - hold) / down;
       setTimeout(() => { gustLevel = k * Math.max(0, shape); gustUntil = ctx.currentTime + 1; }, tt * 1000);
     }
-    knock(t + up * .75 + Math.random() * hold, lerp(.8, 1, Math.random()));
+    knockOld(t + up * .75 + Math.random() * hold, lerp(.8, 1, Math.random()));
     if (Math.random() < .45 * k) creak(t + up * .8 + Math.random() * hold);
     if (Math.random() < .5) chime(t + up + hold + Math.random(), k * .8);
     return up + hold + down;
