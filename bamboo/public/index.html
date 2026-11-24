@@ -255,6 +255,8 @@
   #keeperBtn.on { background: #e9f6e4; border-color: var(--accent); }
   .person .tag.keeperTag { background: #b8892f; }
   .msg.hiddenLeaf { opacity: .35; }
+  .keeperEntry { text-align: center; margin-top: 12px; }
+  .keeperEntry .linkbtn { font-size: 12.5px; }
   .mode-label { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; margin-bottom: 10px; }
   .leaf-text { font-family: "Gowun Batang", serif; font-size: 19px; line-height: 1.8; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 18px; }
   .leaf-text.loud { font-weight: 700; }
@@ -372,6 +374,29 @@
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
   <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
+  <div class="keeperEntry"><button class="linkbtn" id="keeperEnter">🎋 숲지기로 들어가기</button><button class="linkbtn" id="keeperLeave" hidden>🎋 숲지기 모드 끄기</button></div>
+</dialog>
+
+<dialog id="keeperDlg">
+  <button class="close" data-close aria-label="닫기">×</button>
+  <h2 style="font-family:'Gowun Batang',serif;font-size:19px;margin:0 0 12px">🎋 숲지기로 들어가기</h2>
+  <form id="keeperForm" autocomplete="off">
+    <input type="password" id="keeperPw" placeholder="관리자 비밀번호" autocomplete="current-password" style="width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px;font-size:16px;margin-bottom:10px">
+    <button class="heard" style="width:100%">들어가기</button>
+  </form>
+</dialog>
+
+<dialog id="careDlg">
+  <button class="close" data-close aria-label="닫기">×</button>
+  <h2 style="font-family:'Gowun Batang',serif;font-size:19px;margin:0 0 10px">많이 힘들었구나</h2>
+  <p style="line-height:1.75;margin:0 0 12px;word-break:keep-all">털어놓아 줘서 고마워요. 대숲이 다 들었어요.<br>그래도 이 마음을 혼자 견디지 않았으면 해요. 지금 바로 이야기를 들어줄 사람들이 있어요.</p>
+  <div class="care" style="line-height:2">
+    📞 <a href="tel:109">109</a> 자살예방상담전화 (24시간)<br>
+    📞 <a href="tel:15770199">1577-0199</a> 정신건강위기상담 (24시간)<br>
+    📞 <a href="tel:1388">1388</a> 청소년상담 (24시간, 문자 #1388)<br>
+    🚨 지금 위험하다면 <a href="tel:112">112</a> · <a href="tel:119">119</a>
+  </div>
+  <button class="heard" data-close style="width:100%">고마워요, 알겠어요</button>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1223,6 +1248,7 @@ $('sendBtn').onclick = async () => {
   perform(meG, mode, true, () => {
     drawLeaf(leaf, true);
     toast(M.done + '\n🔖 내 마음 보관함에도 담아 뒀어요', 3800);
+    if (CARE.test(leaf.text)) setTimeout(() => $('careDlg').showModal(), 2200);
     setTimeout(() => $('kingBtn').classList.add('ready'), 1800);
   });
 };
@@ -1278,6 +1304,27 @@ async function startKeeper() {
   toast(keeperVisible ? '🎋 숲지기로 들어왔어요 · 다른 사람에게 보여요' : '🎋 숲지기로 들어왔어요 · 아무에게도 안 보여요', 3200);
   heartbeat(); load(true);
 }
+function syncKeeperEntry() { $('keeperEnter').hidden = keeper; $('keeperLeave').hidden = !keeper; }
+$('keeperEnter').onclick = () => { $('aboutDlg').close(); $('keeperPw').value = ''; $('keeperDlg').showModal(); setTimeout(() => $('keeperPw').focus(), 50); };
+$('keeperForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const pw = $('keeperPw').value; if (!pw) return;
+  try {
+    const r = await fetch('/api/admin/ping', { headers: { authorization: 'Bearer ' + encodeURIComponent(pw) } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || '비밀번호가 맞지 않아요.');
+    keeperToken = pw; try { localStorage.setItem('bamboo.admin', pw); } catch {}
+    $('keeperDlg').close(); await startKeeper(); syncKeeperEntry();
+  } catch (err) { toast(err.message, 3500); }
+};
+$('keeperLeave').onclick = async () => {
+  keeper = false; keeperToken = ''; try { localStorage.removeItem('bamboo.admin'); } catch {}
+  setKeeperBtn(); syncKeeperEntry(); $('aboutDlg').close();
+  if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나'; }
+  toast('🎋 숲지기 모드를 껐어요', 2200);
+  await heartbeat(); await load(true); if (scene === 'grove') renderGroveLeaves();
+};
+$('aboutBtn').addEventListener('click', syncKeeperEntry);
 $('keeperBtn').onclick = () => {
   keeperVisible = !keeperVisible; try { localStorage.setItem('bamboo.keeper.visible', keeperVisible ? '1' : '0'); } catch {}
   setKeeperBtn(); heartbeat();
@@ -1290,7 +1337,7 @@ $('kDel').onclick = () => keeperAct('delete');
 let openLeaf = null;
 function timeAgo(ms) { const m = Math.floor(ms / 60000); if (m < 1) return '방금'; if (m < 60) return m + '분 전'; return Math.floor(m / 60) + '시간 전'; }
 function timeLeft(ms, isMine) { return isMine ? '숲이 오늘 하루 품어 줄게요 🍃' : ''; }
-const CARE = /(죽고\s*싶|자살|살기\s*싫|사라지고\s*싶|극단적|자해|목숨|살\s*이유)/;
+const CARE = /(죽고\s*싶|죽을\s*래|죽어\s*버리|자살|살기\s*싫|살고\s*싶지\s*않|사라지고\s*싶|없어지고\s*싶|극단적|자해|목숨|살\s*이유|뛰어\s*내리|유서|끝내고\s*싶|손목)/;
 function openLeafDialog(leaf) {
   openLeaf = leaf;
   const age = now() - leaf.created, M = MODES[modeOf(leaf)];

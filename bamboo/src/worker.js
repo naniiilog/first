@@ -142,6 +142,7 @@ async function notify(env, title, body) {
   }));
 }
 const GROVE_NAME = ['🍃 바람 숲', '🌙 달빛 숲', '💧 이슬 숲'];
+const CRISIS = /(죽고\s*싶|죽을\s*래|죽어\s*버리|자살|살기\s*싫|살고\s*싶지\s*않|사라지고\s*싶|없어지고\s*싶|극단적|자해|목숨|살\s*이유|뛰어\s*내리|유서|끝내고\s*싶|손목)/;
 const MODE_NAME = { whisper: '🤫 속삭임', shout: '📣 소리침', sigh: '😮‍💨 한숨' };
 const clip = (t, n = 60) => ([...t].length > n ? [...t].slice(0, n).join('') + '…' : t);
 
@@ -192,7 +193,7 @@ async function handleApi(request, env, url, ctx) {
     const keeperPost = await isKeeper(request, env);
     if (!keeperPost) { const day = kstDay(now);
       await env.DB.batch([bump(env, day, 'leaves'), bump(env, day, 'leaves_g' + row.grove), bump(env, day, 'leaves_' + row.mode)]); }
-    if (!keeperPost) later(notify(env, `🎋 새 사연 · ${GROVE_NAME[row.grove] || ''}`, `${MODE_NAME[row.mode] || ''}  ${clip(row.text)}`));
+    if (!keeperPost) later(notify(env, CRISIS.test(row.text) ? `🆘 위기 신호가 있는 사연 · ${GROVE_NAME[row.grove] || ''}` : `🎋 새 사연 · ${GROVE_NAME[row.grove] || ''}`, `${MODE_NAME[row.mode] || ''}  ${clip(row.text)}`));
     return json({ leaf: row }, 201);
   }
 
