@@ -1209,7 +1209,7 @@ function dropLeaf() {
   setTimeout(() => el.remove(), 18000);
 }
 let audio = null;
-const WIND = .022;          // very soft bed under the music
+const WIND = .055;          // soft but audible bed under the music
 function startSound() {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
@@ -1218,7 +1218,7 @@ function startSound() {
   let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
   const white = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); { const d = white.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
   const windBus = ctx.createGain(); windBus.gain.value = 0; windBus.connect(master);
-  windBus.gain.linearRampToValueAtTime(1, ctx.currentTime + 3);
+  windBus.gain.linearRampToValueAtTime(2.6, ctx.currentTime + 3);
   // 1) distant air: a low, soft body that swells with each gust
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
   const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 380; filter.Q.value = .3;
@@ -1246,11 +1246,12 @@ function startSound() {
     filter.frequency.cancelScheduledValues(t); filter.frequency.setValueAtTime(filter.frequency.value, t);
     filter.frequency.linearRampToValueAtTime(380 + 260 * k, t + up); filter.frequency.linearRampToValueAtTime(380, t + up + hold + down);
     rgain.gain.cancelScheduledValues(t); rgain.gain.setValueAtTime(rgain.gain.value, t);
-    rgain.gain.linearRampToValueAtTime(.010 * k, t + up * .8); rgain.gain.setValueAtTime(.010 * k, t + up + hold); rgain.gain.linearRampToValueAtTime(0, t + up + hold + down * .8);
+    rgain.gain.linearRampToValueAtTime(.03 * k, t + up * .8); rgain.gain.setValueAtTime(.03 * k, t + up + hold); rgain.gain.linearRampToValueAtTime(0, t + up + hold + down * .8);
     // canes knock together while the gust is strongest
     const knocks = Math.floor(k * lerp(1, 4, Math.random()));
     for (let i = 0; i < knocks; i++) knock(t + up * .6 + Math.random() * (hold + up * .8), .5 + Math.random() * .5);
     if (Math.random() < .25 * k) creak(t + up + Math.random() * hold);
+    if (Math.random() < .85) chime(t + up * .7 + Math.random() * hold, k);
     return up + hold + down;
   };
   // hollow bamboo knock: "톡 / 또독"
@@ -1261,7 +1262,7 @@ function startSound() {
       const o = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter();
       o.type = 'triangle'; o.frequency.setValueAtTime(f * 1.15, st); o.frequency.exponentialRampToValueAtTime(f, st + .03);
       bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 6;
-      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.028 * vel * (n ? .6 : 1), st + .003); g.gain.exponentialRampToValueAtTime(.0003, st + .22);
+      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.045 * vel * (n ? .6 : 1), st + .003); g.gain.exponentialRampToValueAtTime(.0003, st + .22);
       o.connect(bp).connect(g).connect(windBus); o.start(st); o.stop(st + .25);
     }
   };
@@ -1273,6 +1274,71 @@ function startSound() {
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.006, t + .15); g.gain.linearRampToValueAtTime(0, t + .7);
     o.connect(lp).connect(g).connect(windBus); o.start(t); o.stop(t + .75);
   };
+  // ---------- 풍경: a different wind chime in each place ----------
+  const chimeBus = ctx.createGain(); chimeBus.gain.value = 2; chimeBus.connect(master);
+  const tone = (f, t, { parts = [[1, 1]], peak = .02, decay = 3, detune = 0, trem = 0 } = {}) => {
+    for (const [k, a] of parts) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f * k; o.detune.value = detune * (Math.random() - .5);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak * a, t + .004); g.gain.exponentialRampToValueAtTime(.00008, t + decay / Math.sqrt(k));
+      let out = g;
+      if (trem) { const tg = ctx.createGain(), lf = ctx.createOscillator(), lg2 = ctx.createGain(); tg.gain.value = 1; lf.frequency.value = trem; lg2.gain.value = .35; lf.connect(lg2).connect(tg.gain); g.connect(tg); out = tg; lf.start(t); lf.stop(t + decay + .1); }
+      o.connect(g); out.connect(chimeBus); o.start(t); o.stop(t + decay + .1);
+    }
+  };
+  const PENTA = [0, 2, 4, 7, 9];
+  const CHIMES = {
+    // 🍃 small brass bells, a little cluster of bright tinkles
+    wind(t, k) {
+      const n = 2 + Math.floor(Math.random() * 3 * k + 1);
+      for (let i = 0; i < n; i++) {
+        const f = 1318.5 * Math.pow(2, PENTA[Math.floor(Math.random() * 5)] / 12) * (Math.random() < .3 ? 2 : 1);
+        tone(f, t + i * lerp(.09, .28, Math.random()), { parts: [[1, 1], [2.76, .3], [5.4, .1]], peak: .016 * lerp(.6, 1, Math.random()), decay: 2.2, detune: 8 });
+      }
+    },
+    // 🌙 a deep temple-eave 풍경: one or two long, beating strikes
+    moon(t, k) {
+      const f = [587.3, 659.3, 523.3][Math.floor(Math.random() * 3)];
+      const strike = (st, v) => { tone(f, st, { parts: [[1, 1], [1.006, .7], [2.41, .35], [4.08, .12]], peak: .03 * v, decay: 8 }); };
+      strike(t, 1); if (Math.random() < .45 * k) strike(t + lerp(1.2, 2.2, Math.random()), .6);
+    },
+    // 💧 clear glass chime with a watery shimmer
+    dew(t, k) {
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < n; i++) {
+        const f = 1046.5 * Math.pow(2, PENTA[Math.floor(Math.random() * 5)] / 12) * (i === n - 1 ? 2 : 1);
+        tone(f, t + i * lerp(.18, .4, Math.random()), { parts: [[1, 1], [3.01, .18]], peak: .02, decay: 4, trem: lerp(4, 6.5, Math.random()) });
+      }
+    },
+    // plaza: a single soft bell now and then
+    plaza(t) { tone(880 * Math.pow(2, PENTA[Math.floor(Math.random() * 5)] / 12), t, { parts: [[1, 1], [2.76, .25]], peak: .012, decay: 3 }); },
+  };
+  const placeKey = () => scene === 'grove' ? ['wind', 'moon', 'dew'][groveIdx] || 'plaza' : 'plaza';
+  function chime(t, k = 1) { CHIMES[placeKey()](t, k); }
+  setInterval(() => { if (ctx.state === 'running' && Math.random() < .18) chime(ctx.currentTime + Math.random() * .5, .5); }, 4000);
+
+  // ---------- 💧 water: a little stream that only flows in 이슬 숲 ----------
+  const water = ctx.createGain(); water.gain.value = 0; water.connect(master);
+  const ws = ctx.createBufferSource(); ws.buffer = white; ws.loop = true;
+  const wbp = ctx.createBiquadFilter(); wbp.type = 'bandpass'; wbp.frequency.value = 900; wbp.Q.value = .8;
+  const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 2400;
+  const wam = ctx.createGain(); wam.gain.value = .6;
+  for (const fr of [.31, .53, 1.7, 2.9]) { const lf = ctx.createOscillator(), lg3 = ctx.createGain(); lf.frequency.value = fr; lg3.gain.value = .12; lf.connect(lg3).connect(wam.gain); lf.start(); }
+  const wfm = ctx.createOscillator(), wfg = ctx.createGain(); wfm.frequency.value = .7; wfg.gain.value = 260; wfm.connect(wfg).connect(wbp.frequency); wfm.start();
+  ws.connect(wbp).connect(wlp).connect(wam).connect(water); ws.start();
+  const bubble = (t) => {          // tiny burbles over the stones
+    const o = ctx.createOscillator(), g = ctx.createGain(), f = lerp(500, 1100, Math.random());
+    o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * lerp(1.3, 1.9, Math.random()), t + .06);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(lerp(.01, .03, Math.random()), t + .008); g.gain.exponentialRampToValueAtTime(.0002, t + .09);
+    o.connect(g).connect(water); o.start(t); o.stop(t + .1);
+  };
+  let wet = 0;
+  setInterval(() => {
+    if (ctx.state !== 'running') return;
+    const want = placeKey() === 'dew' ? .22 : 0, now = ctx.currentTime;
+    if (want !== wet) { water.gain.cancelScheduledValues(now); water.gain.setValueAtTime(water.gain.value, now); water.gain.linearRampToValueAtTime(want, now + 3); wet = want; }
+    if (wet) { const n = 2 + Math.floor(Math.random() * 5); for (let i = 0; i < n; i++) bubble(now + Math.random() * .5); }
+  }, 500);
+
   audio.gust = gust;
   // gusts come and go, with calm in between
   const loopGust = () => {
@@ -1284,6 +1350,7 @@ function startSound() {
   setInterval(() => { if (ctx.state === 'running' && Math.random() < .25 * windiness()) knock(ctx.currentTime + Math.random(), .35); }, 3000);
   // ---------- music: a different theme for the plaza and each grove ----------
   const mus = ctx.createGain(); mus.gain.value = 0;
+  audio.mus = mus;
   const dl = ctx.createDelay(2); dl.delayTime.value = .42; const fb = ctx.createGain(); fb.gain.value = .38;
   const dlf = ctx.createBiquadFilter(); dlf.type = 'lowpass'; dlf.frequency.value = 1800;
   mus.connect(master); mus.connect(dl); dl.connect(dlf).connect(fb).connect(dl); dlf.connect(master);
