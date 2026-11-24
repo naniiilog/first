@@ -1222,55 +1222,119 @@ function startSound() {
   src.connect(filter).connect(gain).connect(master); src.start(); lfo.start();
   gain.gain.linearRampToValueAtTime(.2, ctx.currentTime + 2);
   audio = { ctx, gain };
-  // music bus with a soft echo
-  const mus = ctx.createGain(); mus.gain.value = 0; mus.gain.linearRampToValueAtTime(.55, ctx.currentTime + 4);
+  // ---------- music: a different theme for the plaza and each grove ----------
+  const mus = ctx.createGain(); mus.gain.value = 0;
   const dl = ctx.createDelay(2); dl.delayTime.value = .42; const fb = ctx.createGain(); fb.gain.value = .38;
   const dlf = ctx.createBiquadFilter(); dlf.type = 'lowpass'; dlf.frequency.value = 1800;
   mus.connect(master); mus.connect(dl); dl.connect(dlf).connect(fb).connect(dl); dlf.connect(master);
-  // 평조 pentatonic (궁상각치우) on D
-  const scale = [0, 2, 5, 7, 9];
-  const hz = (deg, oct) => 146.83 * Math.pow(2, (scale[((deg % 5) + 5) % 5] + 12 * (oct + Math.floor(deg / 5))) / 12);
-  const pad = (deg, t, dur) => {
-    for (const [d, o, det] of [[deg, 0, -4], [deg + 2, 0, 3], [deg, -1, 0]]) {
+  const noiseBuf = buf;
+  const THEMES = {
+    plaza: { base: 146.83, scale: [0, 2, 5, 7, 9],  bar: 8,  vol: .5,  roots: [0, 3, 4, 2, 0, 1] },
+    wind:  { base: 196.0,  scale: [0, 2, 4, 7, 9],  bar: 6.5, vol: .55, roots: [0, 3, 4, 3, 0, 2] },   // G major pentatonic, warm & hopeful
+    moon:  { base: 146.83, scale: [0, 3, 5, 7, 10], bar: 11, vol: .6,  roots: [0, 2, 3, 0, 4, 2] },   // D 계면조, lullaby
+    dew:   { base: 164.81, scale: [0, 2, 4, 7, 9],  bar: 8,  vol: .85,  roots: [0, 4, 3, 0, 2, 4] },   // E major pentatonic, clear
+  };
+  let th = THEMES.plaza;
+  const hz = (deg, oct) => th.base * Math.pow(2, (th.scale[((deg % 5) + 5) % 5] + 12 * (oct + Math.floor(deg / 5))) / 12);
+  const env = (g, t, a, peak, d) => { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(.0005, t + a + d); };
+  const pad = (deg, t, dur, { type = 'triangle', cut = 700, vol = .045, oct = 0 } = {}) => {
+    for (const [d, o, det] of [[deg, oct, -4], [deg + 2, oct, 3], [deg, oct - 1, 0], [deg + 4, oct, 6]]) {
       const osc = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
-      osc.type = 'triangle'; osc.frequency.value = hz(d, o); osc.detune.value = det;
-      lp.type = 'lowpass'; lp.frequency.value = 700;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.045, t + dur * .35); g.gain.linearRampToValueAtTime(0, t + dur);
+      osc.type = type; osc.frequency.value = hz(d, o); osc.detune.value = det;
+      lp.type = 'lowpass'; lp.frequency.value = cut;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol * (d === deg + 4 ? .5 : 1), t + dur * .38); g.gain.linearRampToValueAtTime(0, t + dur);
       osc.connect(lp).connect(g).connect(mus); osc.start(t); osc.stop(t + dur + .1);
     }
   };
-  const pluck = (deg, oct, t, vel = 1) => {      // 가야금-ish: bright attack, quick decay, a little bend
-    const osc = ctx.createOscillator(), osc2 = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
-    const f = hz(deg, oct);
+  const pluck = (deg, oct, t, vel = 1) => {      // 가야금
+    const f = hz(deg, oct), osc = ctx.createOscillator(), osc2 = ctx.createOscillator(), g = ctx.createGain(), g2 = ctx.createGain(), lp = ctx.createBiquadFilter();
     osc.type = 'triangle'; osc2.type = 'sine'; osc.frequency.setValueAtTime(f, t); osc2.frequency.setValueAtTime(f * 2, t);
-    if (Math.random() < .35) { osc.frequency.linearRampToValueAtTime(f * 1.06, t + .25); osc.frequency.linearRampToValueAtTime(f, t + .7); }   // 농현
+    if (Math.random() < .35) { osc.frequency.linearRampToValueAtTime(f * 1.06, t + .25); osc.frequency.linearRampToValueAtTime(f, t + .7); }
     lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(600, t + 1.2);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.11 * vel, t + .008); g.gain.exponentialRampToValueAtTime(.0008, t + 2.6);
-    const g2 = ctx.createGain(); g2.gain.value = .25;
+    env(g, t, .008, .11 * vel, 2.6); g2.gain.value = .25;
     osc.connect(lp); osc2.connect(g2).connect(lp); lp.connect(g).connect(mus);
     osc.start(t); osc2.start(t); osc.stop(t + 2.8); osc2.stop(t + 2.8);
   };
-  let root = 0, next = ctx.currentTime + .5, melody = 2;
+  const flute = (deg, oct, t, dur, vel = 1) => {   // 대금-ish: breathy, slow vibrato
+    const f = hz(deg, oct), osc = ctx.createOscillator(), g = ctx.createGain(), vib = ctx.createOscillator(), vg = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(f * .985, t); osc.frequency.linearRampToValueAtTime(f, t + .18);
+    vib.frequency.value = 4.6; vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * .012, t + dur * .6); vib.connect(vg).connect(osc.frequency);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.07 * vel, t + .22); g.gain.setValueAtTime(.07 * vel, t + dur * .7); g.gain.linearRampToValueAtTime(0, t + dur);
+    const n = ctx.createBufferSource(), nf = ctx.createBiquadFilter(), ng = ctx.createGain();
+    n.buffer = noiseBuf; nf.type = 'bandpass'; nf.frequency.value = f * 2; nf.Q.value = 3;
+    ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(.05 * vel, t + .1); ng.gain.linearRampToValueAtTime(.012 * vel, t + .5); ng.gain.linearRampToValueAtTime(0, t + dur);
+    osc.connect(g).connect(mus); n.connect(nf).connect(ng).connect(mus);
+    osc.start(t); vib.start(t); n.start(t, Math.random() * 2); osc.stop(t + dur + .05); vib.stop(t + dur + .05); n.stop(t + dur + .05);
+  };
+  const bell = (deg, oct, t, vel = 1, long = 4) => {   // 풍경 / clear bell
+    const f = hz(deg, oct);
+    for (const [k, a] of [[1, 1], [2.76, .35], [5.4, .12]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f * k;
+      env(g, t, .004, .06 * vel * a, long / k); o.connect(g).connect(mus); o.start(t); o.stop(t + long / k + .1);
+    }
+  };
+  const drop = (deg, oct, t, vel = 1) => {           // water drop
+    const f = hz(deg, oct), o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f * 1.5, t); o.frequency.exponentialRampToValueAtTime(f, t + .05);
+    env(g, t, .003, .08 * vel, .9); o.connect(g).connect(mus); o.start(t); o.stop(t + 1);
+  };
+  const drone = (t, dur) => {                         // low warm hum for the moonlight lullaby
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = hz(0, -1);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05, t + dur * .4); g.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(g).connect(mus); o.start(t); o.stop(t + dur + .1);
+  };
+  const step = (m, lo, hi) => Math.max(lo, Math.min(hi, m + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
+  let root = 0, melody = 2, next = ctx.currentTime + .5, cur = null;
+  const PHRASE = {
+    plaza(t0, bar, slow) {
+      pad(root, t0, bar + 1.5);
+      const n = slow ? 2 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 3); let t = t0 + .6 + Math.random();
+      for (let i = 0; i < n; i++) { melody = step(melody, 0, 9); pluck(melody, 1, t, .7 + Math.random() * .3); t += (bar - 1.5) / n * (.7 + Math.random() * .6); }
+    },
+    wind(t0, bar, slow) {        // a gentle flute line that rises at the end of the phrase, like a reassuring breath
+      pad(root, t0, bar + 2, { cut: 900, vol: .04 });
+      const notes = slow ? 3 : 4; let t = t0 + .4;
+      for (let i = 0; i < notes; i++) {
+        melody = i === notes - 1 ? Math.min(9, melody + 1) : step(melody, 2, 8);
+        const d = (bar - .8) / notes * (i === notes - 1 ? 1.6 : lerp(.8, 1.1, Math.random()));
+        flute(melody, 1, t, d + .3, .9); t += d;
+      }
+      if (Math.random() < .5) pluck(root + 2, 1, t0 + bar * .55, .45);
+    },
+    moon(t0, bar, slow) {        // lullaby: low hum, slow plucks rocking back and forth, a wind chime now and then
+      drone(t0, bar + 2); pad(root, t0, bar + 2, { type: 'sine', cut: 500, vol: .05 });
+      const notes = slow ? 3 : 4; let t = t0 + 1;
+      const pattern = [0, 2, 1, 2, 0, 1];
+      for (let i = 0; i < notes; i++) { pluck(root + pattern[(i + Math.floor(Math.random() * 2)) % 6] + 2, 0, t, .6 + Math.random() * .2); t += (bar - 2) / notes; }
+      if (Math.random() < .55) bell(root + 4, 2, t0 + bar * (.3 + Math.random() * .4), .5, 6);
+    },
+    dew(t0, bar, slow) {         // drops falling into still water, then a clear bell
+      pad(root, t0, bar + 2, { type: 'sine', cut: 1400, vol: .03, oct: 1 });
+      let t = t0 + .5; const k = slow ? 3 : 4 + Math.floor(Math.random() * 2);
+      let d = root + Math.floor(Math.random() * 3);
+      for (let i = 0; i < k; i++) { drop(d, 2, t, .7 + Math.random() * .3); d += Math.random() < .7 ? 1 : 2; t += lerp(.35, .7, Math.random()); }
+      bell(d, 2, t + .4, .7, 5);
+      if (Math.random() < .5) { let t2 = t0 + bar * .6; for (let i = 0; i < 3; i++) { drop(root + 4 - i, 2, t2, .5); t2 += .45; } }
+    },
+  };
+  const themeNow = () => scene === 'grove' ? ['wind', 'moon', 'dew'][groveIdx] || 'plaza' : 'plaza';
   const schedule = () => {
     if (ctx.state !== 'running') return;
-    const night = phase === 'night' || phase === 'dawn';
-    const bar = night ? 9 : 7;
-    while (next < ctx.currentTime + 4) {
-      pad(root, next, bar + 1.5);
-      // a few sparse notes per phrase, wandering by small steps
-      const n = night ? 2 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 3);
-      let t = next + .6 + Math.random();
-      for (let i = 0; i < n; i++) {
-        melody = Math.max(0, Math.min(9, melody + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
-        pluck(melody, night ? 1 : 1 + (melody > 6 ? 0 : 0), t, .7 + Math.random() * .3);
-        if (Math.random() < .25) pluck(melody + 2, 1, t + .18, .45);
-        t += (bar - 1.5) / n * (.7 + Math.random() * .6);
-      }
-      root = [0, 3, 4, 2, 0, 1][Math.floor(Math.random() * 6)];
+    const want = themeNow(), now = ctx.currentTime;
+    if (want !== cur) {                       // crossfade into the new theme
+      mus.gain.cancelScheduledValues(now); mus.gain.setValueAtTime(mus.gain.value, now);
+      mus.gain.linearRampToValueAtTime(0, now + 1.2);
+      th = THEMES[want]; cur = want; root = 0; melody = 3; next = now + 1.4;
+      mus.gain.linearRampToValueAtTime(th.vol, now + 4);
+    }
+    const slow = phase === 'night' || phase === 'dawn', bar = th.bar * (slow ? 1.25 : 1);
+    while (next < now + 4) {
+      PHRASE[cur](next, bar, slow);
+      root = th.roots[Math.floor(Math.random() * th.roots.length)];
       next += bar;
     }
   };
-  schedule(); setInterval(schedule, 1000);
+  schedule(); setInterval(schedule, 700);
   // birds by day, crickets by night
   setInterval(() => {
     if (ctx.state !== 'running' || Math.random() < .5) return;
