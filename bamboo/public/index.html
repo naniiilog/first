@@ -606,45 +606,74 @@ function buildGrove(k) {
   LAYERS.forEach((cfg, li) => {
     const svg = $(cfg.id); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const r = rng(500 + k * 97 + li * 31);
+    // stalks grow in loose clumps, not a picket fence
     let xs = [];
-    if (cfg.every) { const n = Math.max(6, Math.round(W / cfg.every)); for (let i = 0; i < n; i++) xs.push(((i + .15 + r() * .7) / n) * W); }
-    else xs = (small ? [0, .08, .18, .82, .92, 1] : [0, .05, .11, .18, .82, .89, .95, 1]).map((q) => W * (q + (r() - .5) * .025));
-    let defs = `<defs><linearGradient id="cg${li}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cfg.cane, '#1d3b18', .28)}"/><stop offset=".3" stop-color="${cfg.cane}"/><stop offset=".55" stop-color="${mix(cfg.cane, '#f4ffd8', .5)}"/><stop offset=".8" stop-color="${cfg.cane}"/><stop offset="1" stop-color="${mix(cfg.cane, '#1d3b18', .22)}"/></linearGradient>`;
-    if (cfg.hang) defs += `<filter id="ffg${li}" x="-80%" y="-250%" width="260%" height="600%"><feGaussianBlur stdDeviation="${li === 3 ? 9 : 7}"/></filter><filter id="eg${li}" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="2.4"/></filter>`;
-    defs += '</defs>';
-    let body = '';
-    xs.forEach((x0) => {
-      const w = lerp(cfg.w[0], cfg.w[1], r()) * (cfg.every ? 1 : G.scale);
-      const base = cfg.every ? groundY - (3 - li) * 14 : H + 10;
-      const h = lerp(cfg.h[0], cfg.h[1], r()) * H, lean = (r() - .5) * H * .05, topY = base - h;
-      const at = (y) => { const t = (base - y) / h; return { x: x0 + lean * t * t, w: w * (1 - .3 * t) }; };
-      const midY = base - h / 2, m = at(midY), tp = at(topY);
-      let g = `<path d="M${f1(x0 - w / 2)} ${f1(base)}Q${f1(m.x - m.w / 2)} ${f1(midY)} ${f1(tp.x - tp.w / 2)} ${f1(topY)}L${f1(tp.x + tp.w / 2)} ${f1(topY)}Q${f1(m.x + m.w / 2)} ${f1(midY)} ${f1(x0 + w / 2)} ${f1(base)}Z" fill="url(#cg${li})"/>`;
-      const seg = lerp(.07, .1, r()) * H * (li === 3 ? 1.3 : 1);
-      let side = r() < .5 ? -1 : 1; const fol = [];
-      for (let y = base - seg * (1.2 + r() * .5); y > topY + 4; y -= seg * lerp(.85, 1.15, r())) {
-        const p = at(y);
-        g += `<rect x="${f1(p.x - p.w / 2 - 1)}" y="${f1(y - 1.5)}" width="${f1(p.w + 2)}" height="3" rx="1.5" fill="${cfg.node}" opacity=".85"/>`;
-        if ((base - y) / h > .28 && r() < cfg.density) { fol.push({ y, p, side }); side = -side; }
+    if (cfg.every) {
+      let x = -cfg.every * r();
+      while (x < W + cfg.every) {
+        const n = r() < .35 ? 1 : r() < .7 ? 2 : 3;
+        for (let q = 0; q < n; q++) xs.push(x + (r() - .5) * cfg.every * .9);
+        x += cfg.every * n * lerp(.7, 1.5, r());
       }
-      fol.push({ y: topY + 2, p: tp, side: r() < .5 ? -1 : 1, crown: true });
-      const leafLen = (q) => lerp(cfg.leafLen[0], cfg.leafLen[1], q) * (cfg.every ? 1 : G.scale);
+    } else xs = (small ? [0, .08, .18, .82, .92, 1] : [0, .05, .11, .18, .82, .89, .95, 1]).map((q) => W * (q + (r() - .5) * .03));
+    // each stalk gets its own character: age, tint, thickness, bend, node rhythm, foliage
+    const TINTS = ['#6f8a2c', '#1e5c55', '#4a5a2a', '#5f9a3c', '#2f6a3b', '#7a7a3a'];
+    let defs = '<defs>';
+    if (cfg.hang) defs += `<filter id="ffg${li}" x="-80%" y="-250%" width="260%" height="600%"><feGaussianBlur stdDeviation="${li === 3 ? 9 : 7}"/></filter><filter id="eg${li}" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="2.4"/></filter>`;
+    let body = '';
+    xs.forEach((x0, si) => {
+      const age = r();                                   // 0 young … 1 old
+      const tint = TINTS[Math.floor(r() * TINTS.length)];
+      const cane = mix(cfg.cane, tint, .15 + r() * .3);
+      const gid = `cg${li}_${si}`, hl = lerp(.4, .65, r());
+      defs += `<linearGradient id="${gid}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cane, '#0d2010', .35)}"/><stop offset="${f1(hl - .25)}" stop-color="${cane}"/><stop offset="${f1(hl)}" stop-color="${mix(cane, age < .4 ? '#eaffd0' : '#d8d8a8', .35 + (1 - age) * .2)}"/><stop offset="${f1(hl + .22)}" stop-color="${cane}"/><stop offset="1" stop-color="${mix(cane, '#0d2010', .3)}"/></linearGradient>`;
+      const w = lerp(cfg.w[0], cfg.w[1], r()) * lerp(.65, 1.45, r()) * (cfg.every ? 1 : G.scale);
+      const base = cfg.every ? groundY - (3 - li) * 14 + r() * 8 : H + 10;
+      const broken = cfg.every && li >= 1 && r() < .08;
+      const h = lerp(cfg.h[0], cfg.h[1], r()) * H * (broken ? lerp(.35, .6, r()) : 1);
+      const lean = (r() - .5) * H * lerp(.02, .09, r()), bow = (r() - .5) * H * (r() < .25 ? .06 : .02), topY = base - h;
+      const at = (y) => { const t = clamp((base - y) / h, 0, 1); return { x: x0 + lean * t * t + bow * 4 * t * (1 - t), w: w * (1 - lerp(.15, .4, age) * t) }; };
+      // cane outline follows the bend exactly
+      const N = 12, L1 = [], R1 = [];
+      for (let i = 0; i <= N; i++) { const y = base - h * i / N, p = at(y); L1.push(`${f1(p.x - p.w / 2)} ${f1(y)}`); R1.unshift(`${f1(p.x + p.w / 2)} ${f1(y)}`); }
+      let g = `<path d="M${L1.join('L')}L${R1.join('L')}Z" fill="url(#${gid})"/>`;
+      if (broken) { const p = at(topY); g += `<path d="M${f1(p.x - p.w / 2)} ${f1(topY)}l${f1(p.w * .3)} -6 ${f1(p.w * .25)} 5 ${f1(p.w * .45)} -3v4h${f1(-p.w)}z" fill="${mix(cane, '#c9b98a', .5)}"/>`; }
+      const seg = lerp(.055, .12, r()) * H * (li === 3 ? 1.3 : 1);
+      const sheath = r() < .14, chalk = age < .5 && r() < .6, spotty = age > .7;
+      const node = mix(cfg.node, tint, .2);
+      let side = r() < .5 ? -1 : 1; const fol = [];
+      const dens = cfg.density * lerp(.35, 1.15, r());
+      for (let y = base - seg * (1 + r() * .6), n = 0; y > topY + 4; y -= seg * lerp(.8, 1.2, r()), n++) {
+        const p = at(y);
+        g += `<rect x="${f1(p.x - p.w / 2 - 1.2)}" y="${f1(y - 1.6)}" width="${f1(p.w + 2.4)}" height="3.2" rx="1.6" fill="${node}" opacity=".9"/>`;
+        if (chalk) g += `<rect x="${f1(p.x - p.w / 2)}" y="${f1(y + 1.6)}" width="${f1(p.w)}" height="${f1(Math.min(8, seg * .12))}" fill="#d8ecd0" opacity=".22"/>`;
+        if (sheath && n === 0 && li >= 1) g += `<path d="M${f1(p.x - p.w / 2 - .8)} ${f1(y)}L${f1(p.x - p.w / 2)} ${f1(y - seg * .5)}Q${f1(p.x)} ${f1(y - seg * .42)} ${f1(p.x + p.w * .1)} ${f1(y - seg * .3)}L${f1(p.x + p.w / 2 + .8)} ${f1(y)}Z" fill="${mix(cane, '#9a8456', .55)}" opacity=".6"/>`;
+        if (spotty) for (let q = 0; q < 3; q++) g += `<ellipse cx="${f1(p.x + (r() - .5) * p.w * .6)}" cy="${f1(y - r() * seg * .8)}" rx="${f1(.6 + r() * 1.4)}" ry="${f1(.5 + r())}" fill="#1a2a14" opacity=".35"/>`;
+        if ((base - y) / h > lerp(.2, .45, r()) && r() < dens) { fol.push({ y, p, side }); side = r() < .8 ? -side : side; }
+      }
+      if (!broken) fol.push({ y: topY + 2, p: at(topY), side: r() < .5 ? -1 : 1, crown: true });
+      const leafK = lerp(.75, 1.3, r()), droopK = lerp(.6, 1.4, r());
+      const leafBase = mix(cfg.leaf, tint, .15 + r() * .2), leafHi = mix(cfg.rim || cfg.node, tint, .15);
+      const leafLen = (q) => lerp(cfg.leafLen[0], cfg.leafLen[1], q) * leafK * (cfg.every ? 1 : G.scale);
       for (const f of fol) {
-        const blen = lerp(10, 34, r()) * (li >= 2 ? 1.4 : 1) * (f.crown ? .4 : 1);
-        const bang = (f.crown ? -90 + f.side * 25 : f.side > 0 ? -28 - r() * 22 : -152 + r() * 22) * Math.PI / 180;
+        const blen = lerp(8, 38, r()) * (li >= 2 ? 1.4 : 1) * (f.crown ? .4 : 1);
+        const bang = (f.crown ? -90 + f.side * 25 : f.side > 0 ? -20 - r() * 35 : -160 + r() * 35) * Math.PI / 180;
         const bx = f.p.x + Math.cos(bang) * blen, by = f.y + Math.sin(bang) * blen;
-        g += `<path d="M${f1(f.p.x)} ${f1(f.y)}L${f1(bx)} ${f1(by)}" stroke="${cfg.cane}" stroke-width="${li >= 2 ? 1.6 : 1}" stroke-linecap="round"/>`;
-        const nl = f.crown ? 9 + Math.floor(r() * 4) : 5 + Math.floor(r() * 4);
+        g += `<path d="M${f1(f.p.x)} ${f1(f.y)}Q${f1((f.p.x + bx) / 2)} ${f1((f.y + by) / 2 - 4)} ${f1(bx)} ${f1(by)}" stroke="${cane}" stroke-width="${li >= 2 ? 1.6 : 1}" fill="none" stroke-linecap="round"/>`;
+        const nl = f.crown ? 7 + Math.floor(r() * 6) : 3 + Math.floor(r() * 6);
         for (let q = 0; q < nl; q++) {
           const L = leafLen(r()) * (f.crown ? 1.1 : 1), dir = f.crown ? (q % 2 ? 1 : -1) : f.side;
-          const droop = f.crown ? lerp(-70, 50, r()) : lerp(-10, 65, r()), ang = dir > 0 ? droop : 180 - droop;
-          g += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${mix(cfg.leaf, cfg.rim || cfg.node, r() * .55)}"/>`;
+          const droop = (f.crown ? lerp(-70, 50, r()) : lerp(-15, 70, r())) * droopK, ang = dir > 0 ? droop : 180 - droop;
+          const shade = mix(leafBase, leafHi, r() * .6);
+          g += `<path d="${leafPath(L, L * lerp(.1, .15, r()))}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${age > .8 && r() < .15 ? mix(shade, '#a89a4a', .45) : shade}"/>`;
         }
       }
-      const sway = cfg.sway ? ` class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(cfg.sway * lerp(.6, 1.3, r()))}deg;--d:${f1(4 + r() * 3)}s;--dl:${f1(-r() * 7)}s"` : '';
+      const sway = cfg.sway ? ` class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(cfg.sway * lerp(.5, 1.5, r()))}deg;--d:${f1(3.5 + r() * 4)}s;--dl:${f1(-r() * 7)}s"` : '';
       body += `<g${sway}>${g}<g class="msgs"></g></g>`;
-      if (cfg.hang) hangers.push({ layer: li, x0, lean, base, h, topY });
+      if (cfg.hang && !broken) hangers.push({ layer: li, x0, lean, bow, base, h, topY, gi: si });
+      else if (cfg.hang) hangers.push({ layer: li, x0, lean, bow, base, h, topY, gi: si, skip: true });
     });
+    defs += '</defs>';
     if (li === 3) {
       let c = '';
       for (let x = -30; x < W + 40; x += small ? 26 : 32) {
@@ -657,7 +686,7 @@ function buildGrove(k) {
       body += `<g class="sw" style="transform-origin:${W / 2}px -400px;--a:.25deg;--d:6s;--dl:-2s">${c}</g>`;
     }
     svg.innerHTML = defs + body;
-    if (cfg.hang) { const gs = svg.querySelectorAll(':scope > g'); hangers.filter((s) => s.layer === li).forEach((s, i) => { s.el = gs[i].querySelector('.msgs'); }); }
+    if (cfg.hang) { const gs = svg.querySelectorAll(':scope > g'); hangers.filter((s) => s.layer === li).forEach((s) => { s.el = gs[s.gi].querySelector('.msgs'); }); hangers = hangers.filter((s) => !s.skip); }
   });
   // forest floor clearing
   const r = rng(900 + k);
@@ -696,7 +725,7 @@ function leafAnchor(leaf) {
   const yMin = Math.max(s.topY + 30, G.H * .14), yMax = Math.min(G.groundY - 90, G.H * .62);
   const y = lerp(yMin, Math.max(yMin, yMax), hash(seed * 7 + 3));
   const t = (s.base - y) / s.h;
-  return { s, x: s.x0 + s.lean * t * t, y };
+  return { s, x: s.x0 + s.lean * t * t + (s.bow || 0) * 4 * t * (1 - t), y };
 }
 const MODES = {
   whisper: { e: '🤫', name: '속삭이기', desc: '비밀, 짝사랑처럼 조용히', color: '#3f9158', ph: '대나무에게만 살짝 털어놓아 보세요', label: '🤫 속삭인 말',
