@@ -48,6 +48,8 @@ export interface RoomRow {
   notice_at: number;
   /** 봇 대장: 방장 부탁에 의견을 모아 전하는 봇(멤버 번호, 없으면 null) */
   leader_id: string | null;
+  /** 1이면 알림에 대화 내용을 보여줘요(기본 0: 숨김) */
+  notify_preview: number;
 }
 
 export interface MemberRow {
@@ -135,6 +137,8 @@ export interface GuestRow {
   can_post: number;
   created_at: number;
   last_seen: number | null;
+  /** 이 시각이 지나면 링크가 안 열려요(null이면 기한 없음) */
+  expires_at: number | null;
 }
 
 /** 사진 주소 서명: 방장 토큰을 아는 서버만 만들 수 있어요(주소에 비밀번호를 넣지 않으려고). */
@@ -165,7 +169,8 @@ export class Rooms {
   notifier?: (room: RoomRow, msg: MessageRow) => void;
 
   /** 알림 설정 */
-  async setNotify(roomId: string, patch: { mode?: string; silent?: boolean; name?: string; sound?: string }) {
+  async setNotify(roomId: string, patch: { mode?: string; silent?: boolean; name?: string; sound?: string; preview?: boolean }) {
+    if (patch.preview !== undefined) await this.db.run('UPDATE rooms SET notify_preview = ? WHERE id = ?', patch.preview ? 1 : 0, roomId);
     if (patch.sound !== undefined) await this.db.run('UPDATE rooms SET notify_sound = ? WHERE id = ?', patch.sound, roomId);
     // 조건을 바꾸면 '묶어서' 3분 간격도 새로 시작해요.
     if (patch.mode !== undefined) await this.db.run('UPDATE rooms SET notify_mode = ?, notify_last = NULL WHERE id = ?', patch.mode, roomId);
@@ -195,7 +200,7 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null, notify_sound: 'default', notice: null, notice_at: 0, leader_id: null };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null, notify_sound: 'default', notice: null, notice_at: 0, leader_id: null, notify_preview: 0 };
     // 확인 간격은 정해 두지 않아요(실시간). 방장이 방 설정에서 정한 대로 따라요.
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at, check_interval_min) VALUES (?, ?, ?, ?, 0)', room.id, room.name, room.owner_token, room.created_at);
     return room;
@@ -531,9 +536,12 @@ export class Rooms {
   }
 
   // ── 초대한 사람(손님) ──
-  async addGuest(roomId: string, name: string, canPost: boolean) {
-    const g: GuestRow = { id: randomToken(6), room_id: roomId, name, token: randomToken(20), can_post: canPost ? 1 : 0, created_at: Date.now(), last_seen: null };
-    await this.db.run('INSERT INTO guests (id, room_id, name, token, can_post, created_at) VALUES (?, ?, ?, ?, ?, ?)', g.id, g.room_id, g.name, g.token, g.can_post, g.created_at);
+  async addGuest(roomId: string, name: string, canPost: boolean, expiresAt: number | null) {
+    const g: GuestRow = { id: randomToken(6), room_id: roomId, name, token: randomToken(20), can_post: canPost ? 1 : 0, created_at: Date.now(), last_seen: null, expires_at: expiresAt };
+    await this.db.run(
+      'INSERT INTO guests (id, room_id, name, token, can_post, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      g.id, g.room_id, g.name, g.token, g.can_post, g.created_at, g.expires_at,
+    );
     await this.post(roomId, SYSTEM_ID, '안내', `${name} 님을 ${canPost ? '대화에' : '구경하러'} 초대했어요.`);
     return g;
   }
@@ -542,6 +550,10 @@ export class Rooms {
   }
   guestByToken(token: string) {
     return this.db.first<GuestRow>('SELECT * FROM guests WHERE token = ?', token);
+  }
+  /** 초대 기한 바꾸기(연장) */
+  setGuestExpiry(roomId: string, guestId: string, expiresAt: number | null) {
+    return this.db.run('UPDATE guests SET expires_at = ? WHERE id = ? AND room_id = ?', expiresAt, guestId, roomId);
   }
   async removeGuest(roomId: string, guestId: string) {
     const g = await this.db.first<GuestRow>('SELECT * FROM guests WHERE id = ? AND room_id = ?', guestId, roomId);

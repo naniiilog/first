@@ -179,6 +179,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
       checkRate(`guest:${parts[1]}`, 240);
       const g = await rooms.guestByToken(parts[1]);
       if (!g) throw new HttpError(404, '초대가 없거나 거둬졌어요.');
+      if (g.expires_at && Date.now() > g.expires_at) throw new HttpError(410, '초대 기한이 지났어요. 방장에게 기한을 늘려 달라고 해 주세요.');
       const room = await rooms.room(g.room_id);
       if (!room) throw new HttpError(404, '방이 없어졌어요.');
       await rooms.touchGuest(g);
@@ -315,6 +316,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             notifyMode: room.notify_mode || 'off',
             notifySilent: room.notify_silent === 1,
             notifySound: room.notify_sound || 'default',
+            notifyPreview: room.notify_preview === 1,
             // 방 공지와 봇 대장
             notice: room.notice || null,
             noticeAt: room.notice_at || 0,
@@ -353,8 +355,9 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
         const notifySilent = typeof b.notifySilent === 'boolean' ? b.notifySilent : undefined;
         const notifyName = typeof b.notifyName === 'string' ? cleanName(b.notifyName) : undefined;
         const notifySound = typeof b.notifySound === 'string' && NOTIFY_SOUNDS.includes(b.notifySound) ? b.notifySound : undefined;
-        if (notifyMode !== undefined || notifySilent !== undefined || notifyName !== undefined || notifySound !== undefined) {
-          await rooms.setNotify(room.id, { mode: notifyMode, silent: notifySilent, name: notifyName, sound: notifySound });
+        const notifyPreview = typeof b.notifyPreview === 'boolean' ? b.notifyPreview : undefined;
+        if (notifyMode !== undefined || notifySilent !== undefined || notifyName !== undefined || notifySound !== undefined || notifyPreview !== undefined) {
+          await rooms.setNotify(room.id, { mode: notifyMode, silent: notifySilent, name: notifyName, sound: notifySound, preview: notifyPreview });
         }
         // 순서 대화: turnOrder(멤버 번호 배열)로 시작·바꾸기, null이면 끝내기, turnNext:true면 다음 차례로
         if (b.turnOrder !== undefined || b.turnNext === true) {
@@ -508,17 +511,30 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
     // 사람 초대(손님): GET 목록 · POST {name, canPost} · DELETE /guests/<id>
     if (sub === 'guests') {
       const link = (token: string) => `${url.origin}/join/${token}`;
+      // 기한: days 1·3·7·30일, 0이면 기한 없음
+      const expiryFrom = (v: unknown) => {
+        const days = typeof v === 'number' && [0, 1, 3, 7, 30].includes(v) ? v : 7;
+        return days === 0 ? null : Date.now() + days * 86_400_000;
+      };
       if (!parts[4] && req.method === 'GET') {
         return json(200, {
-          guests: (await rooms.guests(room.id)).map((x) => ({ id: x.id, name: x.name, canPost: x.can_post === 1, joined: x.last_seen !== null, online: x.last_seen !== null && Date.now() - x.last_seen < 90_000, url: link(x.token) })),
+          guests: (await rooms.guests(room.id)).map((x) => ({
+            id: x.id, name: x.name, canPost: x.can_post === 1, joined: x.last_seen !== null,
+            online: x.last_seen !== null && Date.now() - x.last_seen < 90_000, url: link(x.token), expiresAt: x.expires_at ?? null,
+          })),
         });
+      }
+      if (parts[4] && req.method === 'PATCH') {
+        const b = await body(req);
+        await rooms.setGuestExpiry(room.id, parts[4], expiryFrom(b.days));
+        return json(200, { ok: true });
       }
       if (!parts[4] && req.method === 'POST') {
         const b = await body(req);
         const name = cleanName(b.name);
         if (!name) throw new HttpError(400, '초대할 사람 이름을 써 주세요.');
-        const x = await rooms.addGuest(room.id, name, b.canPost !== false);
-        return json(200, { guest: { id: x.id, name: x.name, canPost: x.can_post === 1, joined: false, url: link(x.token) } });
+        const x = await rooms.addGuest(room.id, name, b.canPost !== false, expiryFrom(b.days));
+        return json(200, { guest: { id: x.id, name: x.name, canPost: x.can_post === 1, joined: false, url: link(x.token), expiresAt: x.expires_at } });
       }
       if (parts[4] && req.method === 'DELETE') {
         await rooms.removeGuest(room.id, parts[4]);

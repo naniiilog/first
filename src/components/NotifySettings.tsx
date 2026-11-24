@@ -20,12 +20,13 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
   const [on, setOn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ mode?: NotifyMode; silent?: boolean; sound?: string }>({});
+  const [draft, setDraft] = useState<{ mode?: NotifyMode; silent?: boolean; sound?: string; preview?: boolean }>({});
   const supported = pushSupported();
   const mode = draft.mode ?? info.notifyMode ?? 'off';
   const silent = draft.silent ?? info.notifySilent ?? false;
   const sound = draft.sound ?? info.notifySound ?? 'default';
   const picked = silent ? 'silent' : sound;
+  const preview = draft.preview ?? info.notifyPreview ?? false;
   /** 폰 설정에서 이 칸 소리가 바뀌었는지(설정 화면에 다녀오면 다시 확인해요) */
   const [chState, setChState] = useState<'ok' | 'changed' | 'free' | 'missing' | null>(null);
   useEffect(() => {
@@ -55,12 +56,13 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
     };
   }, [supported, settings, room]);
 
-  const save = async (patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string; notifySound?: string }) => {
+  const save = async (patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string; notifySound?: string; notifyPreview?: boolean }) => {
     setDraft((d) => ({
       ...d,
       ...(patch.notifyMode ? { mode: patch.notifyMode } : {}),
       ...(patch.notifySilent !== undefined ? { silent: patch.notifySilent } : {}),
       ...(patch.notifySound ? { sound: patch.notifySound } : {}),
+      ...(patch.notifyPreview !== undefined ? { preview: patch.notifyPreview } : {}),
     }));
     await api.setNotify(settings, room, patch);
     await refresh();
@@ -150,6 +152,19 @@ export function NotifySettings({ settings, room, info, refresh }: { settings: Se
                   </View>
                 </Pressable>
               ))}
+
+              {/* 개인정보: 기본은 알림에 대화 내용을 싣지 않아요(알림 서비스를 거치지 않게) */}
+              <View style={[styles.previewRow, { backgroundColor: t.card, borderColor: t.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: t.text, fontWeight: '700' }}>🔒 알림에 대화 내용 보여주기</Text>
+                  <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 17 }}>
+                    {preview
+                      ? '켜짐: 알림에 "나부: 안녕~"처럼 내용이 보여요. 내용이 알림 서비스(구글 등)를 거쳐요.'
+                      : '꺼짐: 알림에 "나부의 새 메시지"만 보여요. 대화 내용은 다봇 안에서만 봐요.'}
+                  </Text>
+                </View>
+                <Switch value={preview} onValueChange={(v) => save({ notifyPreview: v }).catch((e) => setMsg(String(e)))} />
+              </View>
 
               <Text style={{ color: t.text, fontWeight: '600' }}>알림 방식</Text>
               {Platform.OS === 'web' ? (
@@ -253,5 +268,6 @@ const styles = StyleSheet.create({
   radioDot: { width: 10, height: 10, borderRadius: 5 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sound: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   testBtn: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
 });

@@ -176,7 +176,9 @@ export async function notifyBotMessage(db: Db, room: RoomRow, msg: MessageRow, o
   if (room.owner_seen && now - room.owner_seen < WATCHING_MS) return;
 
   let title = room.name;
-  let body = `${msg.author_name}: ${clip(msg.text || '[사진]')}`;
+  // 기본은 대화 내용을 알림에 싣지 않아요(알림 서비스를 거치지 않게). 방 설정에서 켜면 보여줘요.
+  const preview = room.notify_preview === 1;
+  let body = preview ? `${msg.author_name}: ${clip(msg.text || '[사진]')}` : `${msg.author_name}의 새 메시지`;
   let tag = `room-${room.id}`;
   if (mode === 'mentions') {
     const name = (room.notify_name || '').trim();
@@ -189,7 +191,7 @@ export async function notifyBotMessage(db: Db, room: RoomRow, msg: MessageRow, o
     if (room.notify_last && now - room.notify_last < BATCH_MS) return;
     const since = room.notify_last_id ?? 0;
     const n = (await db.first<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND id > ? AND author_id NOT IN ('owner','system')", room.id, since))?.n ?? 1;
-    if (n > 1) body = `${msg.author_name}: ${clip(msg.text || '[사진]', 80)} 외 ${n - 1}개`;
+    if (n > 1) body = preview ? `${msg.author_name}: ${clip(msg.text || '[사진]', 80)} 외 ${n - 1}개` : `새 메시지 ${n}개`;
   } else {
     tag = `room-${room.id}-${msg.id}`;
   }

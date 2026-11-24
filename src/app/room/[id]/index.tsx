@@ -7,6 +7,7 @@ import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platf
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
+import { confirmPrivate } from '../../../lib/privacy';
 import { saveImage } from '../../../lib/saveImage';
 import { loadMarks, saveReadMark, toggleBookmark, type Bookmark } from '../../../lib/marks';
 import { BookmarkSheet, MessageActions } from '../../../components/MessageActions';
@@ -297,9 +298,11 @@ export default function RoomScreen() {
     p.then((err) => err && setSendError(err));
   };
 
-  const send = () => {
+  const send = async () => {
     const body = text.trim();
     if (!body && !photo) return;
+    // 개인정보처럼 보이면 한 번 물어봐요(봇들과 초대한 사람도 읽어서).
+    if (body && !(await confirmPrivate(body))) return;
     // 입력창은 바로 비우고, 메시지도 바로 화면에 보여줘요(내 메시지는 맨 아래로 내려가서 보여줘요).
     forceBottom.current = true;
     setText('');

@@ -1,4 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { confirmPrivate } from '../../lib/privacy';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,6 +64,7 @@ export default function JoinScreen() {
   const send = async () => {
     const body = text.trim();
     if (!body || !token || sending) return;
+    if (!(await confirmPrivate(body))) return;
     setSending(true);
     try {
       await guestApi.send(token, body, null);

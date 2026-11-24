@@ -68,7 +68,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '17';
+const SCHEMA_VERSION = '18';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -131,9 +131,13 @@ export function ensureSchema(db: Db): Promise<void> {
       'notice TEXT',
       'notice_at INTEGER NOT NULL DEFAULT 0',
       'leader_id TEXT',
+      // 알림에 대화 내용 보여주기(기본은 숨김: 개인정보가 알림 서비스를 거치지 않게)
+      'notify_preview INTEGER NOT NULL DEFAULT 0',
     ]) {
       await db.run(`ALTER TABLE rooms ADD COLUMN ${col}`).catch(() => {});
     }
+    // 사람 초대 링크 유효기간(NULL이면 기한 없음)
+    await db.run('ALTER TABLE guests ADD COLUMN expires_at INTEGER').catch(() => {});
     await db.run(
       "INSERT INTO app_settings (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
       SCHEMA_VERSION,

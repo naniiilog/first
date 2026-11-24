@@ -77,6 +77,8 @@ export interface RoomInfo {
     notifyMode?: NotifyMode;
     notifySilent?: boolean;
     notifySound?: string;
+    /** 알림에 대화 내용 보여주기 */
+    notifyPreview?: boolean;
     /** 방 공지(없으면 null) */
     notice?: string | null;
     noticeAt?: number;
@@ -111,6 +113,8 @@ export interface Guest {
   joined: boolean;
   online?: boolean;
   url: string;
+  /** 링크가 안 열리게 되는 시각(null이면 기한 없음) */
+  expiresAt?: number | null;
 }
 
 /** 봇 사용량 대시보드 응답 */
@@ -201,8 +205,11 @@ export const api = {
     call<{ messages: ChatMessage[] }>(s, `/api/rooms/${r.id}/timeline?from=${from}&to=${to}`, { ownerToken: r.ownerToken }),
   /** 사람 초대 */
   guests: (s: Settings, r: LocalRoom) => call<{ guests: Guest[] }>(s, `/api/rooms/${r.id}/guests`, { ownerToken: r.ownerToken }),
-  addGuest: (s: Settings, r: LocalRoom, name: string, canPost: boolean) =>
-    call<{ guest: Guest }>(s, `/api/rooms/${r.id}/guests`, { method: 'POST', body: { name, canPost }, ownerToken: r.ownerToken }),
+  addGuest: (s: Settings, r: LocalRoom, name: string, canPost: boolean, days: number) =>
+    call<{ guest: Guest }>(s, `/api/rooms/${r.id}/guests`, { method: 'POST', body: { name, canPost, days }, ownerToken: r.ownerToken }),
+  /** 초대 기한 바꾸기(지금부터 days일, 0이면 기한 없음) */
+  setGuestDays: (s: Settings, r: LocalRoom, id: string, days: number) =>
+    call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'PATCH', body: { days }, ownerToken: r.ownerToken }),
   removeGuest: (s: Settings, r: LocalRoom, id: string) => call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
 
   /** 오래된 대화(before 글번호 앞의 100개) */
@@ -259,7 +266,7 @@ export const api = {
     call(s, `/api/rooms/${r.id}/push`, { method: 'DELETE', body: { endpoint }, ownerToken: r.ownerToken }),
   pushTest: (s: Settings, r: LocalRoom) => call<{ sent: number; failed: number }>(s, `/api/rooms/${r.id}/push/test`, { method: 'POST', ownerToken: r.ownerToken }),
   /** 알림 조건·소리 */
-  setNotify: (s: Settings, r: LocalRoom, patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string; notifySound?: string }) =>
+  setNotify: (s: Settings, r: LocalRoom, patch: { notifyMode?: NotifyMode; notifySilent?: boolean; notifyName?: string; notifySound?: string; notifyPreview?: boolean }) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 사용량(오늘 0시부터) */
