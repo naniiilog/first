@@ -8,6 +8,8 @@
 <style>
   :root { --bg: #0d1b18; --card: #142824; --ink: #e9f3ec; --muted: #9db8ab; --line: #24413a; --accent: #8fe0a6; --danger: #ff8a7a; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  .mode { font-weight: 700; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
   .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
   h1 { font-size: 20px; margin: 0 0 14px; }
@@ -40,6 +42,7 @@
 const $ = (id) => document.getElementById(id);
 let token = '';
 try { token = sessionStorage.getItem('bamboo.admin') || ''; } catch {}
+const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? '방금' : m < 60 ? m + '분 전' : Math.floor(m / 60) + '시간 전'; };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function call(path, post) {
@@ -56,7 +59,7 @@ async function load() {
     $('summary').textContent = `잎 ${leaves.length}장 · 숨김 ${hidden}장 · 신고 있는 잎 ${leaves.filter((l) => l.reports).length}장`;
     $('list').innerHTML = leaves.map((l) => `<div class="item${l.hidden ? ' hidden' : ''}">
       <div class="text">${esc(l.text)}</div>
-      <div class="meta"><span>#${l.id}</span><span>${Math.floor((now - l.created) / 60000)}분 전</span><span>🍃 ${l.heard}</span>
+      <div class="meta"><span>#${l.id}</span><span class="mode">${({ whisper: '🤫 속삭임', shout: '📣 소리침', sigh: '😮‍💨 한숨' })[l.mode] || '🤫 속삭임'}</span><span>${ago(now - l.created)}</span><span>🍃 ${l.heard}</span>
         ${l.reports ? `<span class="badge">신고 ${l.reports}</span>` : ''}${l.hidden ? '<span class="badge">숨김</span>' : ''}<span class="sp"></span>
         <button data-act="${l.hidden ? 'unhide' : 'hide'}" data-id="${l.id}">${l.hidden ? '다시 보이기' : '숨기기'}</button>
         <button class="danger" data-act="delete" data-id="${l.id}">삭제</button></div></div>`).join('') || '<p style="color:var(--muted)">숲이 비어 있어요.</p>';
