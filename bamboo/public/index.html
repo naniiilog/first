@@ -302,7 +302,8 @@
     <li>길 끝 울창한 대숲에 서면 <b>👑 임금님 귀는 당나귀 귀</b> 버튼이 켜져요.</li>
     <li>🤫 속삭이기 · 📣 소리치기 · 😮‍💨 한숨 쉬기 중에 골라 속마음을 털어놓으면, 대나무 잎 하나가 반짝이며 그 사연을 품어요.</li>
     <li>사연을 품은 잎은 <b>24시간 동안</b> 반딧불처럼 깜빡이다가 바람에 날아가요. 누르면 읽을 수 있고, <b>🍃 들었어요</b>로만 대답할 수 있어요.</li>
-    <li>함께 걷는 사람들은 지금 숲에 와 있는 실제 방문자예요. 이름도 가입도 없고, IP 주소는 저장하지 않아요.</li>
+    <li>입구 광장에서 함께 걷는 사람들은 지금 숲에 와 있는 실제 방문자예요. <b>길 끝 대숲 안에서는 오직 나 혼자</b>라 아무도 보지 않아요.</li>
+    <li>이름도 가입도 없고, IP 주소는 저장하지 않아요.</li>
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
   <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
@@ -602,25 +603,37 @@ function wanderIdle(p) {
   p.wait = 1.5 + Math.random() * 4;
   if (Math.random() < .3) p.say(EMOTES[Math.floor(Math.random() * EMOTES.length)], 2000);
   const pl = p.placeName;
-  p.go([pl === 'plaza' ? plazaPoint() : clearingPoint(+pl.slice(1))]);
+  if (pl === 'plaza') p.go([plazaPoint()]);
+}
+// strollers share the plaza; once someone enters a grove they vanish into the forest (groves are private)
+function enterForest(p) { p.idle = null; p.el.style.transition = 'opacity .8s'; p.el.style.opacity = '0'; p.hiddenInGrove = true; }
+function leaveForest(p, k) {
+  const e = GROVES[k].end; p.x = e.x; p.y = e.y; p.place();
+  p.el.style.opacity = '1'; p.hiddenInGrove = false; p.idle = null;
+  p.go(routeFromGrove(k), () => { p.idle = wanderIdle; }, 120);
 }
 function syncMapPeople() {
   for (const [id, o] of others) {
     let p = mapPeople.get(id);
+    const inGrove = o.place !== 'plaza';
     if (!p) {
-      const start = o.place === 'plaza' ? { x: 600 + (Math.random() - .5) * 60, y: WH - 10 } : clearingPoint(+o.place.slice(1));
-      p = new Person(id, $('mapChars'), { x: start.x, y: start.y, scale: charScale });
-      p.placeName = o.place; p.idle = wanderIdle;
-      if (o.place === 'plaza') p.go([{ x: 600, y: 1600 }, plazaPoint()]);
+      if (inGrove) continue;                       // already deep in a grove: nothing to see
+      p = new Person(id, $('mapChars'), { x: 600 + (Math.random() - .5) * 60, y: WH - 10, scale: charScale });
+      p.placeName = 'plaza'; p.idle = wanderIdle;
+      p.go([{ x: 600, y: 1600 }, plazaPoint()]);
       mapPeople.set(id, p);
     } else if (p.placeName !== o.place) {
       const from = p.placeName; p.placeName = o.place;
-      if (from === 'plaza' && o.place !== 'plaza') p.go([FORK, ...routeToGrove(+o.place.slice(1))]);
-      else if (from !== 'plaza' && o.place === 'plaza') p.go(routeFromGrove(+from.slice(1)));
-      else p.go([FORK, ...routeToGrove(+o.place.slice(1))]);
+      if (inGrove) { p.idle = null; p.go([FORK, ...routeToGrove(+o.place.slice(1))], () => enterForest(p), 120); }
+      else if (p.hiddenInGrove) leaveForest(p, +from.slice(1));
+      else p.go([plazaPoint()]);
     }
   }
-  for (const [id, p] of mapPeople) if (!others.has(id) && !p.leaving) { p.leaving = true; p.idle = null; p.go([{ x: 600, y: 1600 }, { x: 600, y: WH + 60 }], () => { p.remove(); mapPeople.delete(id); }); }
+  for (const [id, p] of mapPeople) if (!others.has(id) && !p.leaving) {
+    p.leaving = true; p.idle = null;
+    if (p.hiddenInGrove) { p.remove(); mapPeople.delete(id); continue; }
+    p.go([{ x: 600, y: 1600 }, { x: 600, y: WH + 60 }], () => { p.remove(); mapPeople.delete(id); });
+  }
 }
 function renderPathPanel() {
   const row = $('pathRow'); row.innerHTML = '';
@@ -938,17 +951,7 @@ function groveIdle(p) {
   if (Math.random() < .5) p.go([grovePoint()]);
   p.el.classList.toggle('back', Math.random() < .5);
 }
-function syncGrovePeople() {
-  if (scene !== 'grove') return;
-  const here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).slice(0, G.small ? 6 : 12);
-  const ids = new Set(here.map((o) => o.id));
-  const sc = G.small ? 1.35 : 1.6;
-  for (const o of here) if (!grovePeople.has(o.id)) {
-    const p = new Person(o.id, $('groveChars'), { x: Math.random() < .5 ? -30 : G.W + 30, y: lerp(G.groundY + 30, G.H * .9, Math.random()), scale: sc });
-    p.idle = groveIdle; p.go([grovePoint()]); grovePeople.set(o.id, p);
-  }
-  for (const [id, p] of grovePeople) if (!ids.has(id) && !p.leaving) { p.leaving = true; p.idle = null; p.go([{ x: p.x < G.W / 2 ? -40 : G.W + 40, y: p.y }], () => { p.remove(); grovePeople.delete(id); }); }
-}
+function syncGrovePeople() { /* groves are private: other visitors are never shown here */ }
 
 function fadeThen(fn) {
   const f = $('fade'); f.classList.add('on');
@@ -1074,7 +1077,7 @@ function updateStatus() {
   if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `${PHASES[phase].label} · 입구 광장 · ${total}명 · 잎 ${leaves.length}장`; }
   else {
     const g = GROVES[groveIdx], n = leaves.length, here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).length + 1;
-    $('title').textContent = `${g.icon} ${g.name}`; $('title').title = PHASES[phase].label; $('status').textContent = AW() < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
+    $('title').textContent = `${g.icon} ${g.name}`; $('title').title = PHASES[phase].label; $('status').textContent = `${PHASES[phase].label} · 잎 ${n}장`;
   }
 }
 async function load(first) {
@@ -1087,11 +1090,8 @@ async function load(first) {
     leaves = d.leaves.map((l) => ({ ...l, grove: l.grove ?? 0 }));
     if (scene === 'grove') {
       if (gone || first) renderGroveLeaves();
-      const here = [...grovePeople.values()];
-      for (const l of incoming) {
-        const p = here.length ? here[Math.floor(Math.random() * here.length)] : null;
-        perform(p, modeOf(l), false, () => drawLeaf(l, true));
-      }
+      // someone told the forest a secret somewhere: a leaf quietly lights up
+      incoming.forEach((l, i) => setTimeout(() => drawLeaf(l, true), 600 + i * 900));
     }
     renderPathPanel(); updateStatus();
   } catch (e) { if (first) $('status').textContent = '숲에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
