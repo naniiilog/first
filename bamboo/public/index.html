@@ -1219,60 +1219,76 @@ function startSound() {
   const white = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); { const d = white.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
   const windBus = ctx.createGain(); windBus.gain.value = 0; windBus.connect(master);
   windBus.gain.linearRampToValueAtTime(2.6, ctx.currentTime + 3);
-  // 1) distant air: a low, soft body that swells with each gust
+  // 1) the wind itself: a soft "휘이…" that swells with each gust and settles back
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
-  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 380; filter.Q.value = .3;
-  const gain = ctx.createGain(); gain.gain.value = WIND * .3;
+  const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 320; filter.Q.value = .7;
+  const gain = ctx.createGain(); gain.gain.value = WIND * .12;
   src.connect(filter).connect(gain).connect(windBus); src.start();
-  // 2) leaves brushing together: "사각사각", only while the wind is moving
-  const rsrc = ctx.createBufferSource(); rsrc.buffer = white; rsrc.loop = true;
-  const rbp = ctx.createBiquadFilter(); rbp.type = 'bandpass'; rbp.frequency.value = 4200; rbp.Q.value = .9;
-  const rhp = ctx.createBiquadFilter(); rhp.type = 'highpass'; rhp.frequency.value = 2200;
-  const rgain = ctx.createGain(); rgain.gain.value = 0;
-  // flutter: fast irregular amplitude so it crackles like many small leaves instead of hissing
-  const flut = ctx.createGain(); flut.gain.value = 0;
-  const f1o = ctx.createOscillator(), f2o = ctx.createOscillator(), fg = ctx.createGain();
-  f1o.frequency.value = 7.3; f2o.frequency.value = 11.9; fg.gain.value = .5; f1o.connect(fg); f2o.connect(fg); fg.connect(flut.gain); f1o.start(); f2o.start();
-  rsrc.connect(rhp).connect(rbp).connect(flut).connect(rgain).connect(windBus); rsrc.start();
   audio = { ctx, gain };
-  // how windy each place is
-  const windiness = () => scene !== 'grove' ? .6 : [1.4, .45, .7][groveIdx] ?? .6;
-  // a gust: swell, rustle, fade, then quiet
-  const gust = (strength = 1) => {
-    const t = ctx.currentTime, up = lerp(1.6, 3.2, Math.random()), hold = lerp(.4, 1.6, Math.random()), down = lerp(2.5, 5, Math.random());
-    const k = strength * lerp(.6, 1, Math.random());
-    gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t);
-    gain.gain.linearRampToValueAtTime(WIND * (.3 + k * .9), t + up); gain.gain.setValueAtTime(WIND * (.3 + k * .9), t + up + hold); gain.gain.linearRampToValueAtTime(WIND * .3, t + up + hold + down);
-    filter.frequency.cancelScheduledValues(t); filter.frequency.setValueAtTime(filter.frequency.value, t);
-    filter.frequency.linearRampToValueAtTime(380 + 260 * k, t + up); filter.frequency.linearRampToValueAtTime(380, t + up + hold + down);
-    rgain.gain.cancelScheduledValues(t); rgain.gain.setValueAtTime(rgain.gain.value, t);
-    rgain.gain.linearRampToValueAtTime(.03 * k, t + up * .8); rgain.gain.setValueAtTime(.03 * k, t + up + hold); rgain.gain.linearRampToValueAtTime(0, t + up + hold + down * .8);
-    // canes knock together while the gust is strongest
-    const knocks = Math.floor(k * lerp(1, 4, Math.random()));
-    for (let i = 0; i < knocks; i++) knock(t + up * .6 + Math.random() * (hold + up * .8), .5 + Math.random() * .5);
-    if (Math.random() < .25 * k) creak(t + up + Math.random() * hold);
-    if (Math.random() < .85) chime(t + up * .7 + Math.random() * hold, k);
-    return up + hold + down;
+  const windiness = () => scene !== 'grove' ? .7 : [1.4, .55, .8][groveIdx] ?? .7;
+  let gustLevel = 0, gustUntil = 0;           // how hard it is blowing right now (drives the rustle)
+  // 2) 사각사각: many tiny dry crackles of leaves brushing together
+  const crackle = (t, vel) => {
+    const n = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+    n.buffer = white; hp.type = 'highpass'; hp.frequency.value = 1800;
+    bp.type = 'bandpass'; bp.frequency.value = lerp(2500, 7000, Math.random()); bp.Q.value = lerp(1, 3, Math.random());
+    const d = lerp(.006, .03, Math.random());
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + .002); g.gain.exponentialRampToValueAtTime(.0002, t + d);
+    n.connect(hp).connect(bp).connect(g).connect(windBus); n.start(t, Math.random() * 1.5); n.stop(t + d + .01);
   };
-  // hollow bamboo knock: "톡 / 또독"
-  const knock = (t, vel) => {
-    const twice = Math.random() < .4;
-    for (let n = 0; n < (twice ? 2 : 1); n++) {
-      const st = t + n * lerp(.08, .16, Math.random()), f = lerp(380, 720, Math.random());
-      const o = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter();
-      o.type = 'triangle'; o.frequency.setValueAtTime(f * 1.15, st); o.frequency.exponentialRampToValueAtTime(f, st + .03);
-      bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 6;
-      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.045 * vel * (n ? .6 : 1), st + .003); g.gain.exponentialRampToValueAtTime(.0003, st + .22);
-      o.connect(bp).connect(g).connect(windBus); o.start(st); o.stop(st + .25);
+  setInterval(() => {
+    if (ctx.state !== 'running') return;
+    const now = ctx.currentTime, lvl = now < gustUntil ? gustLevel : 0;
+    const rate = 4 + lvl * 70;                 // crackles per second: a few when calm, a flurry in a gust
+    const n = Math.round(rate * .1 * lerp(.6, 1.4, Math.random()));
+    for (let i = 0; i < n; i++) crackle(now + Math.random() * .1, (.02 + lvl * .05) * lerp(.4, 1, Math.random()));
+  }, 100);
+  // 3) 톡 / 또독: hard wooden click + the hollow ring of the cane
+  const knock = (t, vel = 1) => {
+    const hits = Math.random() < .35 ? 1 : Math.random() < .7 ? 2 : 3, f = lerp(420, 760, Math.random());
+    for (let n = 0; n < hits; n++) {
+      const st = t + n * lerp(.07, .14, Math.random()), v = vel * (n ? lerp(.5, .8, Math.random()) : 1), ff = f * lerp(.94, 1.06, Math.random());
+      const c = ctx.createBufferSource(), chp = ctx.createBiquadFilter(), cg = ctx.createGain();
+      c.buffer = white; chp.type = 'highpass'; chp.frequency.value = 2500;
+      cg.gain.setValueAtTime(.09 * v, st); cg.gain.exponentialRampToValueAtTime(.0002, st + .012);
+      c.connect(chp).connect(cg).connect(windBus); c.start(st, Math.random()); c.stop(st + .02);
+      for (const [k, a, dec] of [[1, 1, .18], [2.32, .45, .09], [3.9, .2, .05]]) {
+        const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(ff * k * 1.04, st); o.frequency.exponentialRampToValueAtTime(ff * k, st + .02);
+        g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.07 * v * a, st + .002); g.gain.exponentialRampToValueAtTime(.0002, st + dec);
+        o.connect(g).connect(windBus); o.start(st); o.stop(st + dec + .02);
+      }
     }
   };
-  // a cane bending: a very faint low creak
+  // 4) 삐걱: a cane bending under the wind, a stick-slip creak
   const creak = (t) => {
-    const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(), f = lerp(150, 230, Math.random());
-    o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * lerp(.85, 1.12, Math.random()), t + .6);
-    lp.type = 'lowpass'; lp.frequency.value = 600;
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.006, t + .15); g.gain.linearRampToValueAtTime(0, t + .7);
-    o.connect(lp).connect(g).connect(windBus); o.start(t); o.stop(t + .75);
+    const dur = lerp(.5, 1.1, Math.random()), f = lerp(110, 190, Math.random());
+    const o = ctx.createOscillator(), bp = ctx.createBiquadFilter(), am = ctx.createGain(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * lerp(1.15, 1.4, Math.random()), t + dur);
+    bp.type = 'bandpass'; bp.frequency.value = f * 5; bp.Q.value = 4;
+    lfo.type = 'square'; lfo.frequency.setValueAtTime(lerp(18, 28, Math.random()), t); lfo.frequency.linearRampToValueAtTime(lerp(30, 45, Math.random()), t + dur);
+    lg.gain.value = .5; am.gain.value = .5; lfo.connect(lg).connect(am.gain);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05, t + .12); g.gain.setValueAtTime(.05, t + dur * .7); g.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(bp).connect(am).connect(g).connect(windBus); o.start(t); lfo.start(t); o.stop(t + dur + .05); lfo.stop(t + dur + .05);
+  };
+  // a gust: swell, flurry of leaves, canes clack, maybe a creak, then calm
+  const gust = (strength = 1) => {
+    const t = ctx.currentTime, up = lerp(1.8, 3.2, Math.random()), hold = lerp(.6, 1.8, Math.random()), down = lerp(2.5, 4.5, Math.random());
+    const k = Math.min(1.4, strength * lerp(.65, 1, Math.random()));
+    gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.linearRampToValueAtTime(WIND * (.2 + k * 1.1), t + up); gain.gain.setValueAtTime(WIND * (.2 + k * 1.1), t + up + hold); gain.gain.linearRampToValueAtTime(WIND * .12, t + up + hold + down);
+    filter.frequency.cancelScheduledValues(t); filter.frequency.setValueAtTime(filter.frequency.value, t);
+    filter.frequency.linearRampToValueAtTime(320 + 520 * k, t + up); filter.frequency.linearRampToValueAtTime(320, t + up + hold + down);
+    // the rustle follows the gust's shape
+    const steps = 12;
+    for (let i = 0; i <= steps; i++) {
+      const tt = (up + hold + down) * i / steps, shape = tt < up ? tt / up : tt < up + hold ? 1 : 1 - (tt - up - hold) / down;
+      setTimeout(() => { gustLevel = k * Math.max(0, shape); gustUntil = ctx.currentTime + 1; }, tt * 1000);
+    }
+    const knocks = 1 + Math.floor(k * lerp(1, 3.5, Math.random()));
+    for (let i = 0; i < knocks; i++) knock(t + up * .5 + Math.random() * (hold + up * .9), lerp(.6, 1, Math.random()));
+    if (Math.random() < .45 * k) creak(t + up * .8 + Math.random() * hold);
+    if (Math.random() < .85) chime(t + up * .7 + Math.random() * hold, k);
+    return up + hold + down;
   };
   // ---------- 풍경: a different wind chime in each place ----------
   const chimeBus = ctx.createGain(); chimeBus.gain.value = 2; chimeBus.connect(master);
