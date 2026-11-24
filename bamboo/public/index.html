@@ -91,8 +91,8 @@
   #top { top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; pointer-events: none; }
   #top > * { pointer-events: auto; }
   .titlecard { padding: 8px 14px 7px; }
-  .titlecard h1 { margin: 0; font-family: "Gowun Batang", serif; font-size: 19px; letter-spacing: .08em; }
-  .titlecard .sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+  .titlecard h1 { white-space: nowrap; margin: 0; font-family: "Gowun Batang", serif; font-size: 19px; letter-spacing: .08em; }
+  .titlecard .sub { white-space: nowrap; color: var(--muted); font-size: 12px; margin-top: 1px; }
   .tools { display: flex; gap: 6px; }
   .pill { white-space: nowrap; padding: 9px 14px; min-height: 40px; font-size: 14px; border-radius: 999px; }
   .pill:hover { border-color: var(--accent); }
@@ -225,10 +225,20 @@
   .linkbtn { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 6px; text-decoration: underline; }
   .care { margin: 0 0 14px; padding: 11px 13px; border-radius: 12px; background: rgba(63, 145, 88, .08); border: 1px solid var(--line); font-size: 14px; line-height: 1.65; }
   .care a { color: var(--accent); font-weight: 700; }
+  .journal h2 { font-family: "Gowun Batang", serif; margin: 0 0 8px; font-size: 20px; }
+  .jnote { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 26px 14px 0; }
+  #journalList { max-height: min(60vh, 520px); overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+  .jitem { border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; background: #fff; }
+  .jitem .jmeta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .jitem .jtag { color: #fff; font-weight: 700; border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+  .jitem .jtext { font-family: "Gowun Batang", serif; font-size: 16px; line-height: 1.7; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+  .jitem .jfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .jitem .jlive { color: var(--accent); font-weight: 700; }
+  .jempty { text-align: center; color: var(--muted); padding: 28px 8px; font-size: 14.5px; line-height: 1.7; }
   .about h2 { font-family: "Gowun Batang", serif; margin: 0 0 12px; font-size: 21px; }
   .about ul { padding-left: 18px; margin: 0 0 14px; line-height: 1.85; font-size: 14.5px; }
 
-  .toast { position: fixed; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 64px); transform: translate(-50%, -8px); z-index: 40; background: rgba(255, 255, 250, .94);
+  .toast { white-space: pre-line; position: fixed; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 64px); transform: translate(-50%, -8px); z-index: 40; background: rgba(255, 255, 250, .94);
     border: 1px solid var(--line); padding: 10px 16px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none; max-width: calc(100% - 32px); text-align: center; font-size: 14.5px;
     box-shadow: 0 8px 24px rgba(20, 50, 20, .2); }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -266,11 +276,12 @@
 </div>
 
 <div class="hud" id="top">
-  <button class="card pill" id="backBtn" hidden>← 광장으로</button>
+  <button class="card pill" id="backBtn" hidden aria-label="광장으로" title="광장으로">←</button>
   <div class="card titlecard"><h1 id="title">대나무숲</h1><div class="sub" id="status">입장하는 중…</div></div>
   <div class="tools">
     <button class="card pill" id="soundBtn" aria-pressed="false" title="숲 소리">🔈</button>
-    <button class="card pill" id="aboutBtn">안내</button>
+    <button class="card pill" id="journalBtn" title="내 마음 보관함" aria-label="내 마음 보관함">🔖</button>
+    <button class="card pill" id="aboutBtn" title="안내" aria-label="안내">ⓘ</button>
   </div>
 </div>
 
@@ -298,6 +309,13 @@
   <div class="actions"><button class="heard" id="heardBtn">🍃 들었어요</button><button class="linkbtn" id="reportBtn">신고하기</button></div>
 </dialog>
 
+<dialog id="journalDlg" class="journal">
+  <button class="close" data-close aria-label="닫기">×</button>
+  <h2>🔖 내 마음 보관함</h2>
+  <p class="jnote">숲에 털어놓은 말을 <b>이 휴대폰에만</b> 따로 담아 둬요. 숲의 잎은 바람이 데려가도, 여기서는 언제든 다시 꺼내 볼 수 있어요.</p>
+  <div id="journalList"></div>
+</dialog>
+
 <dialog id="aboutDlg" class="about">
   <button class="close" data-close aria-label="닫기">×</button>
   <h2>대나무숲 안내</h2>
@@ -307,6 +325,7 @@
     <li>🤫 속삭이기 · 📣 소리치기 · 😮‍💨 한숨 쉬기 중에 골라 속마음을 털어놓으면, 대나무 잎 하나가 반짝이며 그 사연을 품어요.</li>
     <li>사연을 품은 잎은 하루 동안 반딧불처럼 깜빡이며 숲에 머물다가, 바람이 조용히 데려가요. 털어놓은 마음이 가벼워지도록요. 누르면 읽을 수 있고, <b>🍃 들었어요</b>로만 대답할 수 있어요.</li>
     <li>입구 광장에서 함께 걷는 사람들은 지금 숲에 와 있는 실제 방문자예요. <b>길 끝 대숲 안에서는 오직 나 혼자</b>라 아무도 보지 않아요.</li>
+    <li>내가 털어놓은 말은 <b>🔖 내 마음 보관함</b>에 이 휴대폰에만 따로 남아요. 서버에는 저장되지 않아요.</li>
     <li>이름도 가입도 없고, IP 주소는 저장하지 않아요.</li>
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
@@ -1057,11 +1076,12 @@ $('sendBtn').onclick = async () => {
   try { ({ leaf } = await api('/api/leaves', { text, mode, grove: groveIdx })); }
   catch (e) { toast(e.message, 3500); syncCount(); return; }
   mine.add(leaf.id); store.set('bamboo.mine', [...mine].slice(-200));
+  saveJournal({ id: leaf.id, text: leaf.text, mode, grove: groveIdx, created: leaf.created });
   leaves.unshift(leaf); ta.value = ''; syncCount(); $('sheet').close();
   $('kingBtn').classList.remove('ready');
   perform(meG, mode, true, () => {
     drawLeaf(leaf, true);
-    toast(M.done, 3400);
+    toast(M.done + '\n🔖 내 마음 보관함에도 담아 뒀어요', 3800);
     setTimeout(() => $('kingBtn').classList.add('ready'), 1800);
   });
 };
@@ -1075,6 +1095,31 @@ function perform(p, mode, isMe, reveal) {
   setTimeout(reveal, M.reveal);
   setTimeout(() => p.el.classList.remove('m-' + mode), M.reveal + 1200);
 }
+
+// ================= my heart archive (this device only) =================
+function loadJournal() { const j = store.get('bamboo.journal', []); return Array.isArray(j) ? j : []; }
+function saveJournal(e) { const j = loadJournal().filter((x) => x.id !== e.id); j.unshift(e); store.set('bamboo.journal', j.slice(0, 300)); }
+function renderJournal() {
+  const j = loadJournal(), isLive = (e) => leaves.some((l) => l.id === e.id && Math.abs(l.created - e.created) < 60000);
+  const list = $('journalList');
+  if (!j.length) { list.innerHTML = '<div class="jempty">아직 담긴 마음이 없어요.<br>길 끝 대숲에서 👑 임금님 귀는 당나귀 귀를 눌러<br>처음으로 털어놓아 보세요.</div>'; return; }
+  const fmt = (t) => { const d = new Date(t); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  list.innerHTML = '';
+  for (const e of j) {
+    const M = MODES[e.mode] || MODES.whisper, g = GROVES[e.grove] || GROVES[0];
+    const el = document.createElement('div'); el.className = 'jitem';
+    el.innerHTML = `<div class="jmeta"><span class="jtag" style="background:${M.color}">${M.label}</span><span>${fmt(e.created)}</span></div>
+      <div class="jtext"></div>
+      <div class="jfoot"><span>${g.icon} ${g.name} · ${isLive(e) ? '<span class="jlive">지금 숲에서 반짝이는 중 🍃</span>' : '바람에 실려 갔어요'}</span><button class="linkbtn" data-del>지우기</button></div>`;
+    el.querySelector('.jtext').textContent = e.text;
+    el.querySelector('[data-del]').onclick = () => {
+      if (!confirm('보관함에서 이 마음을 지울까요?\n(숲에 붙은 잎은 그대로예요)')) return;
+      store.set('bamboo.journal', loadJournal().filter((x) => x.id !== e.id)); renderJournal();
+    };
+    list.appendChild(el);
+  }
+}
+$('journalBtn').onclick = () => { renderJournal(); $('journalDlg').showModal(); };
 
 // ================= reading a leaf =================
 let openLeaf = null;
