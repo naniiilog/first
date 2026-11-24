@@ -255,8 +255,14 @@
   #keeperBtn.on { background: #e9f6e4; border-color: var(--accent); }
   .person .tag.keeperTag { background: #b8892f; }
   .msg.hiddenLeaf { opacity: .35; }
-  .keeperEntry { text-align: center; margin-top: 12px; }
-  .keeperEntry .linkbtn { font-size: 12.5px; }
+  .keeperToggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; cursor: pointer; user-select: none; }
+  .keeperToggle span:first-child { font-weight: 700; font-size: 15px; }
+  .keeperToggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .keeperToggle .sw { position: relative; width: 52px; height: 30px; border-radius: 999px; background: #cfd8cf; transition: background .2s; flex: none; }
+  .keeperToggle .knob { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: transform .2s; }
+  .keeperToggle input:checked + .sw { background: var(--accent); }
+  .keeperToggle input:checked + .sw .knob { transform: translateX(22px); }
+  .keeperToggle input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
   .mode-label { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; margin-bottom: 10px; }
   .leaf-text { font-family: "Gowun Batang", serif; font-size: 19px; line-height: 1.8; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 18px; }
   .leaf-text.loud { font-weight: 700; }
@@ -374,7 +380,10 @@
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
   <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
-  <div class="keeperEntry"><button class="linkbtn" id="keeperEnter">🎋 숲지기로 들어가기</button><button class="linkbtn" id="keeperLeave" hidden>🎋 숲지기 모드 끄기</button></div>
+  <label class="keeperToggle" for="keeperSwitch">
+    <span id="keeperLabel">🎋 숲지기 모드 끔</span>
+    <input type="checkbox" id="keeperSwitch" role="switch"><span class="sw"><span class="knob"></span></span>
+  </label>
 </dialog>
 
 <dialog id="keeperDlg">
@@ -465,6 +474,7 @@ function toast(msg, ms = 2800) {
 // ---------- 🎋 숲지기 (the admin walking the forest) ----------
 let keeperToken = ''; try { keeperToken = localStorage.getItem('bamboo.admin') || ''; } catch {}
 let keeper = false;
+let keeperOn = true; try { keeperOn = localStorage.getItem('bamboo.keeper.on') !== '0'; } catch {}
 let adminDevice = false; try { adminDevice = localStorage.getItem('bamboo.adminDevice') === '1'; } catch {}
 let keeperVisible = false; try { keeperVisible = localStorage.getItem('bamboo.keeper.visible') === '1'; } catch {}
 async function api(path, body) {
@@ -1300,16 +1310,28 @@ async function keeperAct(act) {
 function setKeeperBtn() { const b = $('keeperBtn'); b.hidden = !keeper; b.textContent = keeperVisible ? '🎋 보임' : '🎋 숨김'; b.classList.toggle('on', keeperVisible); }
 async function startKeeper() {
   if (!keeperToken) return;
-  try { await api('/api/admin/ping'); } catch { keeperChecking = false; heartbeat(); return; }
-  keeper = true; keeperChecking = false; setKeeperBtn();
+  try { await api('/api/admin/ping'); } catch { keeperChecking = false; keeperToken = ''; try { localStorage.removeItem('bamboo.admin'); } catch {} heartbeat(); return; }
+  keeper = true; keeperChecking = false; keeperOn = true; try { localStorage.setItem('bamboo.keeper.on', '1'); } catch {} setKeeperBtn();
   if (!adminDevice) { adminDevice = true; try { localStorage.setItem('bamboo.adminDevice', '1'); } catch {} }
   api('/api/admin/uncount-me', {}).catch(() => {});
   if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나 · 🎋'; }
   toast(keeperVisible ? '🎋 숲지기로 들어왔어요 · 다른 사람에게 보여요' : '🎋 숲지기로 들어왔어요 · 아무에게도 안 보여요', 3200);
   heartbeat(); load(true);
 }
-function syncKeeperEntry() { $('keeperEnter').hidden = keeper; $('keeperLeave').hidden = !keeper; }
-$('keeperEnter').onclick = () => { $('aboutDlg').close(); $('keeperPw').value = ''; $('keeperDlg').showModal(); setTimeout(() => $('keeperPw').focus(), 50); };
+function syncKeeperEntry() { $('keeperSwitch').checked = keeper; $('keeperLabel').textContent = keeper ? '🎋 숲지기 모드 켬' : '🎋 숲지기 모드 끔'; }
+async function keeperOff() {
+  keeper = false; keeperOn = false; try { localStorage.setItem('bamboo.keeper.on', '0'); } catch {}   // the password stays saved, so turning it back on is one tap
+  setKeeperBtn(); syncKeeperEntry();
+  if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나'; }
+  toast('🎋 숲지기 모드를 껐어요', 2200);
+  await heartbeat(); await load(true); if (scene === 'grove') renderGroveLeaves();
+}
+$('keeperSwitch').onchange = async () => {
+  if (!$('keeperSwitch').checked) { await keeperOff(); return; }
+  syncKeeperEntry();                                   // stays off until the password is confirmed
+  if (keeperToken) { await startKeeper(); syncKeeperEntry(); if (keeper) return; }
+  $('aboutDlg').close(); $('keeperPw').value = ''; $('keeperDlg').showModal(); setTimeout(() => $('keeperPw').focus(), 50);
+};
 $('keeperForm').onsubmit = async (e) => {
   e.preventDefault();
   const pw = $('keeperPw').value; if (!pw) return;
@@ -1320,13 +1342,6 @@ $('keeperForm').onsubmit = async (e) => {
     keeperToken = pw; try { localStorage.setItem('bamboo.admin', pw); } catch {}
     $('keeperDlg').close(); await startKeeper(); syncKeeperEntry();
   } catch (err) { toast(err.message, 3500); }
-};
-$('keeperLeave').onclick = async () => {
-  keeper = false; keeperToken = ''; try { localStorage.removeItem('bamboo.admin'); } catch {}
-  setKeeperBtn(); syncKeeperEntry(); $('aboutDlg').close();
-  if (me) { const t = me.el.querySelector('.tag'); if (t) t.textContent = '나'; }
-  toast('🎋 숲지기 모드를 껐어요', 2200);
-  await heartbeat(); await load(true); if (scene === 'grove') renderGroveLeaves();
 };
 $('aboutBtn').addEventListener('click', syncKeeperEntry);
 $('keeperBtn').onclick = () => {
@@ -1403,7 +1418,7 @@ async function load(first) {
     renderPathPanel(); updateStatus();
   } catch (e) { if (first) $('status').textContent = '숲에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
 }
-let keeperChecking = !!keeperToken;
+let keeperChecking = !!keeperToken && keeperOn;
 async function heartbeat() {
   if (keeperChecking && !keeper) return;
   try {
@@ -1834,7 +1849,7 @@ me.go([{ x: 600, y: 1600 }, { x: 600, y: 1535 }], () => {
 me.idle = null;
 renderPathPanel();
 requestAnimationFrame(tick);
-load(true); if (keeperToken) startKeeper(); else heartbeat();   // the keeper is confirmed before the first heartbeat, so it is never counted
+load(true); if (keeperToken && keeperOn) startKeeper(); else heartbeat();   // the keeper is confirmed before the first heartbeat, so it is never counted
 setInterval(() => load(false), 20000);
 setInterval(heartbeat, 20000);
 </script>
