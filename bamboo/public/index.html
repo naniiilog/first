@@ -92,7 +92,8 @@
 
   /* ================= grove ================= */
   #grove .layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-  #gL0 { filter: blur(3px); } #gL1 { filter: blur(1.4px); }
+  #gL0 { filter: blur(3px); } #gL1 { filter: blur(1.2px); }
+  #grove .beams { opacity: .45; }
   .gsky { position: absolute; inset: 0; }
   .beams { position: absolute; inset: -20% -10% 0 0; pointer-events: none; mix-blend-mode: soft-light; }
   .beam { position: absolute; top: -10%; width: var(--bw); height: 130%; left: var(--bx); transform: rotate(22deg); transform-origin: top;
@@ -113,12 +114,15 @@
   @keyframes flutter { from { transform: rotate(-5deg); } to { transform: rotate(6deg); } }
   .msg .halo { opacity: .2; animation: ffly var(--fd) ease-in-out var(--fdl) infinite; }
   .msg .lit { opacity: 0; animation: ffly2 var(--fd) ease-in-out var(--fdl) infinite; }
+  .msg .edge { animation: ffly3 var(--fd) ease-in-out var(--fdl) infinite; }
+  .msg .eglow { animation: ffly var(--fd) ease-in-out var(--fdl) infinite; }
+  @keyframes ffly3 { 0%, 100% { opacity: .6; } 10% { opacity: 1; } 18% { opacity: .75; } 26% { opacity: 1; } 40% { opacity: .6; } }
   @keyframes ffly { 0%, 100% { opacity: .18; } 10% { opacity: 1; } 18% { opacity: .45; } 26% { opacity: .9; } 40% { opacity: .2; } }
-  @keyframes ffly2 { 0%, 100% { opacity: .08; } 10% { opacity: .85; } 18% { opacity: .3; } 26% { opacity: .7; } 40% { opacity: .1; } }
+  @keyframes ffly2 { 0%, 100% { opacity: 0; } 10% { opacity: .45; } 18% { opacity: .12; } 26% { opacity: .35; } 40% { opacity: 0; } }
   .msg.mine .grow { transform: scale(1.18); }
   .msg.mine .halo { opacity: .4; } .msg.mine .lit { opacity: .25; }
   .msg:hover .lit, .msg:focus-visible .lit { animation: none; opacity: .7; }
-  .msg:hover .halo, .msg:focus-visible .halo { animation: none; opacity: .9; }
+  .msg:hover .halo, .msg:focus-visible .halo, .msg:hover .eglow, .msg:hover .edge { animation: none; opacity: 1; }
   .msg.bloom .grow { animation: bloom 2.8s cubic-bezier(.2, .9, .3, 1) forwards; }
   @keyframes bloom { 0% { transform: scale(1); } 20% { transform: scale(2.2); } 55% { transform: scale(1.15); } 100% { transform: scale(1.18); } }
   .msg.bloom .halo { animation: flash 2.8s ease-out forwards; }
@@ -332,9 +336,9 @@ const WW = 1200, WH = 1760;
 const PLAZA = { x: 600, y: 1450, rx: 250, ry: 150 };
 const FORK = { x: 600, y: 1290 };
 const GROVES = [
-  { name: '바람 숲', path: '바람길', icon: '🍃', sky: ['#f3fae6', '#dff1cf', '#c3e2ad'], pts: [[600, 1300], [560, 1180], [400, 1070], [285, 880], [262, 640], [255, 380]] },
-  { name: '달빛 숲', path: '달빛길', icon: '🌙', sky: ['#fbf5e0', '#eaf0cc', '#cfe2ab'], pts: [[600, 1300], [600, 1110], [652, 910], [572, 690], [612, 480], [600, 300]] },
-  { name: '이슬 숲', path: '이슬길', icon: '💧', sky: ['#eef6f1', '#d9ece0', '#bcdcc5'], pts: [[600, 1300], [640, 1180], [800, 1070], [915, 880], [938, 640], [945, 380]] },
+  { name: '바람 숲', path: '바람길', icon: '🍃', sky: ['#173328', '#1d3d2c', '#21402b'], pts: [[600, 1300], [560, 1180], [400, 1070], [285, 880], [262, 640], [255, 380]] },
+  { name: '달빛 숲', path: '달빛길', icon: '🌙', sky: ['#22311f', '#253d27', '#24402a'], pts: [[600, 1300], [600, 1110], [652, 910], [572, 690], [612, 480], [600, 300]] },
+  { name: '이슬 숲', path: '이슬길', icon: '💧', sky: ['#132d30', '#183a35', '#1d3f31'], pts: [[600, 1300], [640, 1180], [800, 1070], [915, 880], [938, 640], [945, 380]] },
 ];
 GROVES.forEach((g) => { g.poly = catmull(g.pts); g.end = g.poly[g.poly.length - 1]; });
 const GATE_POLY = catmull([[600, WH + 40], [600, 1640], [600, 1560]], 4);
@@ -561,10 +565,9 @@ function syncMapPeople() {
 function renderPathPanel() {
   const row = $('pathRow'); row.innerHTML = '';
   GROVES.forEach((g, k) => {
-    const n = leaves.filter((l) => l.grove === k).length;
     const ppl = [...others.values()].filter((o) => o.place === 'g' + k).length;
     const b = document.createElement('button'); b.className = 'pathBtn';
-    b.innerHTML = `<b>${g.icon} ${g.path}</b><small>잎 ${n}장${ppl ? ` · ${ppl}명` : ''}</small>`;
+    b.innerHTML = `<b>${g.icon} ${g.path}</b><small>${ppl ? `${ppl}명 산책 중` : '조용한 숲'}</small>`;
     b.onclick = () => walkToGrove(k);
     row.appendChild(b);
   });
@@ -588,26 +591,26 @@ $('map').addEventListener('click', (e) => {
 // ================= grove scene (front view) =================
 let G = {}, hangers = [], grovePeople = new Map(), meG = null;
 const LAYERS = [
-  { id: 'gL0', every: 15, w: [3, 6],   h: [.55, .85], cane: '#b9d9a3', node: '#d5eac2', leaf: '#acd492', leafLen: [16, 28], density: .85, sway: 0 },
-  { id: 'gL1', every: 28, w: [6, 10],  h: [.65, .95], cane: '#8cc173', node: '#b6da9c', leaf: '#7fb866', rim: '#b0db90', leafLen: [26, 42], density: .9, sway: 0 },
-  { id: 'gL2', every: 56, w: [11, 16], h: [.85, 1.1], cane: '#5a9a4b', node: '#a2d088', leaf: '#559a46', rim: '#9fd47e', leafLen: [40, 62], density: .95, sway: .7, hang: true },
-  { id: 'gL3', every: 0,  w: [20, 28], h: [1.15, 1.3], cane: '#3c7837', node: '#7cb767', leaf: '#3a7834', rim: '#87c26b', leafLen: [70, 100], density: 1, sway: .9, hang: true },
+  { id: 'gL0', every: 8,  w: [3, 6],   h: [.62, .98], cane: '#2b5143', node: '#3b6656', leaf: '#2a5445', leafLen: [16, 30], density: .95, sway: 0 },
+  { id: 'gL1', every: 15, w: [6, 10],  h: [.72, 1.02], cane: '#285a3e', node: '#3e7556', leaf: '#265a3c', rim: '#3a7650', leafLen: [26, 44], density: .95, sway: 0 },
+  { id: 'gL2', every: 28, w: [11, 16], h: [.92, 1.15], cane: '#2c6a3b', node: '#4b8a57', leaf: '#296637', rim: '#468a52', leafLen: [42, 66], density: 1, sway: .7, hang: true },
+  { id: 'gL3', every: 0,  w: [22, 32], h: [1.15, 1.3], cane: '#1d4829', node: '#30693d', leaf: '#1b4527', rim: '#336e3f', leafLen: [74, 108], density: 1, sway: .9, hang: true },
 ];
 function buildGrove(k) {
   const W = innerWidth, H = innerHeight, small = W < 600;
   const groundY = H * (small ? .8 : .78);
   G = { W, H, groundY, small, scale: Math.min(1, Math.max(.72, W / 1100)) };
   const sky = GROVES[k].sky;
-  $('gsky').style.background = `radial-gradient(ellipse 55% 45% at 70% 0%, rgba(255, 252, 225, .95), transparent 70%), linear-gradient(180deg, ${sky[0]} 0%, ${sky[1]} 45%, ${sky[2]} 100%)`;
+  $('gsky').style.background = `radial-gradient(ellipse 45% 40% at 55% 0%, rgba(200, 235, 180, .28), transparent 70%), linear-gradient(180deg, ${sky[0]} 0%, ${sky[1]} 50%, ${sky[2]} 100%)`;
   hangers = [];
   LAYERS.forEach((cfg, li) => {
     const svg = $(cfg.id); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const r = rng(500 + k * 97 + li * 31);
     let xs = [];
     if (cfg.every) { const n = Math.max(6, Math.round(W / cfg.every)); for (let i = 0; i < n; i++) xs.push(((i + .15 + r() * .7) / n) * W); }
-    else xs = small ? [W * (.02 + r() * .05), W * (.94 + r() * .05)] : [W * (.02 + r() * .04), W * (.13 + r() * .04), W * (.87 + r() * .03), W * (.97 + r() * .03)];
+    else xs = (small ? [0, .08, .18, .82, .92, 1] : [0, .05, .11, .18, .82, .89, .95, 1]).map((q) => W * (q + (r() - .5) * .025));
     let defs = `<defs><linearGradient id="cg${li}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cfg.cane, '#1d3b18', .28)}"/><stop offset=".3" stop-color="${cfg.cane}"/><stop offset=".55" stop-color="${mix(cfg.cane, '#f4ffd8', .5)}"/><stop offset=".8" stop-color="${cfg.cane}"/><stop offset="1" stop-color="${mix(cfg.cane, '#1d3b18', .22)}"/></linearGradient>`;
-    if (cfg.hang) defs += `<filter id="ffg${li}" x="-80%" y="-250%" width="260%" height="600%"><feGaussianBlur stdDeviation="${li === 3 ? 8 : 6}"/></filter>`;
+    if (cfg.hang) defs += `<filter id="ffg${li}" x="-80%" y="-250%" width="260%" height="600%"><feGaussianBlur stdDeviation="${li === 3 ? 9 : 7}"/></filter><filter id="eg${li}" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="2.4"/></filter>`;
     defs += '</defs>';
     let body = '';
     xs.forEach((x0) => {
@@ -642,17 +645,28 @@ function buildGrove(k) {
       body += `<g${sway}>${g}<g class="msgs"></g></g>`;
       if (cfg.hang) hangers.push({ layer: li, x0, lean, base, h, topY });
     });
+    if (li === 3) {
+      let c = '';
+      for (let x = -30; x < W + 40; x += small ? 26 : 32) {
+        const cy = -14 + r() * 26, n = 6 + Math.floor(r() * 4);
+        for (let q = 0; q < n; q++) {
+          const L = lerp(50, 115, r()) * G.scale, ang = lerp(35, 145, r());
+          c += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(x + (r() - .5) * 20)} ${f1(cy)}) rotate(${f1(ang)})" fill="${mix('#123620', '#2c6638', r())}"/>`;
+        }
+      }
+      body += `<g class="sw" style="transform-origin:${W / 2}px -400px;--a:.25deg;--d:6s;--dl:-2s">${c}</g>`;
+    }
     svg.innerHTML = defs + body;
     if (cfg.hang) { const gs = svg.querySelectorAll(':scope > g'); hangers.filter((s) => s.layer === li).forEach((s, i) => { s.el = gs[i].querySelector('.msgs'); }); }
   });
   // forest floor clearing
   const r = rng(900 + k);
-  let s = `<defs><linearGradient id="gfloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8cbf68"/><stop offset=".35" stop-color="#cdbb8a"/><stop offset="1" stop-color="#b59d68"/></linearGradient>
-    <radialGradient id="glight" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="#fff7d0" stop-opacity=".6"/><stop offset="1" stop-color="#fff7d0" stop-opacity="0"/></radialGradient></defs>`;
+  let s = `<defs><linearGradient id="gfloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c4a2b"/><stop offset=".4" stop-color="#3a432b"/><stop offset="1" stop-color="#2b3221"/></linearGradient>
+    <radialGradient id="glight" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="#d8f0b8" stop-opacity=".2"/><stop offset="1" stop-color="#fff7d0" stop-opacity="0"/></radialGradient></defs>`;
   s += `<path d="M0 ${f1(groundY)}${Array.from({ length: Math.ceil(W / 20) + 2 }, (_, i) => `L${i * 20} ${f1(groundY + Math.sin(i * .5) * 4)}`).join('')}L${W + 40} ${H}L0 ${H}Z" fill="url(#gfloor)"/>`;
   s += `<ellipse cx="${W / 2}" cy="${f1(groundY + (H - groundY) * .55)}" rx="${f1(W * .38)}" ry="${f1((H - groundY) * .5)}" fill="url(#glight)"/>`;
-  for (let i = 0; i < W / 9; i++) { const x = r() * W, y = groundY + r() * 14, hh = 6 + r() * 14; s += `<path d="M${f1(x)} ${f1(y)}q${f1(2 + r() * 3)} ${f1(-hh * .6)} ${f1(r() * 6 - 1)} ${f1(-hh)}" stroke="${mix('#4f8c3c', '#9ccd73', r())}" stroke-width="2" fill="none" stroke-linecap="round"/>`; }
-  for (let i = 0; i < 26; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 20, H, r()))}" rx="${f1(3 + r() * 9)}" ry="${f1(2 + r() * 3)}" fill="#a68f5c" opacity=".55"/>`;
+  for (let i = 0; i < W / 9; i++) { const x = r() * W, y = groundY + r() * 14, hh = 6 + r() * 14; s += `<path d="M${f1(x)} ${f1(y)}q${f1(2 + r() * 3)} ${f1(-hh * .6)} ${f1(r() * 6 - 1)} ${f1(-hh)}" stroke="${mix('#24502a', '#477f40', r())}" stroke-width="2" fill="none" stroke-linecap="round"/>`; }
+  for (let i = 0; i < 26; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 20, H, r()))}" rx="${f1(3 + r() * 9)}" ry="${f1(2 + r() * 3)}" fill="#4b4a33" opacity=".6"/>`;
   for (let i = 0; i < 6; i++) { const x = r() < .5 ? r() * W * .25 : W - r() * W * .25, y = lerp(groundY + 10, H - 20, r()); s += fern(x, y, lerp(.7, 1.2, r()), r); }
   $('gGround').setAttribute('viewBox', `0 0 ${W} ${H}`); $('gGround').innerHTML = s;
   // light
@@ -667,7 +681,7 @@ function fern(x, y, sc, r) {
   let g = '';
   for (let i = 0; i < 7; i++) {
     const ang = -160 + i * 23 + (r() - .5) * 10, L = (28 + r() * 16) * sc;
-    g += `<path d="${leafPath(L, L * .22)}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})" fill="${mix('#3f7a34', '#8cc46a', r())}"/>`;
+    g += `<path d="${leafPath(L, L * .22)}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})" fill="${mix('#1c4424', '#3c7638', r())}"/>`;
   }
   return g;
 }
@@ -677,9 +691,10 @@ function leafAnchor(leaf) {
   let usable = hangers.filter((s) => s.x0 > G.W * .1 && s.x0 < G.W * .9);
   if (!usable.length) usable = hangers;
   if (!usable.length) return null;
-  const s = usable[Math.floor(hash(leaf.id) * usable.length)];
-  const yMin = Math.max(s.topY + 30, G.H * .13), yMax = Math.min(G.groundY - 90, G.H * .62);
-  const y = lerp(yMin, Math.max(yMin, yMax), hash(leaf.id * 7 + 3));
+  const seed = leaf.id * 3 + groveIdx * 7919;
+  const s = usable[Math.floor(hash(seed) * usable.length)];
+  const yMin = Math.max(s.topY + 30, G.H * .14), yMax = Math.min(G.groundY - 90, G.H * .62);
+  const y = lerp(yMin, Math.max(yMin, yMax), hash(seed * 7 + 3));
   const t = (s.base - y) / s.h;
   return { s, x: s.x0 + s.lean * t * t, y };
 }
@@ -694,7 +709,7 @@ const MODES = {
 const modeOf = (l) => MODES[l.mode] ? l.mode : 'whisper';
 function renderGroveLeaves() {
   document.querySelectorAll('.msg').forEach((m) => m.remove());
-  for (const l of leaves) if (l.grove === groveIdx) drawLeaf(l, false);
+  for (const l of leaves) drawLeaf(l, false);
 }
 function drawLeaf(leaf, bloom) {
   const a = leafAnchor(leaf); if (!a) return;
@@ -706,7 +721,7 @@ function drawLeaf(leaf, bloom) {
   const bx = x + Math.cos(bang * Math.PI / 180) * blen, by = y + Math.sin(bang * Math.PI / 180) * blen;
   const ang = side > 0 ? droop : 180 - droop;
   const age = clamp((now() - leaf.created) / lifetime, 0, 1);
-  const body = mix(s.layer === 3 ? '#4f9643' : '#63a854', '#a8a850', age * .5);
+  const body = mix(s.layer === 3 ? '#2f7440' : '#3a8a48', '#7a8a3c', age * .4);
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'msg' + (mine.has(leaf.id) ? ' mine' : '') + (bloom ? ' bloom' : ''));
   g.setAttribute('data-id', leaf.id); g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
@@ -720,9 +735,11 @@ function drawLeaf(leaf, bloom) {
   g.innerHTML =
     `<path d="M${f1(x)} ${f1(y)}L${f1(bx)} ${f1(by)}" stroke="${s.layer === 3 ? '#3c7837' : '#5a9a4b'}" stroke-width="1.8" stroke-linecap="round"/>` +
     `<g transform="translate(${f1(bx)} ${f1(by)})"><g class="grow"><g class="flut"><g transform="rotate(${f1(ang)})">` +
-      `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .85)}" ry="${f1(L * .45)}" fill="#d4ffb0" filter="url(#ffg${s.layer})"/>` +
+      `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .85)}" ry="${f1(L * .45)}" fill="#8dff86" filter="url(#ffg${s.layer})"/>` +
+      `<path class="eglow" d="${leafPath(L, L * .15)}" fill="none" stroke="#b9ff96" stroke-width="5" filter="url(#eg${s.layer})"/>` +
       `<path d="${leafPath(L, L * .15)}" fill="${body}"/>` +
-      `<path class="lit" d="${leafPath(L, L * .15)}" fill="#dcffbf"/>` +
+      `<path class="edge" d="${leafPath(L, L * .15)}" fill="none" stroke="#e9ffcf" stroke-width="1.5"/>` +
+      `<path class="lit" d="${leafPath(L, L * .15)}" fill="#d8ffb8"/>` +
       `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${mix(body, '#20451c', .35)}" stroke-width="1" fill="none" opacity=".6"/>` +
       `<circle class="burst" cx="${f1(L * .5)}" cy="0" r="${f1(L * .55)}" fill="#f0ffd8" filter="url(#ffg${s.layer})"/>` + sparks +
       `<ellipse cx="${f1(L * .5)}" cy="0" rx="${f1(L * .62)}" ry="24" fill="transparent"/>` +
@@ -874,9 +891,9 @@ $('aboutBtn').onclick = () => $('aboutDlg').showModal();
 // ================= data & presence =================
 function updateStatus() {
   const total = others.size + 1;
-  if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `입구 광장 · 지금 ${total}명이 숲에 있어요`; }
+  if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `입구 광장 · ${total}명 · 깜빡이는 잎 ${leaves.length}장`; }
   else {
-    const g = GROVES[groveIdx], n = leaves.filter((l) => l.grove === groveIdx).length, here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).length + 1;
+    const g = GROVES[groveIdx], n = leaves.length, here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).length + 1;
     $('title').textContent = `${g.icon} ${g.name}`; $('status').textContent = innerWidth < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
   }
 }
@@ -891,7 +908,7 @@ async function load(first) {
     if (scene === 'grove') {
       if (gone || first) renderGroveLeaves();
       const here = [...grovePeople.values()];
-      for (const l of incoming) if (l.grove === groveIdx) {
+      for (const l of incoming) {
         const p = here.length ? here[Math.floor(Math.random() * here.length)] : null;
         perform(p, modeOf(l), false, () => drawLeaf(l, true));
       }
