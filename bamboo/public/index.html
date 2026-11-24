@@ -131,6 +131,10 @@
   .dew { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 2px rgba(220, 255, 255, .8); animation: twinkle var(--t) ease-in-out var(--dl) infinite; }
   .streak { position: absolute; left: 0; height: 1.5px; width: var(--sw); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); animation: streak var(--sd) linear var(--sdl) infinite; }
   @keyframes streak { from { transform: translateX(-30vw); opacity: 0; } 20% { opacity: 1; } to { transform: translateX(130vw); opacity: 0; } }
+  .ribbon { transform-box: fill-box; transform-origin: 0 50%; animation: ribbon 1.1s ease-in-out infinite alternate; }
+  @keyframes ribbon { from { transform: rotate(-8deg) scaleX(.92); } to { transform: rotate(10deg) scaleX(1.05); } }
+  .plantern { animation: lsway 3.4s ease-in-out infinite alternate; }
+  @keyframes lsway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
   .lampglow { animation: flicker 2.6s ease-in-out infinite alternate; }
   @keyframes flicker { 50% { filter: brightness(.8); } }
   .ripple { stroke-dasharray: 18 30; animation: ripple 3s linear infinite; }
@@ -301,7 +305,7 @@
     <li>입구 광장에서 <b>세 갈래 길</b> 중 하나를 골라 걸어 들어가요. 광장을 누르면 그쪽으로 걸어가요.</li>
     <li>길 끝 울창한 대숲에 서면 <b>👑 임금님 귀는 당나귀 귀</b> 버튼이 켜져요.</li>
     <li>🤫 속삭이기 · 📣 소리치기 · 😮‍💨 한숨 쉬기 중에 골라 속마음을 털어놓으면, 대나무 잎 하나가 반짝이며 그 사연을 품어요.</li>
-    <li>사연을 품은 잎은 <b>24시간 동안</b> 반딧불처럼 깜빡이다가 바람에 날아가요. 누르면 읽을 수 있고, <b>🍃 들었어요</b>로만 대답할 수 있어요.</li>
+    <li>사연을 품은 잎은 하루 동안 반딧불처럼 깜빡이며 숲에 머물다가, 바람이 조용히 데려가요. 털어놓은 마음이 가벼워지도록요. 누르면 읽을 수 있고, <b>🍃 들었어요</b>로만 대답할 수 있어요.</li>
     <li>입구 광장에서 함께 걷는 사람들은 지금 숲에 와 있는 실제 방문자예요. <b>길 끝 대숲 안에서는 오직 나 혼자</b>라 아무도 보지 않아요.</li>
     <li>이름도 가입도 없고, IP 주소는 저장하지 않아요.</li>
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
@@ -678,9 +682,9 @@ function phaseNow() {
 let phase = phaseNow();
 // each grove has its own character
 const GSTYLE = [
-  { kind: 'wind',    tint: '#74c455', ta: .14, sway: 2.1, widthK: .72, everyK: .8,  fall: 700 },   // 바람 숲: slender, restless, leaves flying
-  { kind: 'lantern', tint: '#2d5d78', ta: .14, sway: .5,  widthK: 1.35, everyK: 1.25, fall: 4000 }, // 달빛 숲: tall thick canes, stone lanterns
-  { kind: 'dew',     tint: '#2a8a7a', ta: .2,  sway: .8,  widthK: 1,   everyK: 1,   fall: 2600 },   // 이슬 숲: mist, a stream, dew sparkles
+  { kind: 'wind',    tint: '#a6d96a', ta: .26, sway: 2.1, widthK: .7,  everyK: 1.15, fall: 700 },   // 바람 숲: slender, restless, leaves flying
+  { kind: 'lantern', tint: '#1f4a66', ta: .28, sway: .5,  widthK: 1.4, everyK: 1.25, fall: 4000 }, // 달빛 숲: tall thick canes, stone lanterns
+  { kind: 'dew',     tint: '#3aa59a', ta: .3,  sway: .8,  widthK: 1,   everyK: 1,   fall: 2600 },   // 이슬 숲: mist, a stream, dew sparkles
 ];
 const LAYERS = [
   { id: 'gL0', every: 8,  w: [3, 6],   h: [.62, .98], cane: '#2b5143', node: '#3b6656', leaf: '#2a5445', leafLen: [16, 30], density: .95, sway: 0 },
@@ -820,22 +824,61 @@ function buildGrove(k) {
   const nf = S.kind === 'dew' ? 12 : 6;
   for (let i = 0; i < nf; i++) { const x = r() < .5 ? r() * W * .28 : W - r() * W * .28, y = lerp(groundY + 10, H - 20, r()); s += fern(x, y, lerp(.7, 1.25, r()), r, tone); }
   if (S.kind === 'wind') {
+    const cols = ['#ff7b7b', '#ffd25e', '#7ec8ff', '#b99bff', '#ff9fd0', '#ffffff'];
+    const mids = hangers.filter((h) => h.layer === 2 && h.x0 > W * .08 && h.x0 < W * .92);
+    mids.slice(0, small ? 6 : 10).forEach((h, i) => {
+      const y = lerp(H * .3, groundY - 60, r()), t = (h.base - y) / h.h, x = h.x0 + h.lean * t * t + (h.bow || 0) * 4 * t * (1 - t);
+      for (let q = 0; q < 2; q++) {
+        const c = cols[(i * 2 + q) % cols.length], L = lerp(40, 70, r());
+        s += `<g transform="translate(${f1(x)} ${f1(y + q * 6)})"><rect x="-3" y="-2" width="6" height="4" rx="1" fill="${mix(c, '#000000', .15)}"/>
+          <path class="ribbon" style="animation-delay:${f1(-r() * 2)}s" d="M0 0 C${f1(L * .3)} -6 ${f1(L * .6)} 8 ${f1(L)} 2 L${f1(L)} 9 C${f1(L * .6)} 15 ${f1(L * .3)} 1 0 6Z" fill="${c}" opacity="${f1(.75 + P.light * .25)}"/></g>`;
+      }
+    });
     for (let i = 0; i < 40; i++) { const x = r() * W, y = groundY + 6 + r() * 30; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.6 + r() * 1.6)}" fill="${['#ffffff', '#fff3a0', '#f7d9ff'][Math.floor(r() * 3)]}" opacity="${f1(.5 + P.light * .5)}"/>`; }
   }
   if (S.kind === 'lantern') {
-    // stepping stones to the clearing and stone lanterns
-    for (let i = 0; i < 6; i++) { const t = i / 5, y = lerp(groundY + 18, H - 30, t), x = W / 2 + Math.sin(i * 1.3) * W * .04; s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(lerp(18, 40, t))}" ry="${f1(lerp(5, 11, t))}" fill="${tone('#8a8a80')}" opacity=".75"/>`; }
-    const spots = small ? [[.13, .86], [.87, .86]] : [[.24, groundY / H + .045], [.76, groundY / H + .045], [.1, .9], [.9, .9]];
+    // a flagstone path receding into the grove
+    const pt = groundY - 2, pw0 = W * .08, pw1 = W * .62;
+    s += `<path d="M${f1(W / 2 - pw0)} ${f1(pt)}L${f1(W / 2 + pw0)} ${f1(pt)}L${f1(W / 2 + pw1)} ${H}L${f1(W / 2 - pw1)} ${H}Z" fill="${tone('#5b5d55')}" opacity=".55"/>`;
+    for (let row = 0; row < 9; row++) {
+      const t0 = Math.pow(row / 9, 1.6), t1 = Math.pow((row + 1) / 9, 1.6), y0 = lerp(pt, H, t0), y1 = lerp(pt, H, t1), hw = lerp(pw0, pw1, (t0 + t1) / 2);
+      const n = 2 + (row % 2);
+      for (let q = 0; q < n; q++) { const x0 = W / 2 - hw + (q + .08) * (hw * 2 / n), x1 = W / 2 - hw + (q + .92) * (hw * 2 / n); s += `<rect x="${f1(x0)}" y="${f1(y0 + 1)}" width="${f1(x1 - x0)}" height="${f1(Math.max(2, y1 - y0 - 2))}" rx="${f1(2 + t1 * 4)}" fill="${tone(mix('#9a9b92', '#b8b8ae', r()))}" opacity=".85"/>`; }
+    }
+    // paper lanterns hanging among the canes
+    const mids = hangers.filter((h) => h.layer === 2 && Math.abs(h.x0 - W / 2) > W * .12 && h.x0 > W * .06 && h.x0 < W * .94);
+    mids.slice(0, small ? 4 : 7).forEach((h, i) => {
+      const y = lerp(H * .28, H * .52, r()), t = (h.base - y) / h.h, x = h.x0 + h.lean * t * t + (h.bow || 0) * 4 * t * (1 - t), u = (small ? 1 : 1.2) * G.scale * 1.2;
+      const side = x < W / 2 ? 1 : -1, lx = x + side * 26 * u, ly = y + 34 * u;
+      s += `<path d="M${f1(x)} ${f1(y)}Q${f1((x + lx) / 2)} ${f1(y - 6)} ${f1(lx)} ${f1(ly - 18 * u)}" stroke="${tone('#3a2a1a')}" stroke-width="1.2" fill="none"/>
+        <g class="plantern" style="transform-origin:${f1(lx)}px ${f1(ly - 18 * u)}px;animation-delay:${f1(-r() * 3)}s">
+        <ellipse cx="${f1(lx)}" cy="${f1(ly)}" rx="${f1(46 * u)}" ry="${f1(46 * u)}" fill="url(#lampg)" opacity="${f1(.25 + P.lamp * .75)}" class="lampglow"/>
+        <rect x="${f1(lx - 7 * u)}" y="${f1(ly - 18 * u)}" width="${f1(14 * u)}" height="${f1(4 * u)}" rx="1" fill="#3a2a1a"/>
+        <ellipse cx="${f1(lx)}" cy="${f1(ly)}" rx="${f1(11 * u)}" ry="${f1(15 * u)}" fill="${i % 3 === 2 ? '#3b6fc4' : '#d8432f'}"/>
+        <ellipse cx="${f1(lx)}" cy="${f1(ly)}" rx="${f1(7 * u)}" ry="${f1(12 * u)}" fill="#ffd77a" opacity="${f1(.3 + P.lamp * .6)}"/>
+        <rect x="${f1(lx - 7 * u)}" y="${f1(ly + 14 * u)}" width="${f1(14 * u)}" height="${f1(4 * u)}" rx="1" fill="#3a2a1a"/>
+        <path d="M${f1(lx)} ${f1(ly + 18 * u)}v${f1(10 * u)}" stroke="#e8b04a" stroke-width="2"/></g>`;
+    });
+    const spots = small ? [[.2, .9], [.8, .9]] : [[.3, groundY / H + .05], [.7, groundY / H + .05], [.14, .9], [.86, .9]];
     for (const [qx, qy] of spots) s += stoneLantern(W * qx, H * qy, (qy > .88 ? 1.25 : .85) * Math.max(.8, G.scale), P.lamp, tone);
   }
   if (S.kind === 'dew') {
-    const sy = groundY + (H - groundY) * (small ? .1 : .08), amp = 6;
+    const sy = groundY + 6, amp = 5;
     const top = Array.from({ length: Math.ceil(W / 24) + 2 }, (_, i) => `L${i * 24} ${f1(sy + Math.sin(i * .45) * amp)}`).join('');
     const bot = Array.from({ length: Math.ceil(W / 24) + 2 }, (_, i) => { const x = (Math.ceil(W / 24) + 1 - i) * 24; return `L${x} ${f1(sy + 26 + Math.sin(x / 24 * .45 + 1) * amp)}`; }).join('');
     s += `<path d="M0 ${f1(sy)}${top}${bot}Z" fill="url(#water)" opacity=".9"/>`;
     for (let i = 0; i < 7; i++) { const yy = sy + 6 + i * 3; s += `<path class="ripple" d="M0 ${f1(yy)}${Array.from({ length: Math.ceil(W / 24) + 2 }, (_, j) => `L${j * 24} ${f1(yy + Math.sin(j * .45) * amp)}`).join('')}" stroke="rgba(255,255,255,${f1(.25 + P.light * .3)})" stroke-width="1.2" fill="none" style="animation-duration:${f1(2.5 + i * .4)}s"/>`; }
     for (let i = 0; i < 16; i++) { const x = r() * W, y = sy + (r() < .5 ? -4 : 26) + Math.sin(x / 24 * .45) * amp; s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(6 + r() * 12)}" ry="${f1(4 + r() * 5)}" fill="${tone(mix('#6f7a70', '#9aa59a', r()))}"/>`; }
     for (let i = 0; i < 30; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 4, H, r()))}" rx="${f1(10 + r() * 22)}" ry="${f1(3 + r() * 5)}" fill="${tone('#2f6a3a')}" opacity=".5"/>`;
+    // arched wooden bridge you stand on
+    const bw = small ? W * .34 : Math.min(W * .22, 240), bx0 = small ? W * .04 : W * .18, by = sy + 13, rise = 14;
+    const wood = tone('#8a6038'), woodHi = tone('#b07e4c');
+    s += `<path d="M${f1(bx0 - 8)} ${f1(by + 14)}Q${f1(W / 2)} ${f1(by - rise - 4)} ${f1(bx0 + bw + 8)} ${f1(by + 14)}L${f1(bx0 + bw + 8)} ${f1(by + 26)}Q${f1(W / 2)} ${f1(by - rise + 8)} ${f1(bx0 - 8)} ${f1(by + 26)}Z" fill="${tone('#5a3e24')}"/>`;
+    { let top = '', bot = ''; for (let i = 0; i <= 16; i++) { const t = i / 16, x = lerp(bx0, bx0 + bw, t), y = by + 14 - Math.sin(t * Math.PI) * (rise + 6); top += (i ? 'L' : 'M') + f1(x) + ' ' + f1(y - 4); bot = 'L' + f1(x) + ' ' + f1(y + 4) + bot; }
+      s += `<path d="${top}${bot}Z" fill="${woodHi}"/>`;
+      for (let i = 1; i < 16; i++) { const t = i / 16, x = lerp(bx0, bx0 + bw, t), y = by + 14 - Math.sin(t * Math.PI) * (rise + 6); s += `<path d="M${f1(x)} ${f1(y - 4)}v8" stroke="${wood}" stroke-width="1.2"/>`; } }
+    for (const off of [-22, -30]) { let d = ''; for (let i = 0; i <= 12; i++) { const t = i / 12, x = lerp(bx0, bx0 + bw, t), y = by + 14 - Math.sin(t * Math.PI) * (rise + 6) + off; d += (i ? 'L' : 'M') + f1(x) + ' ' + f1(y); } s += `<path d="${d}" stroke="${woodHi}" stroke-width="4" fill="none" stroke-linecap="round"/>`; }
+    for (let i = 0; i <= 4; i++) { const t = i / 4, x = lerp(bx0, bx0 + bw, t), y = by + 14 - Math.sin(t * Math.PI) * (rise + 6); s += `<rect x="${f1(x - 3)}" y="${f1(y - 34)}" width="6" height="34" rx="2" fill="${wood}"/>`; }
   }
   $('gGround').setAttribute('viewBox', `0 0 ${W} ${H}`); $('gGround').innerHTML = s;
   // ---- light beams from the sun / moon side ----
@@ -845,8 +888,8 @@ function buildGrove(k) {
   $('beams').innerHTML = b; $('beams').style.opacity = P.light;
   // ---- mist, dew, wind streaks ----
   let mi = '';
-  const mistK = (S.kind === 'dew' ? 1 : .25) * P.mistK;
-  for (let i = 0; i < (S.kind === 'dew' ? 4 : 2); i++) mi += `<div class="mistband" style="--mt:${f1(38 + i * 12 + rb() * 6)}%;--mh:${f1(16 + rb() * 10)}%;--mc:${P.mist};--md:${f1(40 + rb() * 40)}s;opacity:${f1(mistK * (.6 + rb() * .4))};animation-delay:${f1(-rb() * 30)}s"></div>`;
+  const mistK = (S.kind === 'dew' ? 1.6 : .25) * P.mistK;
+  for (let i = 0; i < (S.kind === 'dew' ? 6 : 2); i++) mi += `<div class="mistband" style="--mt:${f1(38 + i * 12 + rb() * 6)}%;--mh:${f1(16 + rb() * 10)}%;--mc:${P.mist};--md:${f1(40 + rb() * 40)}s;opacity:${f1(mistK * (.6 + rb() * .4))};animation-delay:${f1(-rb() * 30)}s"></div>`;
   if (S.kind === 'dew') for (let i = 0; i < (small ? 22 : 40); i++) mi += `<div class="dew" style="left:${f1(rb() * 100)}%;top:${f1(8 + rb() * 55)}%;--t:${f1(1.8 + rb() * 3)}s;--dl:${f1(-rb() * 4)}s"></div>`;
   if (S.kind === 'wind') for (let i = 0; i < (small ? 6 : 10); i++) mi += `<div class="streak" style="top:${f1(10 + rb() * 70)}%;--sw:${f1(80 + rb() * 160)}px;--sd:${f1(2.5 + rb() * 3)}s;--sdl:${f1(-rb() * 5)}s"></div>`;
   $('gMist').innerHTML = mi;
@@ -1036,13 +1079,13 @@ function perform(p, mode, isMe, reveal) {
 // ================= reading a leaf =================
 let openLeaf = null;
 function timeAgo(ms) { const m = Math.floor(ms / 60000); if (m < 1) return '방금'; if (m < 60) return m + '분 전'; return Math.floor(m / 60) + '시간 전'; }
-function timeLeft(ms) { const m = Math.max(0, Math.ceil(ms / 60000)); return m < 60 ? `${m}분 뒤 바람에 날아가요` : `${Math.floor(m / 60)}시간 뒤 바람에 날아가요`; }
+function timeLeft(ms, isMine) { return isMine ? '숲이 오늘 하루 품어 줄게요 🍃' : ''; }
 const CARE = /(죽고\s*싶|자살|살기\s*싫|사라지고\s*싶|극단적|자해|목숨|살\s*이유)/;
 function openLeafDialog(leaf) {
   openLeaf = leaf;
   const age = now() - leaf.created, M = MODES[modeOf(leaf)];
   $('leafMode').textContent = M.label; $('leafMode').style.background = M.color;
-  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 털어놓은 말' : ''}</span><span>${timeLeft(lifetime - age)}</span>`;
+  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 털어놓은 말' : ''}</span><span>${timeLeft(lifetime - age, mine.has(leaf.id))}</span>`;
   $('leafText').textContent = leaf.text; $('leafText').classList.toggle('loud', modeOf(leaf) === 'shout');
   const care = CARE.test(leaf.text); $('leafCare').hidden = !care;
   if (care) $('leafCare').innerHTML = '이 말을 남긴 누군가가 많이 힘든가 봐요. 혹시 당신도 그렇다면, 자살예방상담전화 <a href="tel:109">109</a>는 24시간 열려 있어요.';
