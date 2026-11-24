@@ -9,8 +9,10 @@ import { Platform } from 'react-native';
 let channelsReady = false;
 // 알림 칸(채널): 서버가 방 설정에 맞춰 이 이름으로 보내요(server/src/push.ts의 channelFor와 같아요).
 // 안드로이드는 한 번 만든 칸의 소리를 앱에서 못 바꿔서, 소리마다 칸을 따로 만들어요.
-const CUSTOM = ['dingdong', 'bell', 'pop', 'tok', 'chime'] as const;
-const LABEL: Record<(typeof CUSTOM)[number], string> = { dingdong: '딩동', bell: '방울', pop: '뿅', tok: '톡', chime: '차임' };
+const CUSTOM = ['salang', 'pogeun', 'pop', 'tok', 'marimba', 'bogeul'] as const;
+const LABEL: Record<(typeof CUSTOM)[number], string> = { salang: '살랑', pogeun: '포근', pop: '뿅', tok: '톡', marimba: '마림바', bogeul: '보글' };
+/** 예전 버전에 있던 소리 칸은 지워요(폰 알림 설정에 안 남게) */
+const REMOVED = ['dingdong', 'bell', 'chime'];
 async function ensureChannels() {
   if (channelsReady || Platform.OS !== 'android') return;
   // eslint-disable-next-line import/namespace -- 다시 내보낸 이름이라 린트가 못 찾아요(타입 검사는 통과)
@@ -20,6 +22,7 @@ async function ensureChannels() {
   for (const k of CUSTOM) {
     await Notifications.setNotificationChannelAsync(`snd_${k}`, { ...base, name: `대화 알림(${LABEL[k]})`, sound: `${k}.wav` });
   }
+  for (const k of REMOVED) await Notifications.deleteNotificationChannelAsync(`snd_${k}`).catch(() => {});
   await Notifications.setNotificationChannelAsync('vibrate', { ...base, name: '대화 알림(진동만)', sound: null });
   await Notifications.setNotificationChannelAsync('quiet', { name: '대화 알림(무음)', importance: LOW, sound: null, enableVibrate: false, showBadge: false });
   channelsReady = true;

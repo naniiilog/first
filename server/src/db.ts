@@ -125,7 +125,7 @@ export function ensureSchema(db: Db): Promise<void> {
       // 방장의 '마지막으로 읽은 글'과 북마크(JSON) — 어느 기기에서든 같게
       'read_mark INTEGER NOT NULL DEFAULT 0',
       'bookmarks TEXT',
-      // 설치형 앱 알림 소리(default·dingdong·bell·pop·tok·chime·vibrate·silent)
+      // 설치형 앱 알림 소리(default·salang·pogeun·pop·tok·marimba·bogeul·vibrate·silent)
       "notify_sound TEXT NOT NULL DEFAULT 'default'",
     ]) {
       await db.run(`ALTER TABLE rooms ADD COLUMN ${col}`).catch(() => {});

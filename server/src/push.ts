@@ -100,7 +100,7 @@ export interface PushSub {
   auth: string;
 }
 
-export const NOTIFY_SOUNDS = ['default', 'dingdong', 'bell', 'pop', 'tok', 'chime', 'vibrate', 'silent'];
+export const NOTIFY_SOUNDS = ['default', 'salang', 'pogeun', 'pop', 'tok', 'marimba', 'bogeul', 'vibrate', 'silent'];
 /** 설치형 앱 알림 칸(앱의 nativePush.ts와 같은 이름) */
 const channelFor = (sound: string, silent: boolean) =>
   silent || sound === 'silent' ? 'quiet' : sound === 'vibrate' ? 'vibrate' : sound === 'default' || !NOTIFY_SOUNDS.includes(sound) ? 'chat' : `snd_${sound}`;
