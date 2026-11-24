@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>대나무숲</title>
+<meta name="description" content="임금님 귀는 당나귀 귀! 하고 싶은 말을 외치면 대나무 잎이 되어 하루 동안 숲에 머물다 바람에 날아가요.">
+<meta name="theme-color" content="#0b1a17">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎋</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky-top: #07110f; --sky-bottom: #12302a; --mist: rgba(170, 220, 200, .06);
+    --stalk: #2f6b4f; --stalk-light: #4f8f6c; --stalk-node: #1f4a37;
+    --leaf: #7fcf96; --leaf-old: #c9b66a; --glow: rgba(160, 255, 190, .55);
+    --ink: #e9f3ec; --muted: #9db8ab; --panel: rgba(12, 28, 24, .86); --line: rgba(160, 220, 190, .18);
+    --accent: #8fe0a6; --danger: #ff9a8a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: linear-gradient(var(--sky-top), var(--sky-bottom)); color: var(--ink);
+    font-family: "Gowun Dodum", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    overflow: hidden; -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  /* ---------- sky ---------- */
+  .moon { position: fixed; top: 9vh; right: 12vw; width: 74px; height: 74px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 38%, #fffbe8, #f1e6b8 60%, #d9cb92);
+    box-shadow: 0 0 60px 18px rgba(255, 244, 200, .18); }
+  .star { position: fixed; width: 2px; height: 2px; background: #fff; border-radius: 50%; opacity: .6; animation: twinkle 4s ease-in-out infinite; }
+  @keyframes twinkle { 50% { opacity: .15; } }
+  .fog { position: fixed; left: 0; right: 0; bottom: 0; height: 40vh; pointer-events: none; z-index: 3;
+    background: linear-gradient(transparent, rgba(10, 26, 22, .95)); }
+
+  /* ---------- header ---------- */
+  header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding: max(14px, env(safe-area-inset-top)) 16px 10px;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; pointer-events: none; }
+  header > * { pointer-events: auto; }
+  h1 { margin: 0; font-family: "Gowun Batang", serif; font-size: 26px; letter-spacing: .04em; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  .tools { display: flex; gap: 6px; }
+  .iconbtn { white-space: nowrap; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-size: 14px; backdrop-filter: blur(4px); }
+  .iconbtn:hover { border-color: var(--accent); }
+
+  /* ---------- forest ---------- */
+  #forest { position: fixed; inset: 0; z-index: 2; }
+  .stalk { position: absolute; bottom: -10px; width: var(--w); transform-origin: 50% 100%;
+    animation: sway var(--dur) ease-in-out var(--delay) infinite alternate; }
+  .stalk .cane { position: absolute; inset: 0; border-radius: 6px 6px 0 0;
+    background:
+      repeating-linear-gradient(to top, transparent 0 calc(var(--seg) - 4px), var(--stalk-node) calc(var(--seg) - 4px) var(--seg)),
+      linear-gradient(90deg, var(--stalk-node), var(--stalk) 30%, var(--stalk-light) 55%, var(--stalk) 80%, var(--stalk-node)); }
+  .stalk.far { filter: brightness(.45) saturate(.7); z-index: 0; }
+  .stalk.mid { filter: brightness(.7); z-index: 1; }
+  .stalk.near { z-index: 2; }
+  .twig { position: absolute; left: 50%; width: 46px; height: 2px; background: var(--stalk); transform-origin: 0 50%; opacity: .8; }
+  @keyframes sway { from { transform: rotate(calc(var(--amp) * -1)); } to { transform: rotate(var(--amp)); } }
+
+  .leaf { position: absolute; left: 50%; width: 58px; height: 18px; border: 0; padding: 0; background: none; transform-origin: 0 50%; z-index: 4; }
+  .leaf::before { content: ""; position: absolute; inset: 0; border-radius: 0 100% 0 100% / 0 100% 0 100%;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--leaf-old) calc(var(--age) * 100%), var(--leaf)), color-mix(in srgb, var(--leaf-old) calc(var(--age) * 100%), #b5f0c4));
+    opacity: calc(1 - var(--age) * .55); box-shadow: 0 0 14px var(--glow); transition: transform .2s; }
+  .leaf::after { content: ""; position: absolute; left: 4px; right: 8px; top: 50%; height: 1px; background: rgba(20, 60, 40, .45); }
+  .leaf:hover::before, .leaf:focus-visible::before { transform: scale(1.18); box-shadow: 0 0 22px 4px var(--glow); }
+  .leaf:focus-visible { outline: none; }
+  .leaf.new::before { animation: newleaf 1.6s ease-out 3; }
+  @keyframes newleaf { 0% { box-shadow: 0 0 0 0 rgba(200,255,210,.9); } 100% { box-shadow: 0 0 30px 14px rgba(200,255,210,0); } }
+
+  .falling { position: fixed; width: 30px; height: 10px; border-radius: 0 100% 0 100% / 0 100% 0 100%; background: var(--leaf-old); opacity: .5; z-index: 3; pointer-events: none;
+    animation: fall var(--fd) linear forwards; }
+  @keyframes fall { to { transform: translate(var(--fx), 110vh) rotate(720deg); opacity: 0; } }
+
+  .empty { position: fixed; top: 38vh; left: 0; right: 0; text-align: center; color: var(--muted); z-index: 5; font-family: "Gowun Batang", serif; font-size: 17px; line-height: 1.7; padding: 0 16px; text-shadow: 0 1px 8px #000; }
+
+  /* ---------- composer ---------- */
+  .composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
+  .composer form { max-width: 620px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 8px; backdrop-filter: blur(8px); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .composer textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink);
+    font: 16px/1.5 "Gowun Batang", serif; padding: 8px 6px; max-height: 120px; }
+  .composer textarea::placeholder { color: var(--muted); }
+  .count { font-size: 12px; color: var(--muted); align-self: center; min-width: 52px; text-align: right; }
+  .count.over { color: var(--danger); }
+  .shout { border: 0; border-radius: 12px; padding: 10px 16px; background: var(--accent); color: #0b1a17; font-weight: 700; white-space: nowrap; }
+  .shout:disabled { opacity: .5; cursor: default; }
+
+  /* ---------- dialog ---------- */
+  dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink); padding: 22px 20px 16px;
+    width: min(440px, calc(100vw - 32px)); backdrop-filter: blur(10px); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  dialog::backdrop { background: rgba(0, 8, 6, .55); }
+  .leaf-text { font-family: "Gowun Batang", serif; font-size: 18px; line-height: 1.75; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 14px; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+  .heard { border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 9px 16px; font-weight: 700; }
+  .heard.done { background: var(--accent); color: #0b1a17; }
+  .linkbtn { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 6px; text-decoration: underline; }
+  .care { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(143, 224, 166, .1); border: 1px solid var(--line); font-size: 14px; line-height: 1.6; }
+  .care a { color: var(--accent); }
+  .about h2 { font-family: "Gowun Batang", serif; margin: 0 0 10px; font-size: 20px; }
+  .about ul { padding-left: 18px; margin: 0 0 14px; line-height: 1.8; font-size: 14.5px; }
+  .close { float: right; margin: -10px -6px 0 0; background: none; border: 0; color: var(--muted); font-size: 20px; }
+
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 10px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
+    padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 22px; } .moon { width: 52px; height: 52px; top: 11vh; }
+    .count { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stalk, .star, .falling, .leaf.new::before { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="moon" aria-hidden="true"></div>
+<div id="sky" aria-hidden="true"></div>
+
+<header>
+  <div>
+    <h1>🎋 대나무숲</h1>
+    <div class="sub" id="status">바람 소리를 듣는 중…</div>
+  </div>
+  <div class="tools">
+    <button class="iconbtn" id="soundBtn" aria-pressed="false" title="바람 소리">🔈</button>
+    <button class="iconbtn" id="aboutBtn">숲 이야기</button>
+  </div>
+</header>
+
+<main id="forest" aria-label="대나무숲. 잎을 누르면 누군가의 외침을 읽을 수 있어요."></main>
+<div class="fog" aria-hidden="true"></div>
+<div class="empty" id="empty" hidden>아직 숲이 조용해요.<br>임금님 귀는 당나귀 귀! 처음으로 외쳐 보세요.</div>
+
+<div class="composer">
+  <form id="form" autocomplete="off">
+    <textarea id="text" rows="1" maxlength="400" placeholder="아무에게도 못 한 말을 숲에 외쳐 보세요" aria-label="외칠 말"></textarea>
+    <span class="count" id="count">0 / 200</span>
+    <button class="shout" id="shoutBtn" type="submit">외치기</button>
+  </form>
+</div>
+
+<dialog id="leafDlg">
+  <button class="close" data-close aria-label="닫기">×</button>
+  <div class="meta" id="leafMeta"></div>
+  <p class="leaf-text" id="leafText"></p>
+  <div class="care" id="leafCare" hidden></div>
+  <div class="actions">
+    <button class="heard" id="heardBtn">🍃 들었어요</button>
+    <button class="linkbtn" id="reportBtn">신고하기</button>
+  </div>
+</dialog>
+
+<dialog id="aboutDlg" class="about">
+  <button class="close" data-close aria-label="닫기">×</button>
+  <h2>숲 이야기</h2>
+  <ul>
+    <li>여기는 <b>임금님 귀는 당나귀 귀</b>를 외치는 숲이에요.</li>
+    <li>외친 말은 대나무 잎이 되어 <b>24시간 동안</b> 숲에 머물다 바람에 날아가요.</li>
+    <li>다른 사람은 <b>🍃 들었어요</b>로만 대답할 수 있어요. 댓글은 없어요.</li>
+    <li>가입도 이름도 없어요. IP 주소는 저장하지 않아요.</li>
+    <li>전화번호·이메일 같은 개인정보, 링크, 거친 말은 남길 수 없어요.</li>
+    <li>누군가를 특정해 상처 주는 말은 하지 말아 주세요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
+  </ul>
+  <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const MAX = 200;
+let leaves = [];
+let lifetime = 24 * 3600 * 1000;
+let serverOffset = 0;
+let stalks = [];
+let openLeaf = null;
+
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let heardSet = new Set(store.get('bamboo.heard', []));
+let reportedSet = new Set(store.get('bamboo.reported', []));
+let mine = new Set(store.get('bamboo.mine', []));
+
+function toast(msg, ms = 2600) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), ms);
+}
+function hash(n) { // deterministic 0..1 from an integer
+  let x = (n * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
+  return (x >>> 0) / 4294967296;
+}
+function rand(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+
+// ---------- sky ----------
+(function stars() {
+  const r = rand(7); const sky = $('sky');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div'); s.className = 'star';
+    s.style.left = r() * 100 + 'vw'; s.style.top = r() * 45 + 'vh';
+    s.style.animationDelay = (r() * 4) + 's'; sky.appendChild(s);
+  }
+})();
+
+// ---------- forest ----------
+function buildForest() {
+  const forest = $('forest'); forest.innerHTML = ''; stalks = [];
+  const W = innerWidth; const r = rand(42);
+  const layers = [['far', 34, 6, 9], ['mid', 52, 9, 13], ['near', 78, 13, 19]];
+  for (const [cls, gap, wMin, wMax] of layers) {
+    const n = Math.max(4, Math.round(W / gap));
+    for (let i = 0; i < n; i++) {
+      const el = document.createElement('div'); el.className = 'stalk ' + cls;
+      const w = wMin + r() * (wMax - wMin);
+      const h = (cls === 'far' ? 62 : cls === 'mid' ? 78 : 92) + r() * 14;
+      el.style.left = ((i + .15 + r() * .7) / n) * W - w / 2 + 'px';
+      el.style.height = h + 'vh';
+      el.style.setProperty('--w', w + 'px');
+      el.style.setProperty('--seg', (46 + r() * 30) + 'px');
+      el.style.setProperty('--amp', (.6 + r() * 1.4) + 'deg');
+      el.style.setProperty('--dur', (3.5 + r() * 3) + 's');
+      el.style.setProperty('--delay', (-r() * 6) + 's');
+      el.innerHTML = '<div class="cane"></div>';
+      for (let t = 0; t < 3; t++) {
+        const tw = document.createElement('div'); tw.className = 'twig';
+        tw.style.top = (8 + r() * 40) + '%';
+        tw.style.transform = `rotate(${r() < .5 ? -150 - r() * 20 : -30 + r() * 20}deg)`;
+        el.appendChild(tw);
+      }
+      forest.appendChild(el);
+      if (cls !== 'far') stalks.push({ el, h, cls });
+    }
+  }
+  // hang leaves only on stalks within the visible band (avoid header & composer)
+  stalks.sort((a, b) => a.el.offsetLeft - b.el.offsetLeft);
+  renderLeaves();
+}
+
+function now() { return Date.now() + serverOffset; }
+
+function renderLeaves(newId) {
+  document.querySelectorAll('.leaf').forEach((l) => l.remove());
+  $('empty').hidden = leaves.length > 0;
+  const usable = stalks.filter((s) => s.el.offsetLeft > 12 && s.el.offsetLeft < innerWidth - 40);
+  if (!usable.length) return;
+  for (const leaf of leaves) {
+    const s = usable[Math.floor(hash(leaf.id) * usable.length)];
+    const stalkPx = s.h / 100 * innerHeight;
+    // y measured from stalk top; keep leaves between ~16vh and ~70vh of the screen
+    const minTop = Math.max(0, stalkPx - innerHeight * .80);
+    const maxTop = Math.max(minTop + 1, stalkPx - innerHeight * .30);
+    const top = minTop + hash(leaf.id * 7 + 3) * (maxTop - minTop);
+    const right = hash(leaf.id * 13 + 1) < .5;
+    const ang = right ? -20 + hash(leaf.id * 5) * 40 : 160 + hash(leaf.id * 5) * 40;
+    const age = Math.min(1, Math.max(0, (now() - leaf.created) / lifetime));
+    const b = document.createElement('button');
+    b.className = 'leaf' + (leaf.id === newId ? ' new' : '');
+    b.style.top = top + 'px';
+    b.style.transform = `rotate(${ang}deg)`;
+    b.style.setProperty('--age', age.toFixed(2));
+    b.setAttribute('aria-label', '누군가의 외침: ' + leaf.text.slice(0, 40));
+    b.onclick = () => openLeafDialog(leaf);
+    s.el.appendChild(b);
+  }
+}
+
+function timeAgo(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return '방금'; if (m < 60) return m + '분 전';
+  return Math.floor(m / 60) + '시간 전';
+}
+function timeLeft(ms) {
+  const m = Math.max(0, Math.ceil(ms / 60000));
+  return m < 60 ? `${m}분 뒤 바람에 날아가요` : `${Math.floor(m / 60)}시간 뒤 바람에 날아가요`;
+}
+const CARE = /(죽고\s*싶|자살|살기\s*싫|사라지고\s*싶|극단적|자해|목숨|살\s*이유)/;
+
+function openLeafDialog(leaf) {
+  openLeaf = leaf;
+  const age = now() - leaf.created;
+  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 외친 말' : ''}</span><span>${timeLeft(lifetime - age)}</span>`;
+  $('leafText').textContent = leaf.text;
+  const care = CARE.test(leaf.text);
+  $('leafCare').hidden = !care;
+  if (care) $('leafCare').innerHTML = '이 말을 남긴 누군가가 많이 힘든가 봐요. 혹시 당신도 그렇다면, 자살예방상담전화 <a href="tel:109">109</a>는 24시간 열려 있어요.';
+  updateHeardBtn();
+  $('reportBtn').hidden = mine.has(leaf.id);
+  $('leafDlg').showModal();
+}
+function updateHeardBtn() {
+  const done = heardSet.has(openLeaf.id);
+  const btn = $('heardBtn');
+  btn.classList.toggle('done', done);
+  btn.textContent = `🍃 들었어요${openLeaf.heard ? ' · ' + openLeaf.heard : ''}`;
+  btn.disabled = done || mine.has(openLeaf.id);
+}
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  let data = {}; try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error(data.error || '숲에 잠시 문제가 생겼어요.');
+  return data;
+}
+
+$('heardBtn').onclick = async () => {
+  const leaf = openLeaf; if (!leaf || heardSet.has(leaf.id)) return;
+  heardSet.add(leaf.id); store.set('bamboo.heard', [...heardSet]);
+  leaf.heard++; updateHeardBtn(); whoosh(.25);
+  try { const d = await api(`/api/leaves/${leaf.id}/heard`, {}); leaf.heard = d.heard; if (openLeaf === leaf) updateHeardBtn(); }
+  catch (e) { toast(e.message); }
+};
+$('reportBtn').onclick = async () => {
+  const leaf = openLeaf; if (!leaf) return;
+  if (reportedSet.has(leaf.id)) { toast('이미 신고했어요.'); return; }
+  if (!confirm('이 잎을 신고할까요?\n개인정보 노출, 특정인 비방, 혐오 표현 같은 경우에 신고해 주세요.')) return;
+  try {
+    await api(`/api/leaves/${leaf.id}/report`, {});
+    reportedSet.add(leaf.id); store.set('bamboo.reported', [...reportedSet]);
+    toast('신고했어요. 알려줘서 고마워요.');
+  } catch (e) { toast(e.message); }
+};
+document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => b.closest('dialog').close());
+document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
+$('aboutBtn').onclick = () => $('aboutDlg').showModal();
+
+// ---------- composer ----------
+const ta = $('text');
+function syncCount() {
+  const n = [...ta.value.trim()].length;
+  $('count').textContent = `${n} / ${MAX}`;
+  $('count').classList.toggle('over', n > MAX);
+  $('shoutBtn').disabled = n === 0 || n > MAX;
+  ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+ta.addEventListener('input', syncCount);
+ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('form').requestSubmit(); });
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = ta.value.trim(); if (!text) return;
+  $('shoutBtn').disabled = true;
+  try {
+    const { leaf } = await api('/api/leaves', { text });
+    mine.add(leaf.id); store.set('bamboo.mine', [...mine].slice(-200));
+    leaves.unshift(leaf); ta.value = ''; syncCount();
+    renderLeaves(leaf.id); updateStatus(); whoosh(.6);
+    toast('외침이 대나무 잎이 되었어요. 반짝이는 잎을 찾아보세요 🍃');
+  } catch (err) { toast(err.message, 3500); }
+  finally { syncCount(); }
+});
+
+// ---------- data ----------
+function updateStatus() {
+  const n = leaves.length;
+  $('status').textContent = n ? `지금 숲에 잎 ${n}장 · 하루 뒤 바람에 날아가요` : '잎은 하루 뒤 바람에 날아가요';
+}
+async function load(first) {
+  try {
+    const d = await api('/api/leaves');
+    serverOffset = d.now - Date.now(); lifetime = d.lifetime || lifetime;
+    const before = new Set(leaves.map((l) => l.id));
+    const changed = d.leaves.length !== leaves.length || d.leaves.some((l) => !before.has(l.id));
+    leaves = d.leaves;
+    if (changed || first) renderLeaves();
+    updateStatus();
+  } catch (e) { if (first) $('status').textContent = '숲에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
+}
+
+// a few old leaves drifting down, for atmosphere
+function dropLeaf() {
+  if (document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const f = document.createElement('div'); f.className = 'falling';
+  f.style.left = Math.random() * innerWidth + 'px'; f.style.top = '-20px';
+  f.style.setProperty('--fx', (Math.random() * 200 - 100) + 'px');
+  f.style.setProperty('--fd', (9 + Math.random() * 6) + 's');
+  document.body.appendChild(f); f.addEventListener('animationend', () => f.remove());
+}
+
+// ---------- wind sound (generated, no files) ----------
+let audio = null;
+function startWind() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const len = ctx.sampleRate * 4; const buf = ctx.createBuffer(1, len, ctx.sampleRate); const data = buf.getChannelData(0);
+  let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
+  const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+  const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 500; filter.Q.value = .7;
+  const gain = ctx.createGain(); gain.gain.value = .0;
+  const lfo = ctx.createOscillator(); lfo.frequency.value = .08; const lfoGain = ctx.createGain(); lfoGain.gain.value = 300;
+  lfo.connect(lfoGain).connect(filter.frequency);
+  src.connect(filter).connect(gain).connect(ctx.destination); src.start(); lfo.start();
+  gain.gain.linearRampToValueAtTime(.35, ctx.currentTime + 2);
+  audio = { ctx, gain };
+}
+function whoosh(strength) {
+  if (!audio) return; const { ctx, gain } = audio; const t = ctx.currentTime;
+  gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t);
+  gain.gain.linearRampToValueAtTime(.35 + strength, t + .4); gain.gain.linearRampToValueAtTime(.35, t + 2.2);
+}
+$('soundBtn').onclick = () => {
+  const btn = $('soundBtn');
+  if (!audio) { startWind(); btn.textContent = '🔊'; btn.setAttribute('aria-pressed', 'true'); return; }
+  if (audio.ctx.state === 'running') { audio.ctx.suspend(); btn.textContent = '🔈'; btn.setAttribute('aria-pressed', 'false'); }
+  else { audio.ctx.resume(); btn.textContent = '🔊'; btn.setAttribute('aria-pressed', 'true'); }
+};
+
+let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(buildForest, 200); });
+buildForest(); syncCount(); load(true).then(() => {
+  if (leaves.length && !store.get('bamboo.visited', false)) { toast('빛나는 잎을 눌러 누군가의 외침을 들어 보세요 🍃', 4000); store.set('bamboo.visited', true); }
+});
+setInterval(() => load(false), 30000);
+setInterval(dropLeaf, 2500);
+</script>
+</body>
+</html>

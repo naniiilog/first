@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>숲지기</title>
+<style>
+  :root { --bg: #0d1b18; --card: #142824; --ink: #e9f3ec; --muted: #9db8ab; --line: #24413a; --accent: #8fe0a6; --danger: #ff8a7a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 20px; margin: 0 0 14px; }
+  input, button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); }
+  .login { display: flex; gap: 8px; } .login input { flex: 1; min-width: 0; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; color: var(--muted); font-size: 14px; flex-wrap: wrap; gap: 8px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .item.hidden { border-color: var(--danger); opacity: .8; }
+  .text { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 8px; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .meta .sp { flex: 1; }
+  .badge { color: var(--danger); font-weight: 700; }
+  .danger { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎋 숲지기 (관리자)</h1>
+  <form class="login" id="login">
+    <input type="password" id="token" placeholder="관리자 비밀번호" autocomplete="current-password">
+    <button>들어가기</button>
+  </form>
+  <div id="panel" hidden>
+    <div class="bar"><span id="summary"></span><span><button id="refresh">새로고침</button> <button id="logout">나가기</button></span></div>
+    <div id="list"></div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let token = '';
+try { token = sessionStorage.getItem('bamboo.admin') || ''; } catch {}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function call(path, post) {
+  const res = await fetch(path, { method: post ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: post ? '{}' : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.status);
+  return data;
+}
+async function load() {
+  try {
+    const { leaves, now } = await call('/api/admin/leaves');
+    $('login').hidden = true; $('panel').hidden = false;
+    const hidden = leaves.filter((l) => l.hidden).length;
+    $('summary').textContent = `잎 ${leaves.length}장 · 숨김 ${hidden}장 · 신고 있는 잎 ${leaves.filter((l) => l.reports).length}장`;
+    $('list').innerHTML = leaves.map((l) => `<div class="item${l.hidden ? ' hidden' : ''}">
+      <div class="text">${esc(l.text)}</div>
+      <div class="meta"><span>#${l.id}</span><span>${Math.floor((now - l.created) / 60000)}분 전</span><span>🍃 ${l.heard}</span>
+        ${l.reports ? `<span class="badge">신고 ${l.reports}</span>` : ''}${l.hidden ? '<span class="badge">숨김</span>' : ''}<span class="sp"></span>
+        <button data-act="${l.hidden ? 'unhide' : 'hide'}" data-id="${l.id}">${l.hidden ? '다시 보이기' : '숨기기'}</button>
+        <button class="danger" data-act="delete" data-id="${l.id}">삭제</button></div></div>`).join('') || '<p style="color:var(--muted)">숲이 비어 있어요.</p>';
+  } catch (e) {
+    $('login').hidden = false; $('panel').hidden = true;
+    if (token) alert(e.message);
+  }
+}
+$('login').onsubmit = (e) => { e.preventDefault(); token = $('token').value.trim(); try { sessionStorage.setItem('bamboo.admin', token); } catch {} load(); };
+$('logout').onclick = () => { token = ''; try { sessionStorage.removeItem('bamboo.admin'); } catch {} $('token').value = ''; load(); };
+$('refresh').onclick = load;
+$('list').onclick = async (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'delete' && !confirm('이 잎을 완전히 삭제할까요?')) return;
+  try { await call(`/api/admin/leaves/${b.dataset.id}/${b.dataset.act}`, true); load(); } catch (err) { alert(err.message); }
+};
+if (token) load();
+</script>
+</body>
+</html>
