@@ -1268,7 +1268,7 @@ function startSound() {
   };
   const knockOld = (t, vel = 1) => {
     const hits = Math.random() < .3 ? 1 : Math.random() < .75 ? 2 : 3;
-    const body = lerp(230, 380, Math.random());               // the hollow cane: low and dull
+    const body = lerp(430, 620, Math.random());               // the hollow cane: clear, ringing
     for (let n = 0; n < hits; n++) {
       const st = t + n * lerp(.08, .2, Math.random()), v = vel * (n ? lerp(.6, .85, Math.random()) : 1);
       // the hard contact: a very short mid-band click
@@ -1278,10 +1278,10 @@ function startSound() {
       c.connect(cbp).connect(cg).connect(windBus); c.start(st, Math.random()); c.stop(st + .03);
       // the dull hollow thud of the tube: resonant noise, dies away fast
       const r = ctx.createBufferSource(), rbp = ctx.createBiquadFilter(), rbp2 = ctx.createBiquadFilter(), rg = ctx.createGain();
-      r.buffer = white; rbp.type = 'bandpass'; rbp.frequency.value = body * lerp(.97, 1.03, Math.random()); rbp.Q.value = 9;
-      rbp2.type = 'lowpass'; rbp2.frequency.value = 900;
-      rg.gain.setValueAtTime(.75 * v, st); rg.gain.exponentialRampToValueAtTime(.0002, st + .12);
-      r.connect(rbp).connect(rbp2).connect(rg).connect(windBus); r.start(st, Math.random()); r.stop(st + .14);
+      r.buffer = white; rbp.type = 'bandpass'; rbp.frequency.value = body * lerp(.97, 1.03, Math.random()); rbp.Q.value = 22;
+      rbp2.type = 'lowpass'; rbp2.frequency.value = 3000;
+      rg.gain.setValueAtTime(1.3 * v, st); rg.gain.exponentialRampToValueAtTime(.0002, st + .2);
+      r.connect(rbp).connect(rbp2).connect(rg).connect(windBus); r.start(st, Math.random()); r.stop(st + .22);
     }
   };
   // 4) 삐걱: a cane bending under the wind, a stick-slip creak
