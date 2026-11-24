@@ -1,5 +1,8 @@
 name = "bamboo-forest"
 main = "src/worker.js"
+# the public site lives at bambooforest.pages.dev; this worker only runs the hourly cleanup
+workers_dev = false
+preview_urls = false
 compatibility_date = "2025-09-01"
 
 # The page files are bundled into the worker (see src/worker.js)
