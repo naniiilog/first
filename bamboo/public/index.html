@@ -1396,7 +1396,7 @@ function startSound() {
   mus.connect(master); mus.connect(dl); dl.connect(dlf).connect(fb).connect(dl); dlf.connect(master);
   const noiseBuf = buf;
   const THEMES = {
-    plaza: { base: 146.83, scale: [0, 2, 5, 7, 9],  bar: 8,  vol: .5,  roots: [0, 3, 4, 2, 0, 1] },
+    plaza: { base: 174.61, scale: [0, 2, 5, 7, 9],  bar: 9,  vol: .9,  roots: [0, 3, 2, 0, 4, 3] },   // F, breathing chords
     wind:  { base: 196.0,  scale: [0, 2, 4, 7, 9],  bar: 6.5, vol: .55, roots: [0, 3, 4, 3, 0, 2] },   // G major pentatonic, warm & hopeful
     moon:  { base: 146.83, scale: [0, 3, 5, 7, 10], bar: 11, vol: .6,  roots: [0, 2, 3, 0, 4, 2] },   // D 계면조, lullaby
     dew:   { base: 164.81, scale: [0, 2, 4, 7, 9],  bar: 8,  vol: .85,  roots: [0, 4, 3, 0, 2, 4] },   // E major pentatonic, clear
@@ -1453,10 +1453,27 @@ function startSound() {
   const step = (m, lo, hi) => Math.max(lo, Math.min(hi, m + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
   let root = 0, melody = 2, next = ctx.currentTime + .5, cur = null;
   const PHRASE = {
-    plaza(t0, bar, slow) {
-      pad(root, t0, bar + 1.5);
-      const n = slow ? 2 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 3); let t = t0 + .6 + Math.random();
-      for (let i = 0; i < n; i++) { melody = step(melody, 0, 9); pluck(melody, 1, t, .7 + Math.random() * .3); t += (bar - 1.5) / n * (.7 + Math.random() * .6); }
+    plaza(t0, bar, slow) {       // the entrance: no 가야금 — a breathing 생황-like chord and a low 편종 now and then
+      const breathe = (deg, oct, st, dur, vol) => {
+        for (const [d, det] of [[deg, -5], [deg, 5], [deg + 2, 0], [deg + 4, -3]]) {
+          const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+          o.type = 'sine'; o2.type = 'triangle'; o.frequency.value = hz(d, oct); o2.frequency.value = hz(d, oct) * 2; o.detune.value = det; o2.detune.value = -det;
+          const g2 = ctx.createGain(); g2.gain.value = .18;
+          lp.type = 'lowpass'; lp.frequency.setValueAtTime(500, st); lp.frequency.linearRampToValueAtTime(1300, st + dur * .5); lp.frequency.linearRampToValueAtTime(500, st + dur);
+          g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(vol, st + dur * .45); g.gain.linearRampToValueAtTime(0, st + dur);
+          o.connect(lp); o2.connect(g2).connect(lp); lp.connect(g).connect(mus); o.start(st); o2.start(st); o.stop(st + dur + .1); o2.stop(st + dur + .1);
+        }
+      };
+      breathe(root, 0, t0, bar + 2.5, .035);
+      if (Math.random() < .6) breathe(root + 2, 1, t0 + bar * .4, bar * .8, .015);
+      if (Math.random() < .5) {                    // 편종: one low, round strike
+        const st = t0 + bar * lerp(.2, .7, Math.random()), f = hz(root, -1) * 2;
+        for (const [k, a2, dec] of [[1, 1, 5], [2.0, .3, 3], [3.0, .1, 1.6]]) {
+          const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f * k;
+          g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.05 * a2, st + .01); g.gain.exponentialRampToValueAtTime(.0003, st + dec);
+          o.connect(g).connect(mus); o.start(st); o.stop(st + dec + .1);
+        }
+      }
     },
     wind(t0, bar, slow) {        // a gentle flute line that rises at the end of the phrase, like a reassuring breath
       pad(root, t0, bar + 2, { cut: 900, vol: .04 });
@@ -1501,6 +1518,7 @@ function startSound() {
       next += bar;
     }
   };
+  audio.theme = () => cur;
   schedule(); setInterval(schedule, 700);
   // birds by day, crickets by night
   setInterval(() => {
