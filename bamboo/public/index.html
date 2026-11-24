@@ -279,7 +279,7 @@
   <button class="card pill" id="backBtn" hidden aria-label="광장으로" title="광장으로">←</button>
   <div class="card titlecard"><h1 id="title">대나무숲</h1><div class="sub" id="status">입장하는 중…</div></div>
   <div class="tools">
-    <button class="card pill" id="soundBtn" aria-pressed="false" title="숲 소리">🔈</button>
+    <button class="card pill" id="soundBtn" aria-pressed="false" title="숲 소리와 음악" aria-label="숲 소리와 음악">🔈</button>
     <button class="card pill" id="journalBtn" title="내 마음 보관함" aria-label="내 마음 보관함">🔖</button>
     <button class="card pill" id="aboutBtn" title="안내" aria-label="안내">ⓘ</button>
   </div>
@@ -864,20 +864,25 @@ function buildGrove(k) {
       const n = 2 + (row % 2);
       for (let q = 0; q < n; q++) { const x0 = W / 2 - hw + (q + .08) * (hw * 2 / n), x1 = W / 2 - hw + (q + .92) * (hw * 2 / n); s += `<rect x="${f1(x0)}" y="${f1(y0 + 1)}" width="${f1(x1 - x0)}" height="${f1(Math.max(2, y1 - y0 - 2))}" rx="${f1(2 + t1 * 4)}" fill="${tone(mix('#9a9b92', '#b8b8ae', r()))}" opacity=".85"/>`; }
     }
-    // paper lanterns hanging among the canes
-    const mids = hangers.filter((h) => h.layer === 2 && Math.abs(h.x0 - W / 2) > W * .12 && h.x0 > W * .06 && h.x0 < W * .94);
-    mids.slice(0, small ? 4 : 7).forEach((h, i) => {
-      const y = lerp(H * .28, H * .52, r()), t = (h.base - y) / h.h, x = h.x0 + h.lean * t * t + (h.bow || 0) * 4 * t * (1 - t), u = (small ? 1 : 1.2) * G.scale * 1.2;
-      const side = x < W / 2 ? 1 : -1, lx = x + side * 26 * u, ly = y + 34 * u;
-      s += `<path d="M${f1(x)} ${f1(y)}Q${f1((x + lx) / 2)} ${f1(y - 6)} ${f1(lx)} ${f1(ly - 18 * u)}" stroke="${tone('#3a2a1a')}" stroke-width="1.2" fill="none"/>
-        <g class="plantern" style="transform-origin:${f1(lx)}px ${f1(ly - 18 * u)}px;animation-delay:${f1(-r() * 3)}s">
-        <ellipse cx="${f1(lx)}" cy="${f1(ly)}" rx="${f1(46 * u)}" ry="${f1(46 * u)}" fill="url(#lampg)" opacity="${f1(.25 + P.lamp * .75)}" class="lampglow"/>
-        <rect x="${f1(lx - 7 * u)}" y="${f1(ly - 18 * u)}" width="${f1(14 * u)}" height="${f1(4 * u)}" rx="1" fill="#3a2a1a"/>
-        <ellipse cx="${f1(lx)}" cy="${f1(ly)}" rx="${f1(11 * u)}" ry="${f1(15 * u)}" fill="${i % 3 === 2 ? '#3b6fc4' : '#d8432f'}"/>
-        <ellipse cx="${f1(lx)}" cy="${f1(ly)}" rx="${f1(7 * u)}" ry="${f1(12 * u)}" fill="#ffd77a" opacity="${f1(.3 + P.lamp * .6)}"/>
-        <rect x="${f1(lx - 7 * u)}" y="${f1(ly + 14 * u)}" width="${f1(14 * u)}" height="${f1(4 * u)}" rx="1" fill="#3a2a1a"/>
-        <path d="M${f1(lx)} ${f1(ly + 18 * u)}v${f1(10 * u)}" stroke="#e8b04a" stroke-width="2"/></g>`;
-    });
+    // 청사초롱 lanterns planted along both edges of the path, shrinking into the distance
+    for (let i = 0; i < (small ? 4 : 5); i++) {
+      const t = Math.pow((i + .6) / (small ? 4.4 : 5.4), 1.5), y = lerp(pt, H, t), hw = lerp(pw0, pw1, t) + lerp(6, 26, t);
+      for (const sd of [-1, 1]) {
+        const x = W / 2 + sd * hw, u = lerp(.35, 1.25, t) * Math.max(.85, G.scale), blue = (i + (sd > 0 ? 1 : 0)) % 2 === 1;
+        if (small && t > .78) continue;          // keep the nearest ones clear of the button
+        s += `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f1(u)})">
+          <ellipse cx="0" cy="2" rx="60" ry="16" fill="#ffcf6a" opacity="${f1(.08 + P.lamp * .35)}" class="lampglow"/>
+          <ellipse cx="0" cy="-46" rx="44" ry="44" fill="url(#lampg)" opacity="${f1(.15 + P.lamp * .8)}" class="lampglow"/>
+          <ellipse cx="0" cy="2" rx="8" ry="3" fill="#000" opacity=".3"/>
+          <rect x="-2.5" y="-36" width="5" height="38" rx="2" fill="${tone('#4a3420')}"/>
+          <rect x="-12" y="-40" width="24" height="4" rx="1.5" fill="#2e2016"/>
+          <path d="M-12 -40 C-15 -52 -15 -64 -12 -74 L12 -74 C15 -64 15 -52 12 -40 Z" fill="${blue ? '#2f5fae' : '#c8382a'}"/>
+          <path d="M-12 -40 C-15 -52 -15 -58 -14 -57 L14 -57 C15 -58 15 -52 12 -40 Z" fill="${blue ? '#c8382a' : '#2f5fae'}"/>
+          <path d="M-8 -43 C-10 -52 -10 -64 -8 -71 L8 -71 C10 -64 10 -52 8 -43 Z" fill="#ffd77a" opacity="${f1(.25 + P.lamp * .65)}"/>
+          <rect x="-12" y="-78" width="24" height="4" rx="1.5" fill="#2e2016"/>
+          <path d="M-9 -78 L0 -86 L9 -78 Z" fill="#2e2016"/></g>`;
+      }
+    }
     const spots = small ? [[.2, .9], [.8, .9]] : [[.3, groundY / H + .05], [.7, groundY / H + .05], [.14, .9], [.86, .9]];
     for (const [qx, qy] of spots) s += stoneLantern(W * qx, H * qy, (qy > .88 ? 1.25 : .85) * Math.max(.8, G.scale), P.lamp, tone);
   }
@@ -1206,22 +1211,79 @@ function dropLeaf() {
 let audio = null;
 function startSound() {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
+  // wind through the bamboo
   const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
   let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
   const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 900; filter.Q.value = .6;
   const gain = ctx.createGain(); gain.gain.value = 0;
   const lfo = ctx.createOscillator(); lfo.frequency.value = .09; const lg = ctx.createGain(); lg.gain.value = 500; lfo.connect(lg).connect(filter.frequency);
-  src.connect(filter).connect(gain).connect(ctx.destination); src.start(); lfo.start();
-  gain.gain.linearRampToValueAtTime(.26, ctx.currentTime + 2);
+  src.connect(filter).connect(gain).connect(master); src.start(); lfo.start();
+  gain.gain.linearRampToValueAtTime(.2, ctx.currentTime + 2);
   audio = { ctx, gain };
+  // music bus with a soft echo
+  const mus = ctx.createGain(); mus.gain.value = 0; mus.gain.linearRampToValueAtTime(.55, ctx.currentTime + 4);
+  const dl = ctx.createDelay(2); dl.delayTime.value = .42; const fb = ctx.createGain(); fb.gain.value = .38;
+  const dlf = ctx.createBiquadFilter(); dlf.type = 'lowpass'; dlf.frequency.value = 1800;
+  mus.connect(master); mus.connect(dl); dl.connect(dlf).connect(fb).connect(dl); dlf.connect(master);
+  // 평조 pentatonic (궁상각치우) on D
+  const scale = [0, 2, 5, 7, 9];
+  const hz = (deg, oct) => 146.83 * Math.pow(2, (scale[((deg % 5) + 5) % 5] + 12 * (oct + Math.floor(deg / 5))) / 12);
+  const pad = (deg, t, dur) => {
+    for (const [d, o, det] of [[deg, 0, -4], [deg + 2, 0, 3], [deg, -1, 0]]) {
+      const osc = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+      osc.type = 'triangle'; osc.frequency.value = hz(d, o); osc.detune.value = det;
+      lp.type = 'lowpass'; lp.frequency.value = 700;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.045, t + dur * .35); g.gain.linearRampToValueAtTime(0, t + dur);
+      osc.connect(lp).connect(g).connect(mus); osc.start(t); osc.stop(t + dur + .1);
+    }
+  };
+  const pluck = (deg, oct, t, vel = 1) => {      // 가야금-ish: bright attack, quick decay, a little bend
+    const osc = ctx.createOscillator(), osc2 = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    const f = hz(deg, oct);
+    osc.type = 'triangle'; osc2.type = 'sine'; osc.frequency.setValueAtTime(f, t); osc2.frequency.setValueAtTime(f * 2, t);
+    if (Math.random() < .35) { osc.frequency.linearRampToValueAtTime(f * 1.06, t + .25); osc.frequency.linearRampToValueAtTime(f, t + .7); }   // 농현
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(600, t + 1.2);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.11 * vel, t + .008); g.gain.exponentialRampToValueAtTime(.0008, t + 2.6);
+    const g2 = ctx.createGain(); g2.gain.value = .25;
+    osc.connect(lp); osc2.connect(g2).connect(lp); lp.connect(g).connect(mus);
+    osc.start(t); osc2.start(t); osc.stop(t + 2.8); osc2.stop(t + 2.8);
+  };
+  let root = 0, next = ctx.currentTime + .5, melody = 2;
+  const schedule = () => {
+    if (ctx.state !== 'running') return;
+    const night = phase === 'night' || phase === 'dawn';
+    const bar = night ? 9 : 7;
+    while (next < ctx.currentTime + 4) {
+      pad(root, next, bar + 1.5);
+      // a few sparse notes per phrase, wandering by small steps
+      const n = night ? 2 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 3);
+      let t = next + .6 + Math.random();
+      for (let i = 0; i < n; i++) {
+        melody = Math.max(0, Math.min(9, melody + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
+        pluck(melody, night ? 1 : 1 + (melody > 6 ? 0 : 0), t, .7 + Math.random() * .3);
+        if (Math.random() < .25) pluck(melody + 2, 1, t + .18, .45);
+        t += (bar - 1.5) / n * (.7 + Math.random() * .6);
+      }
+      root = [0, 3, 4, 2, 0, 1][Math.floor(Math.random() * 6)];
+      next += bar;
+    }
+  };
+  schedule(); setInterval(schedule, 1000);
+  // birds by day, crickets by night
   setInterval(() => {
     if (ctx.state !== 'running' || Math.random() < .5) return;
-    const t = ctx.currentTime, n = 2 + Math.floor(Math.random() * 3), base = 2600 + Math.random() * 1400;
-    for (let i = 0; i < n; i++) { const o = ctx.createOscillator(), g = ctx.createGain(), st = t + i * .13; o.frequency.setValueAtTime(base, st); o.frequency.exponentialRampToValueAtTime(base * 1.35, st + .08); g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.04, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .11); o.connect(g).connect(ctx.destination); o.start(st); o.stop(st + .12); }
+    const t = ctx.currentTime;
+    if (phase === 'night') {
+      for (let i = 0; i < 6; i++) { const o = ctx.createOscillator(), g = ctx.createGain(), st = t + i * .07; o.frequency.value = 4400; g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.012, st + .01); g.gain.linearRampToValueAtTime(0, st + .045); o.connect(g).connect(master); o.start(st); o.stop(st + .05); }
+      return;
+    }
+    const n = 2 + Math.floor(Math.random() * 3), base = 2600 + Math.random() * 1400;
+    for (let i = 0; i < n; i++) { const o = ctx.createOscillator(), g = ctx.createGain(), st = t + i * .13; o.frequency.setValueAtTime(base, st); o.frequency.exponentialRampToValueAtTime(base * 1.35, st + .08); g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.03, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .11); o.connect(g).connect(master); o.start(st); o.stop(st + .12); }
   }, 2600);
 }
-function whoosh(k) { if (!audio) return; const { ctx, gain } = audio, t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(.26 + k, t + .4); gain.gain.linearRampToValueAtTime(.26, t + 2.2); }
+function whoosh(k) { if (!audio) return; const { ctx, gain } = audio, t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(.2 + k, t + .4); gain.gain.linearRampToValueAtTime(.2, t + 2.2); }
 $('soundBtn').onclick = () => {
   const b = $('soundBtn');
   if (!audio) { startSound(); b.textContent = '🔊'; b.setAttribute('aria-pressed', 'true'); return; }
