@@ -4,212 +4,229 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>대나무숲</title>
-<meta name="description" content="임금님 귀는 당나귀 귀! 울창한 대나무숲 산책로에서 속마음을 털어놓으면 빛나는 잎이 되어 하루 동안 머물다 바람에 날아가요.">
-<meta name="theme-color" content="#dcefd0">
+<meta name="description" content="대나무숲 입구에서 길을 골라 걸어 들어가, 울창한 대숲에 속마음을 털어놓아요. 임금님 귀는 당나귀 귀!">
+<meta name="theme-color" content="#2f5a2c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎋</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #22402b; --muted: #5a7862; --panel: rgba(255, 255, 250, .66); --line: rgba(60, 110, 70, .18);
-    --accent: #3f9158; --accent-ink: #ffffff; --danger: #c65446;
+    --ink: #22402b; --muted: #5a7862; --panel: rgba(255, 255, 248, .78); --line: rgba(60, 110, 70, .2);
+    --accent: #3f9158; --gold: #e2b04a; --danger: #c65446;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body {
-    background: #dcefd0; color: var(--ink); overflow: hidden; -webkit-tap-highlight-color: transparent;
-    font-family: "Gowun Dodum", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  }
+  body { background: #2f5a2c; color: var(--ink); overflow: hidden; -webkit-tap-highlight-color: transparent; user-select: none;
+    font-family: "Gowun Dodum", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
   button { font: inherit; color: inherit; cursor: pointer; }
+  .view { position: fixed; inset: 0; overflow: hidden; }
+  [hidden] { display: none !important; }
 
-  /* ---------- scene ---------- */
-  #scene { position: fixed; inset: 0; overflow: hidden; }
-  .sky { position: absolute; inset: 0;
-    background:
-      radial-gradient(ellipse 50% 40% at 78% 0%, rgba(255, 252, 225, .95), transparent 70%),
-      linear-gradient(180deg, #f6f8e4 0%, #e3f1d2 40%, #cfe6bd 68%, #bcdca8 100%); }
-  .layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-  .haze { position: absolute; left: 0; right: 0; pointer-events: none; }
+  /* ================= map ================= */
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  #mapSvg { display: block; }
+  #mapChars { position: absolute; inset: 0; }
+
+  /* ================= people ================= */
+  .person { position: absolute; left: 0; top: 0; width: 40px; height: 62px; margin: -62px 0 0 -20px; transform-origin: 50% 100%; pointer-events: none; }
+  .person .shadow { position: absolute; left: 7px; right: 7px; bottom: -3px; height: 7px; border-radius: 50%; background: rgba(20, 40, 15, .3); }
+  .person .spr { position: absolute; inset: 0; transform-origin: 50% 100%; }
+  .person.flip .spr { transform: scaleX(-1); }
+  .person svg { position: absolute; inset: 0; overflow: visible; }
+  .person .vb { display: none; } .person.back .vb { display: block; } .person.back .vf { display: none; }
+  .person .lg, .person .arm { transform-box: fill-box; }
+  .person .arm { transform-origin: 50% 8%; transition: transform .25s; }
+  .person.walking .bobber { animation: pbob .36s ease-in-out infinite alternate; }
+  @keyframes pbob { to { transform: translateY(-1.6px); } }
+  .person.walking .lg1 { animation: legs .36s ease-in-out infinite alternate; }
+  .person.walking .lg2 { animation: legs .36s ease-in-out infinite alternate-reverse; }
+  @keyframes legs { from { transform: translateY(0); } to { transform: translateY(-2.6px); } }
+  .person.walking .a1 { animation: swing .36s ease-in-out infinite alternate; }
+  .person.walking .a2 { animation: swing .36s ease-in-out infinite alternate-reverse; }
+  @keyframes swing { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+  .person .eyes { animation: blink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+  .person .mo { display: none; }
+  .person .tag { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -2px) scale(var(--inv, 1)); transform-origin: 50% 100%; font-size: 10px; font-weight: 700; color: #fff; background: var(--accent);
+    padding: 0 6px; border-radius: 999px; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,.2); }
+  .person .bubble { position: absolute; left: 50%; bottom: calc(100% + 16px * var(--inv, 1)); transform-origin: 50% 100%; transform: translate(-50%, 4px) scale(calc(var(--inv, 1) * .6)); opacity: 0; transition: .25s; background: #fff; border-radius: 12px;
+    padding: 2px 8px; font-size: 13px; white-space: nowrap; box-shadow: 0 3px 10px rgba(20, 50, 20, .2); }
+  .person .bubble::after { content: ""; position: absolute; left: 50%; top: 100%; margin-left: -4px; border: 4px solid transparent; border-top-color: #fff; }
+  .person .bubble.show { opacity: 1; transform: translate(-50%, 0) scale(var(--inv, 1)); }
+  .person .bubble.loud { font-weight: 700; color: #c2412d; font-size: 15px; }
+  .person .bubble.soft { color: var(--muted); font-style: italic; }
+  /* telling motions (seen from behind) */
+  .person.m-whisper .spr { animation: lean .8s ease-in-out 3 alternate; }
+  @keyframes lean { to { transform: translateY(-3px) scale(.96) rotate(-3deg); } }
+  .person.m-whisper .a1 { transform: rotate(170deg); }
+  .person.m-shout .spr { animation: jump .16s ease-in-out 12 alternate; }
+  @keyframes jump { to { transform: translateY(-9px) scale(1.06, .96); } }
+  .person.m-shout .a1 { transform: rotate(155deg); } .person.m-shout .a2 { transform: rotate(-155deg); }
+  .person.m-shout .mo { display: inline; } .person.m-shout .ms { display: none; }
+  .person.m-sigh .spr { animation: slump 2.4s ease-in-out forwards; }
+  @keyframes slump { 30% { transform: translateY(-2px) scaleY(1.04); } 100% { transform: translateY(1px) scale(1.04, .9); } }
+  .person.m-sigh .eyes { animation: none; transform: scaleY(.15); }
+
+  /* ================= header / panels ================= */
+  .hud { position: fixed; z-index: 20; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 6px 20px rgba(10, 30, 10, .18); }
+  #top { top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; pointer-events: none; }
+  #top > * { pointer-events: auto; }
+  .titlecard { padding: 8px 14px 7px; }
+  .titlecard h1 { margin: 0; font-family: "Gowun Batang", serif; font-size: 19px; letter-spacing: .08em; }
+  .titlecard .sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+  .tools { display: flex; gap: 6px; }
+  .pill { white-space: nowrap; padding: 7px 12px; font-size: 14px; border-radius: 999px; }
+  .pill:hover { border-color: var(--accent); }
+  #backBtn { margin-right: auto; }
+
+  #pathPanel { left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); padding: 12px; text-align: center; }
+  #pathPanel .q { font-family: "Gowun Batang", serif; font-weight: 700; margin-bottom: 9px; font-size: 15px; }
+  #pathPanel .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .pathBtn { border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 9px 4px 7px; transition: .15s; }
+  .pathBtn:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .pathBtn b { display: block; font-size: 15px; }
+  .pathBtn small { color: var(--muted); font-size: 11.5px; }
+  #pathPanel.walking .row { display: none; }
+
+  /* ================= grove ================= */
+  #grove .layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  #gL0 { filter: blur(3px); } #gL1 { filter: blur(1.4px); }
+  .gsky { position: absolute; inset: 0; }
   .beams { position: absolute; inset: -20% -10% 0 0; pointer-events: none; mix-blend-mode: soft-light; }
-  .beam { position: absolute; top: -10%; width: var(--bw); height: 130%; left: var(--bx); transform: rotate(24deg); transform-origin: top;
-    background: linear-gradient(180deg, rgba(255, 255, 235, .95), rgba(255, 255, 235, .35) 60%, transparent);
-    filter: blur(6px); animation: shimmer var(--bd) ease-in-out var(--bdl) infinite alternate; }
-  @keyframes shimmer { from { opacity: .35; } to { opacity: .9; } }
-  .mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fffbe0; box-shadow: 0 0 6px 2px rgba(255, 250, 210, .8);
-    pointer-events: none; animation: mote var(--md) ease-in-out var(--mdl) infinite alternate; opacity: .8; }
-  @keyframes mote { to { transform: translate(var(--mx), var(--my)); opacity: .2; } }
-
+  .beam { position: absolute; top: -10%; width: var(--bw); height: 130%; left: var(--bx); transform: rotate(22deg); transform-origin: top;
+    background: linear-gradient(180deg, rgba(255, 255, 230, .95), rgba(255, 255, 230, .3) 60%, transparent); filter: blur(8px);
+    animation: shimmer var(--bd) ease-in-out var(--bdl) infinite alternate; }
+  @keyframes shimmer { from { opacity: .3; } to { opacity: .85; } }
+  .mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fffbe0; box-shadow: 0 0 6px 2px rgba(255, 250, 210, .7);
+    pointer-events: none; animation: mote var(--md) ease-in-out var(--mdl) infinite alternate; }
+  @keyframes mote { to { transform: translate(var(--mx), var(--my)); opacity: .15; } }
   .sw { animation: sway var(--d) ease-in-out var(--dl) infinite alternate; }
   @keyframes sway { from { transform: rotate(calc(var(--a) * -1)); } to { transform: rotate(var(--a)); } }
+  #grove.gust .sw { --a: 2.6deg !important; }
+  #groveChars { position: absolute; inset: 0; pointer-events: none; }
 
-  /* message leaves */
+  /* message leaves: blink softly like fireflies */
   .msg { pointer-events: auto; cursor: pointer; outline: none; }
   .msg .flut { animation: flutter var(--d) ease-in-out var(--dl) infinite alternate; }
-  @keyframes flutter { from { transform: rotate(-6deg); } to { transform: rotate(7deg); } }
-  .msg .halo { animation: breathe 3.2s ease-in-out var(--dl) infinite; }
-  @keyframes breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-  .msg .spark { animation: spark 2.4s ease-in-out var(--dl) infinite; transform-box: fill-box; transform-origin: center; }
-  @keyframes spark { 0%, 70%, 100% { opacity: 0; transform: scale(.3); } 80% { opacity: 1; transform: scale(1); } }
-  .msg:hover .body, .msg:focus-visible .body { filter: brightness(1.12) drop-shadow(0 0 4px #fff); }
-  .msg.fresh .halo { animation: fresh 1.1s ease-out 4; transform-box: fill-box; transform-origin: center; }
-  @keyframes fresh { 0% { opacity: 1; transform: scale(1); } 100% { opacity: .5; transform: scale(1.8); } }
+  @keyframes flutter { from { transform: rotate(-5deg); } to { transform: rotate(6deg); } }
+  .msg .halo { opacity: .2; animation: ffly var(--fd) ease-in-out var(--fdl) infinite; }
+  .msg .lit { opacity: 0; animation: ffly2 var(--fd) ease-in-out var(--fdl) infinite; }
+  @keyframes ffly { 0%, 100% { opacity: .18; } 10% { opacity: 1; } 18% { opacity: .45; } 26% { opacity: .9; } 40% { opacity: .2; } }
+  @keyframes ffly2 { 0%, 100% { opacity: .08; } 10% { opacity: .85; } 18% { opacity: .3; } 26% { opacity: .7; } 40% { opacity: .1; } }
+  .msg.mine .grow { transform: scale(1.18); }
+  .msg.mine .halo { opacity: .4; } .msg.mine .lit { opacity: .25; }
+  .msg:hover .lit, .msg:focus-visible .lit { animation: none; opacity: .7; }
+  .msg:hover .halo, .msg:focus-visible .halo { animation: none; opacity: .9; }
+  .msg.bloom .grow { animation: bloom 2.8s cubic-bezier(.2, .9, .3, 1) forwards; }
+  @keyframes bloom { 0% { transform: scale(1); } 20% { transform: scale(2.2); } 55% { transform: scale(1.15); } 100% { transform: scale(1.18); } }
+  .msg.bloom .halo { animation: flash 2.8s ease-out forwards; }
+  .msg.bloom .lit { animation: flash 2.8s ease-out forwards; }
+  @keyframes flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: .2; } }
+  .spark, .burst { opacity: 0; }
+  .msg.bloom .burst { animation: burst 1.6s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+  @keyframes burst { 0% { opacity: 0; transform: scale(.2); } 15% { opacity: .95; } 100% { opacity: 0; transform: scale(2.2); } }
+  .msg.bloom .spark { animation: spark 1.4s ease-out .2s forwards; }
+  @keyframes spark { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(.3); } }
 
-  /* walkers */
-  #walkers { position: absolute; inset: 0; pointer-events: none; }
-  .walker { position: absolute; left: 0; top: 0; width: 44px; height: 54px; margin: -54px 0 0 -22px; transform-origin: 50% 100%; will-change: transform; }
-  .walker .shadow { position: absolute; left: 8px; right: 8px; bottom: -3px; height: 7px; border-radius: 50%; background: rgba(60, 80, 40, .25); }
-  .walker .fig { position: absolute; inset: 0; transform-origin: 50% 100%; }
-  .walker.flip .fig { transform: scaleX(-1); }
-  .walker .bob { position: absolute; inset: 0; }
-  .walker.walking .bob { animation: bob .42s ease-in-out infinite alternate; }
-  @keyframes bob { from { transform: translateY(0) rotate(-3deg); } to { transform: translateY(-3px) rotate(3deg); } }
-  .walker.walking .ft1 { animation: step .42s ease-in-out infinite alternate; }
-  .walker.walking .ft2 { animation: step .42s ease-in-out infinite alternate-reverse; }
-  @keyframes step { from { transform: translateY(0); } to { transform: translateY(-3px); } }
-  .walker .eyes { animation: blink 4.5s infinite; transform-box: fill-box; transform-origin: center; }
-  @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
-  .walker.cheer .bob { animation: cheer .35s ease-in-out 4 alternate; }
-  @keyframes cheer { to { transform: translateY(-9px); } }
-  .tag { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -4px); font-size: 11px; font-weight: 700; color: #fff; background: var(--accent);
-    padding: 1px 7px; border-radius: 999px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
-  .bubble { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -6px) scale(.6); opacity: 0; transition: .25s; background: #fff; border-radius: 14px;
-    padding: 3px 8px; font-size: 15px; white-space: nowrap; box-shadow: 0 3px 10px rgba(30, 60, 30, .18); }
-  .bubble::after { content: ""; position: absolute; left: 50%; top: 100%; margin-left: -5px; border: 5px solid transparent; border-top-color: #fff; }
-  .bubble.show { opacity: 1; transform: translate(-50%, -6px) scale(1); }
-  .walker.me .bubble { bottom: calc(100% + 18px); }
+  #kingBtn { left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%) scale(.9); opacity: 0; pointer-events: none;
+    border: 0; border-radius: 999px; padding: 14px 26px; font-family: "Gowun Batang", serif; font-weight: 700; font-size: 18px; letter-spacing: .04em; color: #4a3108;
+    background: linear-gradient(180deg, #ffe9a8, #f1c457); box-shadow: 0 8px 24px rgba(120, 80, 10, .35), inset 0 1px 0 rgba(255,255,255,.7); transition: .4s cubic-bezier(.2, 1.4, .4, 1); white-space: nowrap; }
+  #kingBtn.ready { opacity: 1; transform: translateX(-50%) scale(1); pointer-events: auto; animation: glowbtn 2.4s ease-in-out .4s infinite; }
+  @keyframes glowbtn { 50% { box-shadow: 0 8px 30px rgba(241, 196, 87, .8), inset 0 1px 0 rgba(255,255,255,.7); } }
 
-  /* telling motions */
-  .walker .bob { transform-origin: 50% 100%; }
-  .walker .mo { display: none; }
-  .walker.m-whisper .bob { animation: whisper .9s ease-in-out 3 alternate; }
-  @keyframes whisper { to { transform: rotate(14deg) translateY(2px); } }
-  .walker.m-shout .bob { animation: shout .16s ease-in-out 12 alternate; }
-  @keyframes shout { from { transform: translateY(0) scale(1); } to { transform: translateY(-11px) scale(1.14, .94); } }
-  .walker.m-shout .mo { display: inline; } .walker.m-shout .ms { display: none; }
-  .walker.m-sigh .bob { animation: sigh 2.4s ease-in-out 1 forwards; }
-  @keyframes sigh { 30% { transform: translateY(-3px) scaleY(1.05); } 100% { transform: translateY(2px) scale(1.04, .88); } }
-  .walker.m-sigh .eyes { animation: none; transform: scaleY(.2); }
-  .bubble.loud { font-size: 17px; font-weight: 700; color: #c2412d; padding: 4px 10px; }
-  .bubble.soft { font-size: 13px; color: var(--muted); font-style: italic; }
-  #scene.gust .sw { --a: 3deg !important; }
-
-  #pathHit { position: absolute; left: 0; right: 0; pointer-events: auto; cursor: pointer; }
-
-  .falling { position: fixed; z-index: 4; pointer-events: none; animation: fall var(--fd) linear forwards; }
-  @keyframes fall { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 10% { opacity: .85; }
-    50% { transform: translate(calc(var(--fx) * .5 + 40px), 55vh) rotate(260deg); }
-    100% { transform: translate(var(--fx), 105vh) rotate(560deg); opacity: 0; } }
-
-  /* ---------- header ---------- */
-  header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding: max(14px, env(safe-area-inset-top)) 16px 10px;
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; pointer-events: none; }
-  header > * { pointer-events: auto; }
-  .titlecard { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 9px 14px 8px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-  h1 { margin: 0; font-family: "Gowun Batang", serif; font-weight: 700; font-size: 22px; letter-spacing: .1em; }
-  .sub { color: var(--muted); font-size: 12.5px; margin-top: 1px; }
-  .tools { display: flex; gap: 6px; }
-  .iconbtn { white-space: nowrap; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; font-size: 14px;
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-  .iconbtn:hover { border-color: var(--accent); }
-
-  .empty { position: fixed; top: 30vh; left: 0; right: 0; text-align: center; z-index: 5; pointer-events: none; padding: 0 16px; }
-  .empty span { display: inline-block; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 18px; font-family: "Gowun Batang", serif; font-size: 16px; line-height: 1.7; backdrop-filter: blur(8px); }
-
-  /* ---------- composer ---------- */
-  .composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
-  .composer form { max-width: 600px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end;
-    background: rgba(255, 255, 250, .82); border: 1px solid var(--line); border-radius: 22px; padding: 8px 8px 8px 12px;
-    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(40, 80, 40, .18); }
-  .composer form:focus-within { border-color: rgba(63, 145, 88, .55); }
-  .composer textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink);
-    font: 16px/1.5 "Gowun Batang", serif; padding: 8px 4px; max-height: 120px; }
-  .composer textarea::placeholder { color: #86a08c; }
-  .count { font-size: 12px; color: var(--muted); align-self: center; min-width: 52px; text-align: right; }
+  /* ================= sheets & dialogs ================= */
+  dialog { border: 1px solid var(--line); border-radius: 22px; background: rgba(255, 255, 248, .95); color: var(--ink); padding: 22px 20px 18px;
+    width: min(460px, calc(100vw - 24px)); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 24px 60px rgba(20, 50, 20, .35); user-select: text; }
+  dialog[open] { animation: rise .28s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
+  dialog::backdrop { background: rgba(20, 40, 20, .3); }
+  .close { position: absolute; top: 10px; right: 10px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; padding: 6px; }
+  #sheet h2 { font-family: "Gowun Batang", serif; font-size: 19px; margin: 0 0 12px; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .mode { border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 10px 6px; text-align: center; transition: .15s; }
+  .mode .e { font-size: 24px; display: block; }
+  .mode b { display: block; font-size: 14.5px; margin: 2px 0; }
+  .mode small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; word-break: keep-all; }
+  .mode[aria-checked="true"] { border-color: var(--mc); background: color-mix(in srgb, var(--mc) 10%, #fff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mc) 18%, transparent); }
+  #sheet textarea { width: 100%; resize: none; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; font: 16px/1.6 "Gowun Batang", serif; color: var(--ink);
+    background: #fff; outline: 0; min-height: 110px; }
+  #sheet textarea:focus { border-color: var(--mc, var(--accent)); }
+  .sheetfoot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
+  .count { font-size: 12.5px; color: var(--muted); }
   .count.over { color: var(--danger); }
-  .modes { max-width: 600px; margin: 0 auto 8px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-  .modes button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 13px; font-size: 14px;
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: .15s; }
-  .modes button[aria-checked="true"] { background: var(--mode); color: #fff; border-color: var(--mode); font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
-  .shout { border: 0; border-radius: 16px; padding: 10px 18px; background: var(--mode, var(--accent)); color: var(--accent-ink); font-weight: 700; white-space: nowrap; transition: transform .15s, opacity .2s, background .2s; }
-  .shout:active { transform: scale(.96); }
-  .shout:disabled { opacity: .45; cursor: default; }
+  #sendBtn { border: 0; border-radius: 14px; padding: 11px 22px; font-weight: 700; color: #fff; background: var(--mc, var(--accent)); }
+  #sendBtn:disabled { opacity: .45; cursor: default; }
 
-  /* ---------- dialog ---------- */
-  dialog { border: 1px solid var(--line); border-radius: 22px; background: rgba(255, 255, 248, .92); color: var(--ink); padding: 24px 22px 18px;
-    width: min(440px, calc(100vw - 32px)); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 24px 60px rgba(30, 60, 30, .3); }
-  dialog[open] { animation: rise .25s ease-out; }
-  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
-  dialog::backdrop { background: rgba(40, 70, 40, .25); }
+  .mode-label { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; margin-bottom: 10px; }
   .leaf-text { font-family: "Gowun Batang", serif; font-size: 19px; line-height: 1.8; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 0 0 18px; }
-  .mode-label { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; margin-bottom: 10px; }
   .leaf-text.loud { font-weight: 700; }
-  .meta { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 0 24px 14px 0; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 0 24px 12px 0; }
   .actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-  .heard { border: 1.5px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 9px 18px; font-weight: 700; transition: .2s; }
+  .heard { border: 1.5px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 9px 18px; font-weight: 700; }
   .heard.done { background: var(--accent); color: #fff; }
-  .heard:disabled { cursor: default; }
   .linkbtn { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 6px; text-decoration: underline; }
-  .care { margin: 0 0 16px; padding: 11px 13px; border-radius: 12px; background: rgba(63, 145, 88, .08); border: 1px solid var(--line); font-size: 14px; line-height: 1.65; }
+  .care { margin: 0 0 14px; padding: 11px 13px; border-radius: 12px; background: rgba(63, 145, 88, .08); border: 1px solid var(--line); font-size: 14px; line-height: 1.65; }
   .care a { color: var(--accent); font-weight: 700; }
-  .about h2 { font-family: "Gowun Batang", serif; margin: 0 0 12px; font-size: 21px; letter-spacing: .06em; }
-  .about ul { padding-left: 18px; margin: 0 0 16px; line-height: 1.85; font-size: 14.5px; }
-  .close { position: absolute; top: 12px; right: 12px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; padding: 6px; }
+  .about h2 { font-family: "Gowun Batang", serif; margin: 0 0 12px; font-size: 21px; }
+  .about ul { padding-left: 18px; margin: 0 0 14px; line-height: 1.85; font-size: 14.5px; }
 
-  .toast { position: fixed; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 70px); transform: translate(-50%, -10px); z-index: 20; background: rgba(255, 255, 250, .92); border: 1px solid var(--line);
-    padding: 11px 18px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px;
-    box-shadow: 0 8px 24px rgba(30, 60, 30, .18); }
+  .toast { position: fixed; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 64px); transform: translate(-50%, -8px); z-index: 40; background: rgba(255, 255, 250, .94);
+    border: 1px solid var(--line); padding: 10px 16px; border-radius: 14px; opacity: 0; transition: .3s; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; font-size: 14.5px;
+    box-shadow: 0 8px 24px rgba(20, 50, 20, .2); }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #fade { position: fixed; inset: 0; z-index: 30; background: #f4f8e8; opacity: 0; pointer-events: none; transition: opacity .55s; }
+  #fade.on { opacity: 1; pointer-events: auto; }
 
-  @media (max-width: 520px) {
-    h1 { font-size: 19px; } .sub { font-size: 11.5px; }
-    .count { display: none; }
-  }
   @media (prefers-reduced-motion: reduce) {
-    .sw, .flut, .halo, .spark, .beam, .mote, .falling, .bob, .ft1, .ft2 { animation: none !important; }
+    .sw, .flut, .halo, .lit, .beam, .mote, .bobber, .lg1, .lg2, .a1, .a2 { animation: none !important; }
   }
 </style>
 </head>
 <body>
-<div id="scene">
-  <div class="sky"></div>
-  <svg class="layer" id="L0"></svg>
-  <div class="haze" id="haze0"></div>
-  <svg class="layer" id="L1"></svg>
+
+<!-- ============ entrance map ============ -->
+<div class="view" id="map">
+  <div id="world"><svg id="mapSvg"></svg><div id="mapChars"></div></div>
+</div>
+
+<!-- ============ grove at the end of a path ============ -->
+<div class="view" id="grove" hidden>
+  <div class="gsky" id="gsky"></div>
+  <svg class="layer" id="gL0"></svg>
+  <svg class="layer" id="gL1"></svg>
   <div class="beams" id="beams"></div>
-  <svg class="layer" id="L2"></svg>
-  <svg class="layer" id="ground"></svg>
-  <div id="pathHit" title="여기를 누르면 내 캐릭터가 걸어가요"></div>
-  <div id="walkers"></div>
-  <svg class="layer" id="L3"></svg>
+  <svg class="layer" id="gL2"></svg>
+  <svg class="layer" id="gGround"></svg>
+  <div id="groveChars"></div>
+  <svg class="layer" id="gL3"></svg>
   <div id="motes"></div>
 </div>
 
-<header>
-  <div class="titlecard">
-    <h1>대나무숲</h1>
-    <div class="sub" id="status">산책로를 여는 중…</div>
-  </div>
+<div class="hud" id="top">
+  <button class="card pill" id="backBtn" hidden>← 광장으로</button>
+  <div class="card titlecard"><h1 id="title">대나무숲</h1><div class="sub" id="status">입장하는 중…</div></div>
   <div class="tools">
-    <button class="iconbtn" id="soundBtn" aria-pressed="false" title="숲 소리">🔈</button>
-    <button class="iconbtn" id="aboutBtn">숲 이야기</button>
+    <button class="card pill" id="soundBtn" aria-pressed="false" title="숲 소리">🔈</button>
+    <button class="card pill" id="aboutBtn">안내</button>
   </div>
-</header>
-
-<div class="empty" id="empty" hidden><span>아직 숲이 조용해요.<br>대나무에게 처음으로 속마음을 털어놓아 보세요.</span></div>
-
-<div class="composer">
-  <div class="modes" role="radiogroup" aria-label="털어놓는 방법">
-    <button type="button" role="radio" data-mode="whisper" aria-checked="true" style="--mode:#3f9158">🤫 속삭이기</button>
-    <button type="button" role="radio" data-mode="shout" aria-checked="false" style="--mode:#e0663f">📣 소리치기</button>
-    <button type="button" role="radio" data-mode="sigh" aria-checked="false" style="--mode:#6f86c6">😮‍💨 한숨 쉬기</button>
-  </div>
-  <form id="form" autocomplete="off">
-    <textarea id="text" rows="1" maxlength="400" placeholder="아무에게도 못 한 말을 숲에 외쳐 보세요" aria-label="털어놓을 말"></textarea>
-    <span class="count" id="count">0 / 200</span>
-    <button class="shout" id="shoutBtn" type="submit">외치기</button>
-  </form>
 </div>
+
+<div class="hud card" id="pathPanel">
+  <div class="q" id="pathQ">어느 길로 걸어 볼까요?</div>
+  <div class="row" id="pathRow"></div>
+</div>
+
+<button class="hud" id="kingBtn">👑 임금님 귀는 당나귀 귀</button>
+
+<dialog id="sheet">
+  <button class="close" data-close aria-label="닫기">×</button>
+  <h2>대나무에게 어떻게 털어놓을까요?</h2>
+  <div class="modes" role="radiogroup" id="modes"></div>
+  <textarea id="text" maxlength="400" placeholder=""></textarea>
+  <div class="sheetfoot"><span class="count" id="count">0 / 200</span><button id="sendBtn">보내기</button></div>
+</dialog>
 
 <dialog id="leafDlg">
   <button class="close" data-close aria-label="닫기">×</button>
@@ -217,44 +234,86 @@
   <div class="meta" id="leafMeta"></div>
   <p class="leaf-text" id="leafText"></p>
   <div class="care" id="leafCare" hidden></div>
-  <div class="actions">
-    <button class="heard" id="heardBtn">🍃 들었어요</button>
-    <button class="linkbtn" id="reportBtn">신고하기</button>
-  </div>
+  <div class="actions"><button class="heard" id="heardBtn">🍃 들었어요</button><button class="linkbtn" id="reportBtn">신고하기</button></div>
 </dialog>
 
 <dialog id="aboutDlg" class="about">
   <button class="close" data-close aria-label="닫기">×</button>
-  <h2>숲 이야기</h2>
+  <h2>대나무숲 안내</h2>
   <ul>
-    <li>여기는 아무에게도 못 한 속마음을 <b>대나무에게 털어놓는</b> 산책로예요. 임금님 귀는 당나귀 귀!</li>
-    <li>길 위의 친구들은 <b>지금 숲에 와 있는 사람들</b>이에요. 머리에 <b>나</b>라고 적힌 게 당신이에요. 길을 누르면 그쪽으로 걸어가요.</li>
-    <li>사연에 따라 <b>🤫 속삭이기 · 📣 소리치기 · 😮‍💨 한숨 쉬기</b> 중에 골라 털어놓을 수 있어요.</li>
-    <li>털어놓은 말은 빛나는 잎이 되어 <b>24시간 동안</b> 숲에 머물다 바람에 날아가요.</li>
-    <li>다른 사람은 <b>🍃 들었어요</b>로만 대답할 수 있어요. 댓글은 없어요.</li>
-    <li>가입도 이름도 없어요. IP 주소는 저장하지 않아요.</li>
+    <li>입구 광장에서 <b>세 갈래 길</b> 중 하나를 골라 걸어 들어가요. 광장을 누르면 그쪽으로 걸어가요.</li>
+    <li>길 끝 울창한 대숲에 서면 <b>👑 임금님 귀는 당나귀 귀</b> 버튼이 켜져요.</li>
+    <li>🤫 속삭이기 · 📣 소리치기 · 😮‍💨 한숨 쉬기 중에 골라 속마음을 털어놓으면, 대나무 잎 하나가 반짝이며 그 사연을 품어요.</li>
+    <li>사연을 품은 잎은 <b>24시간 동안</b> 반딧불처럼 깜빡이다가 바람에 날아가요. 누르면 읽을 수 있고, <b>🍃 들었어요</b>로만 대답할 수 있어요.</li>
+    <li>함께 걷는 사람들은 지금 숲에 와 있는 실제 방문자예요. 이름도 가입도 없고, IP 주소는 저장하지 않아요.</li>
     <li>개인정보, 링크, 거친 말은 남길 수 없어요. 신고가 3번 쌓이면 잎이 숨겨져요.</li>
   </ul>
   <div class="care">많이 힘들다면 혼자 견디지 않아도 괜찮아요. 자살예방상담전화 <a href="tel:109">109</a>, 청소년상담 <a href="tel:1388">1388</a>은 24시간 열려 있어요.</div>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="fade"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const MAX = 200;
 const SVGNS = 'http://www.w3.org/2000/svg';
-let leaves = [];
-let lifetime = 24 * 3600 * 1000;
-let serverOffset = 0;
-let hangers = [];
-let openLeaf = null;
-let G = {};               // scene geometry
+const MAX = 200;
 
+// ---------------- utils ----------------
+function rng(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hash(n) { let x = (n * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; x = Math.imul(x, 3266489917) >>> 0; x ^= x >>> 16; return (x >>> 0) / 4294967296; }
+function strHash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const f1 = (n) => Math.round(n * 10) / 10;
+function mix(c1, c2, t) {
+  const p = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const a = p(c1), b = p(c2);
+  return '#' + a.map((v, i) => Math.round(lerp(v, b[i], clamp(t, 0, 1))).toString(16).padStart(2, '0')).join('');
+}
+function leafPath(L, w) { return `M0 0C${f1(L * .18)} ${f1(-w)} ${f1(L * .62)} ${f1(-w * .9)} ${f1(L)} 0C${f1(L * .62)} ${f1(w * .55)} ${f1(L * .2)} ${f1(w * .7)} 0 0Z`; }
+function catmull(pts, seg = 14) {
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    for (let k = 0; k < seg; k++) {
+      const t = k / seg, t2 = t * t, t3 = t2 * t;
+      const f = (a, b, c, d) => .5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      out.push({ x: f(p0[0], p1[0], p2[0], p3[0]), y: f(p0[1], p1[1], p2[1], p3[1]) });
+    }
+  }
+  const l = pts[pts.length - 1]; out.push({ x: l[0], y: l[1] });
+  return out;
+}
+function distToPoly(x, y, poly) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length - 1; i++) {
+    const a = poly[i], b = poly[i + 1], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+    const t = clamp(((x - a.x) * dx + (y - a.y) * dy) / L2, 0, 1);
+    best = Math.min(best, Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t)));
+  }
+  return best;
+}
+const polyD = (poly) => 'M' + poly.map((p) => `${f1(p.x)} ${f1(p.y)}`).join('L');
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
+function toast(msg, ms = 2800) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), ms);
+}
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  let data = {}; try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error(data.error || '숲에 잠시 문제가 생겼어요.');
+  return data;
+}
+
+// ---------------- state ----------------
+let leaves = [];
+let lifetime = 24 * 3600 * 1000, serverOffset = 0;
+const now = () => Date.now() + serverOffset;
 let heardSet = new Set(store.get('bamboo.heard', []));
 let reportedSet = new Set(store.get('bamboo.reported', []));
 let mine = new Set(store.get('bamboo.mine', []));
@@ -263,464 +322,563 @@ const mySid = (() => {
   if (!/^[a-z0-9]{12,40}$/.test(s)) { s = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => (b % 36).toString(36)).join(''); try { sessionStorage.setItem('bamboo.sid', s); } catch {} }
   return s;
 })();
+let scene = 'map';          // 'map' | 'grove'
+let groveIdx = -1;          // which grove we're in
+let myPlace = 'plaza';
+let others = new Map();     // id -> { id, place }
 
-function toast(msg, ms = 2600) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), ms);
-}
-function hash(n) {
-  let x = (n * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; x = Math.imul(x, 3266489917) >>> 0; x ^= x >>> 16;
-  return (x >>> 0) / 4294967296;
-}
-function strHash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
-function rng(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-const lerp = (a, b, t) => a + (b - a) * t;
-const f1 = (n) => Math.round(n * 10) / 10;
-function mix(c1, c2, t) {
-  const p = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
-  const a = p(c1), b = p(c2);
-  return '#' + a.map((v, i) => Math.round(lerp(v, b[i], t)).toString(16).padStart(2, '0')).join('');
-}
-function leafPath(L, w) {
-  return `M0 0C${f1(L * .18)} ${f1(-w)} ${f1(L * .62)} ${f1(-w * .9)} ${f1(L)} 0C${f1(L * .62)} ${f1(w * .55)} ${f1(L * .2)} ${f1(w * .7)} 0 0Z`;
-}
-
-// ================= telling modes =================
-const MODES = {
-  whisper: { color: '#3f9158', btn: '속삭이기', ph: '대나무에게만 살짝 털어놓아 보세요', phS: '살짝 털어놓아 보세요', label: '🤫 속삭인 말',
-    fill: '#fffbe6', edge: '#d9a93a', halo: '#fff1a8', bubble: '소곤소곤…', bubbleCls: 'soft', reveal: 1500, wind: .15,
-    done: '대나무가 사락사락… 다 들었대요 🍃' },
-  shout:   { color: '#e0663f', btn: '소리치기', ph: '속 시원하게 소리쳐 보세요!', phS: '속 시원하게 소리쳐 보세요!', label: '📣 소리친 말',
-    fill: '#fff0e8', edge: '#e0663f', halo: '#ffc3a6', bubble: '임금님 귀는 당나귀 귀!!', bubbleOther: '으아아아!!', bubbleCls: 'loud', reveal: 900, wind: 1.1,
-    done: '대숲이 쩌렁쩌렁 울렸어요! 속이 좀 시원해졌길 📣' },
-  sigh:    { color: '#6f86c6', btn: '한숨 쉬기', ph: '한숨과 함께 내려놓고 싶은 말', phS: '한숨과 함께 내려놓을 말', label: '😮‍💨 한숨과 함께 놓고 간 말',
-    fill: '#eef3ff', edge: '#7f95d1', halo: '#d3e0ff', bubble: '후우…', bubbleCls: 'soft', reveal: 1700, wind: .35,
-    done: '한숨이 바람에 실려 갔어요. 오늘도 수고했어요 🌿' },
-};
-let currentMode = 'whisper';
-try { const m = localStorage.getItem('bamboo.mode'); if (MODES[m]) currentMode = m; } catch {}
-const modeOf = (leaf) => MODES[leaf.mode] ? leaf.mode : 'whisper';
-
-// ================= scene =================
-const LAYERS = [
-  { id: 'L0', every: 16, w: [3, 6],   h: [.5, .78],  cane: '#c3dfae', node: '#d9ecc6', leaf: '#b6d89c', leafLen: [16, 26], sway: .35, density: .8, baseK: .69 },
-  { id: 'L1', every: 30, w: [6, 10],  h: [.62, .9],  cane: '#93c47a', node: '#b9dca0', leaf: '#86bd6c', rim: '#b4dd94', leafLen: [24, 40], sway: .55, density: .85, baseK: .7 },
-  { id: 'L2', every: 62, w: [10, 15], h: [.8, 1.05], cane: '#5f9f4f', node: '#a6d38a', leaf: '#5a9e4a', rim: '#a5d983', leafLen: [38, 58], sway: .8, density: .9, baseK: .71, hang: true },
-  { id: 'L3', every: 0,  w: [18, 26], h: [1.1, 1.3], cane: '#3f7d3a', node: '#7fb96a', leaf: '#3c7a36', rim: '#8cc46f', leafLen: [64, 96], sway: 1, density: .95, baseK: 1.01, hang: true },
+// ================= world map (top-down, path runs up the screen) =================
+const WW = 1200, WH = 1760;
+const PLAZA = { x: 600, y: 1450, rx: 250, ry: 150 };
+const FORK = { x: 600, y: 1290 };
+const GROVES = [
+  { name: '바람 숲', path: '바람길', icon: '🍃', sky: ['#f3fae6', '#dff1cf', '#c3e2ad'], pts: [[600, 1300], [560, 1180], [400, 1070], [285, 880], [262, 640], [255, 380]] },
+  { name: '달빛 숲', path: '달빛길', icon: '🌙', sky: ['#fbf5e0', '#eaf0cc', '#cfe2ab'], pts: [[600, 1300], [600, 1110], [652, 910], [572, 690], [612, 480], [600, 300]] },
+  { name: '이슬 숲', path: '이슬길', icon: '💧', sky: ['#eef6f1', '#d9ece0', '#bcdcc5'], pts: [[600, 1300], [640, 1180], [800, 1070], [915, 880], [938, 640], [945, 380]] },
 ];
+GROVES.forEach((g) => { g.poly = catmull(g.pts); g.end = g.poly[g.poly.length - 1]; });
+const GATE_POLY = catmull([[600, WH + 40], [600, 1640], [600, 1560]], 4);
 
-function computeGeometry() {
-  const W = innerWidth, H = innerHeight;
-  const composerTop = H - (document.querySelector('.composer').offsetHeight || 80);
-  const pathBot = Math.min(H * .88, composerTop - 8);
-  const pathTop = Math.min(H * .72, pathBot - Math.max(70, H * .12));
-  G = { W, H, pathTop, pathBot, small: W < 600, scale: Math.min(1, Math.max(.72, W / 1100)) };
+function buildMap() {
+  const r = rng(2024);
+  const svg = $('mapSvg');
+  svg.setAttribute('viewBox', `0 0 ${WW} ${WH}`); svg.setAttribute('width', WW); svg.setAttribute('height', WH);
+  let s = `<defs>
+    <pattern id="tiles" width="34" height="22" patternUnits="userSpaceOnUse">
+      <rect width="34" height="22" fill="#d9caa3"/><rect x="1" y="1" width="15" height="9" rx="2" fill="#eee3c8"/><rect x="18" y="1" width="15" height="9" rx="2" fill="#e8dcbd"/>
+      <rect x="-8" y="12" width="15" height="9" rx="2" fill="#e8dcbd"/><rect x="9" y="12" width="15" height="9" rx="2" fill="#efe5cb"/><rect x="26" y="12" width="15" height="9" rx="2" fill="#eadfc2"/>
+    </pattern>
+    <radialGradient id="lamp"><stop offset="0" stop-color="#fff3c4" stop-opacity=".95"/><stop offset="1" stop-color="#ffd76a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="dapple"><stop offset="0" stop-color="#fffbe0" stop-opacity=".55"/><stop offset="1" stop-color="#fffbe0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="floor" cx=".5" cy=".55" r=".75"><stop offset="0" stop-color="#4f8a43"/><stop offset="1" stop-color="#2f5a2c"/></radialGradient>
+  </defs>`;
+  s += `<rect width="${WW}" height="${WH}" fill="url(#floor)"/>`;
+  for (let i = 0; i < 90; i++) s += `<ellipse cx="${f1(r() * WW)}" cy="${f1(r() * WH)}" rx="${f1(40 + r() * 90)}" ry="${f1(30 + r() * 60)}" fill="${r() < .5 ? '#2b5228' : '#5c9a4c'}" opacity=".25"/>`;
+
+  // paths: soft dirt with edges
+  const allPolys = [...GROVES.map((g) => g.poly), GATE_POLY];
+  for (const p of allPolys) s += `<path d="${polyD(p)}" fill="none" stroke="#7fa260" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>`;
+  for (const p of allPolys) s += `<path d="${polyD(p)}" fill="none" stroke="#b9a271" stroke-width="80" stroke-linecap="round" stroke-linejoin="round"/>`;
+  for (const p of allPolys) s += `<path d="${polyD(p)}" fill="none" stroke="#e8d9b1" stroke-width="68" stroke-linecap="round" stroke-linejoin="round"/>`;
+  for (const p of allPolys) s += `<path d="${polyD(p)}" fill="none" stroke="#f2e8cc" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>`;
+  // clearings at the ends
+  for (const g of GROVES) {
+    s += `<circle cx="${g.end.x}" cy="${g.end.y}" r="118" fill="#7fa260" opacity=".7"/><circle cx="${g.end.x}" cy="${g.end.y}" r="104" fill="#b9a271"/><circle cx="${g.end.x}" cy="${g.end.y}" r="96" fill="#e8d9b1"/>`;
+    for (let i = 0; i < 14; i++) { const a = r() * 6.28, d = r() * 80; s += `<ellipse cx="${f1(g.end.x + Math.cos(a) * d)}" cy="${f1(g.end.y + Math.sin(a) * d)}" rx="${f1(6 + r() * 8)}" ry="${f1(4 + r() * 4)}" fill="#d6c596"/>`; }
+  }
+  // pebbles along paths
+  for (const g of GROVES) for (let i = 0; i < g.poly.length; i += 2) {
+    const p = g.poly[i]; s += `<circle cx="${f1(p.x + (r() - .5) * 50)}" cy="${f1(p.y + (r() - .5) * 20)}" r="${f1(1.5 + r() * 2.5)}" fill="#cbb784"/>`;
+  }
+
+  // plaza: hedge ring, tiles, flower bed
+  s += `<ellipse cx="${PLAZA.x}" cy="${PLAZA.y}" rx="${PLAZA.rx + 26}" ry="${PLAZA.ry + 24}" fill="#5f9a4a"/>`;
+  for (let i = 0; i < 46; i++) { const a = i / 46 * 6.283; s += `<circle cx="${f1(PLAZA.x + Math.cos(a) * (PLAZA.rx + 20))}" cy="${f1(PLAZA.y + Math.sin(a) * (PLAZA.ry + 18))}" r="${f1(16 + r() * 6)}" fill="${mix('#4f8c40', '#86bf66', r())}"/>`; }
+  s += `<ellipse cx="${PLAZA.x}" cy="${PLAZA.y}" rx="${PLAZA.rx}" ry="${PLAZA.ry}" fill="url(#tiles)" stroke="#bda874" stroke-width="7"/>`;
+  // re-open the hedge where paths meet the plaza
+  s += `<path d="${polyD(catmull([[600, 1340], [600, 1250]], 2))}" stroke="#e8d9b1" stroke-width="68" stroke-linecap="round"/>`;
+  s += `<path d="${polyD(catmull([[600, 1560], [600, 1640]], 2))}" stroke="#e8d9b1" stroke-width="68" stroke-linecap="round"/>`;
+  s += `<circle cx="${PLAZA.x}" cy="${PLAZA.y}" r="58" fill="#c8b483"/><circle cx="${PLAZA.x}" cy="${PLAZA.y}" r="52" fill="#6aa852"/>`;
+  for (let i = 0; i < 40; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 46; s += `<circle cx="${f1(PLAZA.x + Math.cos(a) * d)}" cy="${f1(PLAZA.y + Math.sin(a) * d)}" r="${f1(3 + r() * 2.5)}" fill="${['#ff9fb2', '#ffe17a', '#ffffff', '#c9a7ff', '#ff8a6b'][Math.floor(r() * 5)]}"/>`; }
+  // young bamboo in the flower bed
+  for (let i = 0; i < 3; i++) s += clump(PLAZA.x - 14 + i * 14, PLAZA.y - 6 + (i % 2) * 10, .55, r);
+  // benches & lanterns around the plaza
+  const bench = (x, y, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-38" y="-12" width="76" height="24" rx="5" fill="#8a6234"/><rect x="-36" y="-10" width="72" height="6" rx="2" fill="#b98a52"/><rect x="-36" y="-2" width="72" height="6" rx="2" fill="#b98a52"/><rect x="-36" y="6" width="72" height="4" rx="2" fill="#a77b45"/></g>`;
+  s += bench(420, 1430, -78) + bench(780, 1430, 78);
+  const lamp = (x, y) => `<circle cx="${x}" cy="${y}" r="34" fill="url(#lamp)"/><rect x="${x - 9}" y="${y - 9}" width="18" height="18" rx="4" fill="#cfc8b8" stroke="#a49c8b" stroke-width="2"/><rect x="${x - 4}" y="${y - 4}" width="8" height="8" rx="2" fill="#ffe7a0"/>`;
+  s += lamp(450, 1350) + lamp(750, 1350) + lamp(450, 1555) + lamp(750, 1555);
+  // lanterns along the paths
+  for (const g of GROVES) {
+    for (let i = 20, side = 1; i < g.poly.length - 8; i += 11, side = -side) {
+      const a = g.poly[i], b = g.poly[i + 1], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+      s += lamp(f1(a.x - dy / L * 52 * side), f1(a.y + dx / L * 52 * side));
+    }
+  }
+
+  // bamboo canopy seen from above, everywhere that isn't path or plaza
+  const spots = [];
+  for (let y = -30; y < WH + 30; y += 46) for (let x = -30; x < WW + 30; x += 46) {
+    const px = x + (r() - .5) * 34, py = y + (r() - .5) * 34;
+    const dp = Math.hypot((px - PLAZA.x) / (PLAZA.rx + 60), (py - PLAZA.y) / (PLAZA.ry + 56));
+    if (dp < 1) continue;
+    if (allPolys.some((p) => distToPoly(px, py, p) < 54)) continue;
+    if (GROVES.some((g) => Math.hypot(px - g.end.x, py - g.end.y) < 122)) continue;
+    spots.push({ x: px, y: py, s: lerp(.85, 1.3, r()) });
+  }
+  spots.sort((a, b) => a.y - b.y);
+  for (const p of spots) s += clump(p.x, p.y, p.s, r);
+
+  // signs
+  const sign = (x, y, text, w = 92) => `<g transform="translate(${x} ${y})"><rect x="-3" y="-4" width="6" height="34" rx="2" fill="#7a5a33"/><rect x="${-w / 2}" y="-26" width="${w}" height="24" rx="6" fill="#c69a5c" stroke="#8e6a3c" stroke-width="2"/><text y="-9" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="14" fill="#3e2a12">${text}</text></g>`;
+  for (const g of GROVES) s += sign(g.end.x, g.end.y - 116, `${g.name}`, 82);
+  s += `<g transform="translate(676 1260)"><rect x="-3" y="-60" width="6" height="74" rx="2" fill="#7a5a33"/>
+    <path d="M-6 -62h-62l-8 9 8 9h62z" fill="#c69a5c" stroke="#8e6a3c" stroke-width="2"/>
+    <text x="-38" y="-48" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="12.5" fill="#3e2a12">← 바람길</text>
+    <rect x="-30" y="-40" width="60" height="18" rx="4" fill="#c69a5c" stroke="#8e6a3c" stroke-width="2"/><text y="-27" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="12.5" fill="#3e2a12">↑ 달빛길</text>
+    <path d="M6 -20h62l8 9-8 9h-62z" fill="#c69a5c" stroke="#8e6a3c" stroke-width="2"/><text x="38" y="-6" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="12.5" fill="#3e2a12">이슬길 →</text></g>`;
+  // entrance gate
+  s += `<g transform="translate(600 1600)">
+    <rect x="-108" y="-6" width="18" height="70" rx="3" fill="#8c3328"/><rect x="90" y="-6" width="18" height="70" rx="3" fill="#8c3328"/>
+    <rect x="-120" y="-14" width="240" height="14" rx="3" fill="#a8432f"/>
+    <path d="M-140 -14 Q-130 -40 -100 -44 L100 -44 Q130 -40 140 -14 Z" fill="#4b525a"/><path d="M-140 -14 Q0 -24 140 -14" stroke="#6b737c" stroke-width="4" fill="none"/>
+    <rect x="-46" y="-40" width="92" height="26" rx="3" fill="#2f2924" stroke="#d6b25e" stroke-width="2"/>
+    <text y="-21" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="17" fill="#f1cf7a" letter-spacing="3">대나무숲</text></g>`;
+  // dappled sunlight
+  s += `<g style="mix-blend-mode:soft-light">`;
+  for (let i = 0; i < 70; i++) s += `<ellipse cx="${f1(r() * WW)}" cy="${f1(r() * WH)}" rx="${f1(40 + r() * 80)}" ry="${f1(30 + r() * 60)}" fill="url(#dapple)"/>`;
+  s += `</g>`;
+  svg.innerHTML = s;
 }
 
-function buildBamboo() {
-  const { W, H, scale } = G;
+// one bamboo clump seen from above: shadow, leaf sprays, cane tops
+function clump(x, y, sc, r) {
+  let g = `<ellipse cx="${f1(x + 10 * sc)}" cy="${f1(y + 13 * sc)}" rx="${f1(32 * sc)}" ry="${f1(24 * sc)}" fill="#14361a" opacity=".35"/>`;
+  const n = 9 + Math.floor(r() * 4);
+  for (let k = 0; k < n; k++) {
+    const ang = r() * 360, L = lerp(24, 42, r()) * sc;
+    const light = (Math.cos((ang - 225) * Math.PI / 180) + 1) / 2;
+    const col = mix('#2c6630', '#a3d67f', light * .75 + r() * .25);
+    const ox = Math.cos(ang * Math.PI / 180) * 4 * sc, oy = Math.sin(ang * Math.PI / 180) * 4 * sc;
+    g += `<path d="${leafPath(L, L * .2)}" transform="translate(${f1(x + ox)} ${f1(y + oy)}) rotate(${f1(ang)})" fill="${col}"/>`;
+  }
+  const t = 2 + Math.floor(r() * 2);
+  for (let k = 0; k < t; k++) g += `<circle cx="${f1(x + (r() - .5) * 12 * sc)}" cy="${f1(y + (r() - .5) * 12 * sc)}" r="${f1(3.4 * sc)}" fill="#c3df98" stroke="#5c8c44" stroke-width="1.2"/>`;
+  return g;
+}
+
+// camera
+let mapScale = 1, cam = { x: 0, y: 0 }, charScale = 1;
+function layoutMap() {
+  const W = innerWidth, H = innerHeight;
+  mapScale = W < 720 ? W / 720 : Math.max(W / WW, H / 1150);
+  charScale = W < 720 ? 1.45 : 1.1;
+}
+function camTarget(p, snap) {
+  const vw = innerWidth / mapScale, vh = innerHeight / mapScale;
+  const tx = clamp(p.x - vw / 2, 0, Math.max(0, WW - vw)), extra = ($('pathPanel').offsetHeight + 24) / mapScale, ty = clamp(p.y - vh * .42, 0, Math.max(0, WH - vh + extra));
+  if (snap) { cam.x = tx; cam.y = ty; } else { cam.x = lerp(cam.x, tx, .08); cam.y = lerp(cam.y, ty, .08); }
+  $('world').style.transform = `scale(${mapScale}) translate(${f1(-cam.x)}px, ${f1(-cam.y)}px)`;
+}
+
+// ================= people =================
+const SKIN = ['#ffdcc4', '#f6cfae', '#ecbb94', '#ffe4d1'];
+const HAIR = ['#2b211c', '#4a3426', '#6b4a2e', '#1f1f2e', '#8a5a3c', '#3a2a20'];
+const SHIRT = ['#ff9f9f', '#ffd07a', '#9fd3ff', '#b8e39a', '#c9b1ff', '#ffb3d9', '#ffffff', '#8fd6c5', '#f7a35c'];
+const PANTS = ['#3d4a66', '#5c4a3a', '#2f3b30', '#6b6f8a', '#a58a6a'];
+const STYLES = ['short', 'bob', 'long', 'bun', 'cap', 'short'];
+function lookFor(key) {
+  const h = strHash(key);
+  return { skin: SKIN[h % 4], hair: HAIR[(h >>> 3) % 6], shirt: SHIRT[(h >>> 7) % 9], pants: PANTS[(h >>> 11) % 5], style: STYLES[(h >>> 14) % 6], cap: SHIRT[(h >>> 19) % 9] };
+}
+function personSVG(lk, back) {
+  const shoe = '#3b3030', dk = mix(lk.shirt, '#000000', .18);
+  const legs = `<g class="lg lg1"><rect x="14" y="44" width="5.5" height="12" rx="2.5" fill="${lk.pants}"/><ellipse cx="16.6" cy="57" rx="4" ry="2.3" fill="${shoe}"/></g>
+    <g class="lg lg2"><rect x="20.5" y="44" width="5.5" height="12" rx="2.5" fill="${lk.pants}"/><ellipse cx="23.4" cy="57" rx="4" ry="2.3" fill="${shoe}"/></g>`;
+  const arm = (cls, x) => `<g class="arm ${cls}"><rect x="${x}" y="30" width="5" height="13" rx="2.5" fill="${dk}"/><circle cx="${x + 2.5}" cy="43.5" r="2.4" fill="${lk.skin}"/></g>`;
+  const longBack = lk.style === 'long' ? `<path d="M9 18 Q7 40 13 43 L27 43 Q33 40 31 18 Z" fill="${lk.hair}"/>` : '';
+  const torso = `<path d="M11 46 L11 34 Q11 28 20 28 Q29 28 29 34 L29 46 Z" fill="${lk.shirt}"/><rect x="17.5" y="25" width="5" height="4" fill="${lk.skin}"/>`;
+  let hairF = '', hairB = '';
+  const hc = lk.hair;
+  if (lk.style === 'short') { hairF = `<path d="M8.6 18 C8 7 14 4.5 20 4.5 C27 4.5 32 8 31.4 18 C29 13 25 11.5 20 12 C16 12 12 13 8.6 18Z" fill="${hc}"/>`; hairB = `<circle cx="20" cy="16" r="11.6" fill="${hc}"/>`; }
+  if (lk.style === 'bob' || lk.style === 'long') { hairF = `<path d="M8 25 C6 9 13 4.5 20 4.5 C27 4.5 34 9 32 25 L29.5 25 C30 17 27 12.5 20 12.5 C13 12.5 10 17 10.5 25Z" fill="${hc}"/>`; hairB = `<path d="M8 26 C6 8 13 4.5 20 4.5 C27 4.5 34 8 32 26 Z" fill="${hc}"/>`; }
+  if (lk.style === 'bun') { hairF = `<circle cx="20" cy="4" r="4.6" fill="${hc}"/><path d="M8.6 18 C8 7 14 4.5 20 4.5 C27 4.5 32 8 31.4 18 C29 13 25 11.5 20 12 C16 12 12 13 8.6 18Z" fill="${hc}"/>`; hairB = `<circle cx="20" cy="16" r="11.6" fill="${hc}"/><circle cx="20" cy="4.5" r="4.8" fill="${mix(hc, '#000000', .15)}"/>`; }
+  if (lk.style === 'cap') { hairF = `<path d="M8.6 19 C8.2 12 10 9 12 8 L28 8 C30 9 31.8 12 31.4 19 C29 15 26 14 20 14 C14 14 11 15 8.6 19Z" fill="${hc}"/><path d="M8.5 13 C9 5 14 3.5 20 3.5 C26 3.5 31 5 31.5 13Z" fill="${lk.cap}"/><path d="M14 12.5 h17 c1 0 2 1 1 2 h-18z" fill="${mix(lk.cap, '#000000', .2)}"/>`; hairB = `<circle cx="20" cy="17" r="11.4" fill="${hc}"/><path d="M8.5 13 C9 5 14 3.5 20 3.5 C26 3.5 31 5 31.5 13Z" fill="${lk.cap}"/>`; }
+  const face = `<g class="eyes"><ellipse cx="16" cy="19" rx="1.4" ry="1.8" fill="#2b2321"/><ellipse cx="24" cy="19" rx="1.4" ry="1.8" fill="#2b2321"/></g>
+    <ellipse cx="13" cy="22.5" rx="2.2" ry="1.3" fill="#ff8f8f" opacity=".45"/><ellipse cx="27" cy="22.5" rx="2.2" ry="1.3" fill="#ff8f8f" opacity=".45"/>
+    <path class="ms" d="M18.5 23.2 q1.5 1.3 3 0" stroke="#8a4a3a" stroke-width="1.1" fill="none" stroke-linecap="round"/><ellipse class="mo" cx="20" cy="24" rx="1.9" ry="2.3" fill="#8a3a3a"/>`;
+  if (!back) return `<svg class="vf" viewBox="0 0 40 62" width="40" height="62"><g class="bobber">${legs}${longBack}${arm('a1', 7)}${arm('a2', 28)}${torso}<circle cx="20" cy="17" r="11" fill="${lk.skin}"/>${hairF}${face}</g></svg>`;
+  const longDown = lk.style === 'long' ? `<path d="M9 16 Q7 40 13 43 L27 43 Q33 40 31 16 Z" fill="${hc}"/>` : '';
+  return `<svg class="vb" viewBox="0 0 40 62" width="40" height="62"><g class="bobber">${legs}${arm('a1', 7)}${arm('a2', 28)}${torso}<circle cx="20" cy="17" r="11" fill="${lk.skin}"/>${hairB}${longDown}</g></svg>`;
+}
+class Person {
+  constructor(key, parent, { me = false, x = 0, y = 0, scale = 1 } = {}) {
+    this.key = key; this.me = me; this.x = x; this.y = y; this.scale = scale; this.route = []; this.onArrive = null; this.wait = 0; this.speed = me ? 95 : 50 + (strHash(key) % 25);
+    const lk = lookFor(me ? mySid : key);
+    this.el = document.createElement('div'); this.el.className = 'person';
+    this.el.innerHTML = `<div class="shadow"></div><div class="spr">${personSVG(lk, false)}${personSVG(lk, true)}</div>${me ? '<div class="tag">나</div>' : ''}<div class="bubble"></div>`;
+    parent.appendChild(this.el);
+    this.place();
+  }
+  go(points, onArrive, speed) { this.route = points.map((p) => ({ x: p.x, y: p.y })); this.onArrive = onArrive || null; this.wait = 0; this.rush = speed || 0; }
+  say(text, ms = 2200, cls = '') {
+    const b = this.el.querySelector('.bubble'); b.className = 'bubble ' + cls; b.textContent = text; b.classList.add('show');
+    clearTimeout(this.sayT); this.sayT = setTimeout(() => b.classList.remove('show'), ms);
+  }
+  step(dt) {
+    let walking = false;
+    if (this.wait > 0) this.wait -= dt;
+    else if (this.route.length) {
+      const t = this.route[0], dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy);
+      const v = (this.rush || this.speed) * dt;
+      if (d <= v) { this.x = t.x; this.y = t.y; this.route.shift(); }
+      else { this.x += dx / d * v; this.y += dy / d * v; }
+      walking = true;
+      if (Math.abs(dx) > .5 || Math.abs(dy) > .5) {
+        this.el.classList.toggle('back', dy < 0 && Math.abs(dy) > Math.abs(dx) * .6);
+        if (Math.abs(dx) > .5) this.el.classList.toggle('flip', dx < 0);
+      }
+      if (!this.route.length && this.onArrive) { const f = this.onArrive; this.onArrive = null; this.rush = 0; setTimeout(f, 0); }
+    } else if (this.idle) this.idle(this);
+    this.el.classList.toggle('walking', walking);
+    this.place();
+  }
+  place() { this.el.style.setProperty('--inv', (1 / this.scale).toFixed(3)); this.el.style.transform = `translate(${f1(this.x)}px, ${f1(this.y)}px) scale(${this.scale.toFixed(3)})`; this.el.style.zIndex = Math.round(this.y); }
+  remove() { this.el.remove(); }
+}
+const EMOTES = ['🎵', '🍃', '☺️', '…', '✨', '🐦', '💭', '🌿'];
+
+// ================= map scene logic =================
+let me = null;                 // my Person on the map
+let mapPeople = new Map();     // other id -> Person on the map
+function plazaPoint(rr = .85) { const a = Math.random() * 6.283, d = Math.sqrt(Math.random()) * rr; return { x: PLAZA.x + Math.cos(a) * PLAZA.rx * d, y: PLAZA.y + Math.sin(a) * PLAZA.ry * d * .9 }; }
+function clearingPoint(k) { const g = GROVES[k].end, a = Math.random() * 6.283, d = Math.sqrt(Math.random()) * 70; return { x: g.x + Math.cos(a) * d, y: g.y + Math.sin(a) * d * .8 }; }
+function routeToGrove(k) { return GROVES[k].poly.slice(1).filter((_, i) => i % 2 === 0).concat([GROVES[k].end]); }
+function routeFromGrove(k) { return routeToGrove(k).slice().reverse().concat([FORK, plazaPoint(.5)]); }
+function wanderIdle(p) {
+  p.wait = 1.5 + Math.random() * 4;
+  if (Math.random() < .3) p.say(EMOTES[Math.floor(Math.random() * EMOTES.length)], 2000);
+  const pl = p.placeName;
+  p.go([pl === 'plaza' ? plazaPoint() : clearingPoint(+pl.slice(1))]);
+}
+function syncMapPeople() {
+  for (const [id, o] of others) {
+    let p = mapPeople.get(id);
+    if (!p) {
+      const start = o.place === 'plaza' ? { x: 600 + (Math.random() - .5) * 60, y: WH - 10 } : clearingPoint(+o.place.slice(1));
+      p = new Person(id, $('mapChars'), { x: start.x, y: start.y, scale: charScale });
+      p.placeName = o.place; p.idle = wanderIdle;
+      if (o.place === 'plaza') p.go([{ x: 600, y: 1600 }, plazaPoint()]);
+      mapPeople.set(id, p);
+    } else if (p.placeName !== o.place) {
+      const from = p.placeName; p.placeName = o.place;
+      if (from === 'plaza' && o.place !== 'plaza') p.go([FORK, ...routeToGrove(+o.place.slice(1))]);
+      else if (from !== 'plaza' && o.place === 'plaza') p.go(routeFromGrove(+from.slice(1)));
+      else p.go([FORK, ...routeToGrove(+o.place.slice(1))]);
+    }
+  }
+  for (const [id, p] of mapPeople) if (!others.has(id) && !p.leaving) { p.leaving = true; p.idle = null; p.go([{ x: 600, y: 1600 }, { x: 600, y: WH + 60 }], () => { p.remove(); mapPeople.delete(id); }); }
+}
+function renderPathPanel() {
+  const row = $('pathRow'); row.innerHTML = '';
+  GROVES.forEach((g, k) => {
+    const n = leaves.filter((l) => l.grove === k).length;
+    const ppl = [...others.values()].filter((o) => o.place === 'g' + k).length;
+    const b = document.createElement('button'); b.className = 'pathBtn';
+    b.innerHTML = `<b>${g.icon} ${g.path}</b><small>잎 ${n}장${ppl ? ` · ${ppl}명` : ''}</small>`;
+    b.onclick = () => walkToGrove(k);
+    row.appendChild(b);
+  });
+}
+let walkingTo = -1;
+function walkToGrove(k) {
+  if (scene !== 'map' || !me) return;
+  walkingTo = k;
+  $('pathPanel').classList.add('walking'); $('pathQ').textContent = `${GROVES[k].icon} ${GROVES[k].path}을 따라 걷는 중…`;
+  const nearFork = Math.hypot(me.x - FORK.x, me.y - FORK.y) < 60;
+  me.go([...(nearFork ? [] : [FORK]), ...routeToGrove(k)], () => enterGrove(k), 150);
+}
+$('map').addEventListener('click', (e) => {
+  if (scene !== 'map' || !me || walkingTo >= 0) return;
+  const wx = cam.x + e.clientX / mapScale, wy = cam.y + e.clientY / mapScale;
+  const k = GROVES.findIndex((g) => distToPoly(wx, wy, g.poly) < 46 && wy < FORK.y + 10);
+  if (k >= 0) { walkToGrove(k); return; }
+  if (Math.hypot((wx - PLAZA.x) / PLAZA.rx, (wy - PLAZA.y) / PLAZA.ry) < .95) me.go([{ x: wx, y: wy }]);
+});
+
+// ================= grove scene (front view) =================
+let G = {}, hangers = [], grovePeople = new Map(), meG = null;
+const LAYERS = [
+  { id: 'gL0', every: 15, w: [3, 6],   h: [.55, .85], cane: '#b9d9a3', node: '#d5eac2', leaf: '#acd492', leafLen: [16, 28], density: .85, sway: 0 },
+  { id: 'gL1', every: 28, w: [6, 10],  h: [.65, .95], cane: '#8cc173', node: '#b6da9c', leaf: '#7fb866', rim: '#b0db90', leafLen: [26, 42], density: .9, sway: 0 },
+  { id: 'gL2', every: 56, w: [11, 16], h: [.85, 1.1], cane: '#5a9a4b', node: '#a2d088', leaf: '#559a46', rim: '#9fd47e', leafLen: [40, 62], density: .95, sway: .7, hang: true },
+  { id: 'gL3', every: 0,  w: [20, 28], h: [1.15, 1.3], cane: '#3c7837', node: '#7cb767', leaf: '#3a7834', rim: '#87c26b', leafLen: [70, 100], density: 1, sway: .9, hang: true },
+];
+function buildGrove(k) {
+  const W = innerWidth, H = innerHeight, small = W < 600;
+  const groundY = H * (small ? .8 : .78);
+  G = { W, H, groundY, small, scale: Math.min(1, Math.max(.72, W / 1100)) };
+  const sky = GROVES[k].sky;
+  $('gsky').style.background = `radial-gradient(ellipse 55% 45% at 70% 0%, rgba(255, 252, 225, .95), transparent 70%), linear-gradient(180deg, ${sky[0]} 0%, ${sky[1]} 45%, ${sky[2]} 100%)`;
   hangers = [];
   LAYERS.forEach((cfg, li) => {
-    const svg = $(cfg.id);
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    const r = rng(100 + li * 31);
+    const svg = $(cfg.id); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const r = rng(500 + k * 97 + li * 31);
     let xs = [];
-    if (cfg.every) {
-      const n = Math.max(6, Math.round(W / cfg.every));
-      for (let i = 0; i < n; i++) xs.push(((i + .15 + r() * .7) / n) * W);
-    } else {
-      xs = G.small ? [W * (.01 + r() * .05), W * (.93 + r() * .06)] : [W * (.02 + r() * .04), W * (.12 + r() * .04), W * (.88 + r() * .03), W * (.97 + r() * .03)];
-    }
-    const gid = `g${li}`;
-    let defs = `<defs><linearGradient id="${gid}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cfg.cane, '#1d3b18', .25)}"/><stop offset=".3" stop-color="${cfg.cane}"/><stop offset=".55" stop-color="${mix(cfg.cane, '#f4ffd8', .45)}"/><stop offset=".8" stop-color="${cfg.cane}"/><stop offset="1" stop-color="${mix(cfg.cane, '#1d3b18', .2)}"/></linearGradient>`;
-    if (cfg.hang) defs += `<filter id="glow${li}" x="-60%" y="-200%" width="220%" height="500%"><feGaussianBlur stdDeviation="${li === 3 ? 7 : 5}"/></filter>`;
+    if (cfg.every) { const n = Math.max(6, Math.round(W / cfg.every)); for (let i = 0; i < n; i++) xs.push(((i + .15 + r() * .7) / n) * W); }
+    else xs = small ? [W * (.02 + r() * .05), W * (.94 + r() * .05)] : [W * (.02 + r() * .04), W * (.13 + r() * .04), W * (.87 + r() * .03), W * (.97 + r() * .03)];
+    let defs = `<defs><linearGradient id="cg${li}" x1="0" x2="1"><stop offset="0" stop-color="${mix(cfg.cane, '#1d3b18', .28)}"/><stop offset=".3" stop-color="${cfg.cane}"/><stop offset=".55" stop-color="${mix(cfg.cane, '#f4ffd8', .5)}"/><stop offset=".8" stop-color="${cfg.cane}"/><stop offset="1" stop-color="${mix(cfg.cane, '#1d3b18', .22)}"/></linearGradient>`;
+    if (cfg.hang) defs += `<filter id="ffg${li}" x="-80%" y="-250%" width="260%" height="600%"><feGaussianBlur stdDeviation="${li === 3 ? 8 : 6}"/></filter>`;
     defs += '</defs>';
     let body = '';
     xs.forEach((x0) => {
-      const w = lerp(cfg.w[0], cfg.w[1], r()) * (cfg.every ? 1 : scale);
-      const base = cfg.baseK > 1 ? H + 10 : G.pathTop - (.71 - cfg.baseK) * H * .6;
-      const h = lerp(cfg.h[0], cfg.h[1], r()) * H;
-      const lean = (r() - .5) * H * .05;
-      const topY = base - h;
+      const w = lerp(cfg.w[0], cfg.w[1], r()) * (cfg.every ? 1 : G.scale);
+      const base = cfg.every ? groundY - (3 - li) * 14 : H + 10;
+      const h = lerp(cfg.h[0], cfg.h[1], r()) * H, lean = (r() - .5) * H * .05, topY = base - h;
       const at = (y) => { const t = (base - y) / h; return { x: x0 + lean * t * t, w: w * (1 - .3 * t) }; };
       const midY = base - h / 2, m = at(midY), tp = at(topY);
-      let g = `<path d="M${f1(x0 - w / 2)} ${f1(base)}Q${f1(m.x - m.w / 2)} ${f1(midY)} ${f1(tp.x - tp.w / 2)} ${f1(topY)}L${f1(tp.x + tp.w / 2)} ${f1(topY)}Q${f1(m.x + m.w / 2)} ${f1(midY)} ${f1(x0 + w / 2)} ${f1(base)}Z" fill="url(#${gid})"/>`;
+      let g = `<path d="M${f1(x0 - w / 2)} ${f1(base)}Q${f1(m.x - m.w / 2)} ${f1(midY)} ${f1(tp.x - tp.w / 2)} ${f1(topY)}L${f1(tp.x + tp.w / 2)} ${f1(topY)}Q${f1(m.x + m.w / 2)} ${f1(midY)} ${f1(x0 + w / 2)} ${f1(base)}Z" fill="url(#cg${li})"/>`;
       const seg = lerp(.07, .1, r()) * H * (li === 3 ? 1.3 : 1);
-      let side = r() < .5 ? -1 : 1;
-      const leafLen = (k) => lerp(cfg.leafLen[0], cfg.leafLen[1], k) * (cfg.every ? 1 : scale);
-      const fol = [];
+      let side = r() < .5 ? -1 : 1; const fol = [];
       for (let y = base - seg * (1.2 + r() * .5); y > topY + 4; y -= seg * lerp(.85, 1.15, r())) {
         const p = at(y);
         g += `<rect x="${f1(p.x - p.w / 2 - 1)}" y="${f1(y - 1.5)}" width="${f1(p.w + 2)}" height="3" rx="1.5" fill="${cfg.node}" opacity=".85"/>`;
-        const t = (base - y) / h;
-        if (t > .3 && r() < cfg.density) { fol.push({ y, p, side }); side = -side; }
+        if ((base - y) / h > .28 && r() < cfg.density) { fol.push({ y, p, side }); side = -side; }
       }
       fol.push({ y: topY + 2, p: tp, side: r() < .5 ? -1 : 1, crown: true });
+      const leafLen = (q) => lerp(cfg.leafLen[0], cfg.leafLen[1], q) * (cfg.every ? 1 : G.scale);
       for (const f of fol) {
         const blen = lerp(10, 34, r()) * (li >= 2 ? 1.4 : 1) * (f.crown ? .4 : 1);
         const bang = (f.crown ? -90 + f.side * 25 : f.side > 0 ? -28 - r() * 22 : -152 + r() * 22) * Math.PI / 180;
         const bx = f.p.x + Math.cos(bang) * blen, by = f.y + Math.sin(bang) * blen;
         g += `<path d="M${f1(f.p.x)} ${f1(f.y)}L${f1(bx)} ${f1(by)}" stroke="${cfg.cane}" stroke-width="${li >= 2 ? 1.6 : 1}" stroke-linecap="round"/>`;
-        const nLeaves = f.crown ? 8 + Math.floor(r() * 4) : 4 + Math.floor(r() * 4);
-        for (let k = 0; k < nLeaves; k++) {
-          const L = leafLen(r()) * (f.crown ? 1.1 : 1);
-          const dir = f.crown ? (k % 2 ? 1 : -1) : f.side;
-          const droop = f.crown ? lerp(-70, 50, r()) : lerp(-10, 65, r());
-          const ang = dir > 0 ? droop : 180 - droop;
-          const shade = mix(cfg.leaf, cfg.rim || cfg.node, r() * .55);
-          g += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${shade}"/>`;
+        const nl = f.crown ? 9 + Math.floor(r() * 4) : 5 + Math.floor(r() * 4);
+        for (let q = 0; q < nl; q++) {
+          const L = leafLen(r()) * (f.crown ? 1.1 : 1), dir = f.crown ? (q % 2 ? 1 : -1) : f.side;
+          const droop = f.crown ? lerp(-70, 50, r()) : lerp(-10, 65, r()), ang = dir > 0 ? droop : 180 - droop;
+          g += `<path d="${leafPath(L, L * .12)}" transform="translate(${f1(bx)} ${f1(by)}) rotate(${f1(ang)})" fill="${mix(cfg.leaf, cfg.rim || cfg.node, r() * .55)}"/>`;
         }
       }
-      const amp = cfg.sway * lerp(.6, 1.3, r());
-      body += `<g class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(amp)}deg;--d:${f1(4 + r() * 3)}s;--dl:${f1(-r() * 7)}s">${g}<g class="msgs"></g></g>`;
+      const sway = cfg.sway ? ` class="sw" style="transform-origin:${f1(x0)}px ${f1(base)}px;--a:${f1(cfg.sway * lerp(.6, 1.3, r()))}deg;--d:${f1(4 + r() * 3)}s;--dl:${f1(-r() * 7)}s"` : '';
+      body += `<g${sway}>${g}<g class="msgs"></g></g>`;
       if (cfg.hang) hangers.push({ layer: li, x0, lean, base, h, topY });
     });
     svg.innerHTML = defs + body;
-    if (cfg.hang) {
-      const groups = svg.querySelectorAll('.sw');
-      hangers.filter((s) => s.layer === li).forEach((s, i) => { s.el = groups[i].querySelector('.msgs'); });
-    }
+    if (cfg.hang) { const gs = svg.querySelectorAll(':scope > g'); hangers.filter((s) => s.layer === li).forEach((s, i) => { s.el = gs[i].querySelector('.msgs'); }); }
   });
-  $('haze0').style.cssText = `top:${G.pathTop - G.H * .45}px;height:${G.H * .45}px;background:linear-gradient(transparent, rgba(232, 244, 218, .55))`;
-}
-
-function buildGround() {
-  const { W, H, pathTop, pathBot, scale } = G;
-  const r = rng(7);
-  const svg = $('ground'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const edge = (y, amp, ph, reverse) => {
-    let d = '';
-    if (!reverse) for (let x = 0; x <= W + 20; x += 20) d += `L${x} ${f1(y + Math.sin(x / 140 + ph) * amp)}`;
-    else for (let x = Math.ceil(W / 20) * 20 + 20; x >= 0; x -= 20) d += `L${x} ${f1(y + Math.sin(x / 140 + ph) * amp)}`;
-    return d;
-  };
-  let s = `<defs>
-    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fcd78"/><stop offset="1" stop-color="#77ad57"/></linearGradient>
-    <linearGradient id="pathg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eadfc0"/><stop offset="1" stop-color="#dccb9f"/></linearGradient>
-  </defs>`;
-  // meadow
-  s += `<path d="M0 ${f1(pathTop - 14)}${edge(pathTop - 14, 4, 1)}L${W + 20} ${H}L0 ${H}Z" fill="url(#grass)"/>`;
-  // bushes hiding bamboo bases
-  for (let x = -20; x < W + 40; x += 26 + r() * 22) {
-    const rr = 18 + r() * 22;
-    s += `<ellipse cx="${f1(x)}" cy="${f1(pathTop - 12 - r() * 6)}" rx="${f1(rr * 1.3)}" ry="${f1(rr * .8)}" fill="${mix('#6fa852', '#9ccc77', r())}"/>`;
-  }
-  // bamboo fence along the back of the path
-  const fy = pathTop - 4, fh = 30 * Math.max(.8, scale);
-  for (let x = 6; x < W; x += 54 * Math.max(.8, scale)) {
-    s += `<rect x="${f1(x)}" y="${f1(fy - fh)}" width="7" height="${f1(fh + 6)}" rx="3" fill="#c7ad6c"/><rect x="${f1(x)}" y="${f1(fy - fh)}" width="7" height="3" rx="1.5" fill="#e0cb8f"/>`;
-  }
-  s += `<rect x="0" y="${f1(fy - fh * .78)}" width="${W}" height="5" rx="2.5" fill="#d6bf80"/><rect x="0" y="${f1(fy - fh * .38)}" width="${W}" height="5" rx="2.5" fill="#cdb474"/>`;
-  // the walking path
-  s += `<path d="M0 ${f1(pathTop)}${edge(pathTop, 3, 2)}${edge(pathBot, 4, 4, true)}Z" fill="url(#pathg)"/>`;
-  for (let x = 20; x < W; x += 60 + r() * 50) {
-    const y = lerp(pathTop + 12, pathBot - 12, r());
-    s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(16 + r() * 14)}" ry="${f1(6 + r() * 4)}" fill="#d3c193" opacity=".75"/>`;
-  }
-  for (let i = 0; i < W / 14; i++) s += `<circle cx="${f1(r() * W)}" cy="${f1(lerp(pathTop + 4, pathBot - 4, r()))}" r="${f1(1 + r() * 1.6)}" fill="#c4b081" opacity=".7"/>`;
-  // grass along the front edge of the path
-  for (let x = 0; x < W; x += 7 + r() * 8) {
-    const y = pathBot + Math.sin(x / 140 + 4) * 4 + 2, hh = 6 + r() * 10;
-    s += `<path d="M${f1(x)} ${f1(y)}q${f1(2 + r() * 3)} ${f1(-hh * .6)} ${f1(r() * 6 - 1)} ${f1(-hh)}" stroke="${mix('#5f9a45', '#8fc36b', r())}" stroke-width="2" fill="none" stroke-linecap="round"/>`;
-  }
-  // signboard
-  const sx = G.small ? W * .22 : W * .24, sy = pathTop - 6;
-  s += `<g><rect x="${f1(sx - 3)}" y="${f1(sy - 62)}" width="6" height="64" rx="2" fill="#9c7a46"/>
-    <rect x="${f1(sx - 52)}" y="${f1(sy - 66)}" width="104" height="30" rx="6" fill="#c69a5c" stroke="#9c7a46" stroke-width="2"/>
-    <text x="${f1(sx)}" y="${f1(sy - 46)}" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="14" fill="#4b3315">대나무숲 산책로</text></g>`;
-  // bench
-  if (!G.small) {
-    const bx = W * .7, by = pathTop - 2;
-    s += `<g fill="#a77b45"><rect x="${f1(bx)}" y="${f1(by - 30)}" width="84" height="7" rx="3"/><rect x="${f1(bx)}" y="${f1(by - 18)}" width="84" height="6" rx="3" fill="#b88b52"/>
-      <rect x="${f1(bx + 8)}" y="${f1(by - 18)}" width="6" height="18" fill="#8a6537"/><rect x="${f1(bx + 70)}" y="${f1(by - 18)}" width="6" height="18" fill="#8a6537"/></g>`;
-  }
-  svg.innerHTML = s;
-  const hit = $('pathHit'); hit.style.top = pathTop + 'px'; hit.style.height = (pathBot - pathTop) + 'px';
-}
-
-function buildLight() {
-  const r = rng(3);
-  let b = '';
-  const n = G.small ? 4 : 7;
-  for (let i = 0; i < n; i++) b += `<div class="beam" style="--bx:${f1(30 + (i / n) * 80 + r() * 6)}%;--bw:${f1(40 + r() * 90)}px;--bd:${f1(5 + r() * 5)}s;--bdl:${f1(-r() * 6)}s"></div>`;
+  // forest floor clearing
+  const r = rng(900 + k);
+  let s = `<defs><linearGradient id="gfloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8cbf68"/><stop offset=".35" stop-color="#cdbb8a"/><stop offset="1" stop-color="#b59d68"/></linearGradient>
+    <radialGradient id="glight" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="#fff7d0" stop-opacity=".6"/><stop offset="1" stop-color="#fff7d0" stop-opacity="0"/></radialGradient></defs>`;
+  s += `<path d="M0 ${f1(groundY)}${Array.from({ length: Math.ceil(W / 20) + 2 }, (_, i) => `L${i * 20} ${f1(groundY + Math.sin(i * .5) * 4)}`).join('')}L${W + 40} ${H}L0 ${H}Z" fill="url(#gfloor)"/>`;
+  s += `<ellipse cx="${W / 2}" cy="${f1(groundY + (H - groundY) * .55)}" rx="${f1(W * .38)}" ry="${f1((H - groundY) * .5)}" fill="url(#glight)"/>`;
+  for (let i = 0; i < W / 9; i++) { const x = r() * W, y = groundY + r() * 14, hh = 6 + r() * 14; s += `<path d="M${f1(x)} ${f1(y)}q${f1(2 + r() * 3)} ${f1(-hh * .6)} ${f1(r() * 6 - 1)} ${f1(-hh)}" stroke="${mix('#4f8c3c', '#9ccd73', r())}" stroke-width="2" fill="none" stroke-linecap="round"/>`; }
+  for (let i = 0; i < 26; i++) s += `<ellipse cx="${f1(r() * W)}" cy="${f1(lerp(groundY + 20, H, r()))}" rx="${f1(3 + r() * 9)}" ry="${f1(2 + r() * 3)}" fill="#a68f5c" opacity=".55"/>`;
+  for (let i = 0; i < 6; i++) { const x = r() < .5 ? r() * W * .25 : W - r() * W * .25, y = lerp(groundY + 10, H - 20, r()); s += fern(x, y, lerp(.7, 1.2, r()), r); }
+  $('gGround').setAttribute('viewBox', `0 0 ${W} ${H}`); $('gGround').innerHTML = s;
+  // light
+  const rb = rng(3 + k); let b = '';
+  for (let i = 0; i < (small ? 4 : 7); i++) b += `<div class="beam" style="--bx:${f1(25 + (i / 7) * 80 + rb() * 6)}%;--bw:${f1(40 + rb() * 90)}px;--bd:${f1(5 + rb() * 5)}s;--bdl:${f1(-rb() * 6)}s"></div>`;
   $('beams').innerHTML = b;
   let m = '';
-  for (let i = 0; i < (G.small ? 14 : 26); i++) {
-    const v = () => (r() * 120 - 60).toFixed(0) + 'px';
-    m += `<div class="mote" style="left:${f1(r() * 100)}%;top:${f1(15 + r() * 55)}%;--md:${f1(6 + r() * 8)}s;--mdl:${f1(-r() * 8)}s;--mx:${v()};--my:${v()}"></div>`;
-  }
+  for (let i = 0; i < (small ? 14 : 24); i++) { const v = () => (rb() * 120 - 60).toFixed(0) + 'px'; m += `<div class="mote" style="left:${f1(rb() * 100)}%;top:${f1(10 + rb() * 60)}%;--md:${f1(6 + rb() * 8)}s;--mdl:${f1(-rb() * 8)}s;--mx:${v()};--my:${v()}"></div>`; }
   $('motes').innerHTML = m;
 }
+function fern(x, y, sc, r) {
+  let g = '';
+  for (let i = 0; i < 7; i++) {
+    const ang = -160 + i * 23 + (r() - .5) * 10, L = (28 + r() * 16) * sc;
+    g += `<path d="${leafPath(L, L * .22)}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})" fill="${mix('#3f7a34', '#8cc46a', r())}"/>`;
+  }
+  return g;
+}
 
-// ================= message leaves =================
-function now() { return Date.now() + serverOffset; }
+// --- leaves that hold someone's story: plain bamboo leaves that blink like fireflies ---
 function leafAnchor(leaf) {
-  const usable = hangers.filter((s) => s.x0 > 4 && s.x0 < G.W - 4);
+  let usable = hangers.filter((s) => s.x0 > G.W * .1 && s.x0 < G.W * .9);
+  if (!usable.length) usable = hangers;
   if (!usable.length) return null;
   const s = usable[Math.floor(hash(leaf.id) * usable.length)];
-  const yMin = Math.max(s.topY + 30, G.H * .16), yMax = Math.min(G.pathTop - 70, G.H * .58);
+  const yMin = Math.max(s.topY + 30, G.H * .13), yMax = Math.min(G.groundY - 90, G.H * .62);
   const y = lerp(yMin, Math.max(yMin, yMax), hash(leaf.id * 7 + 3));
   const t = (s.base - y) / s.h;
   return { s, x: s.x0 + s.lean * t * t, y };
 }
-function renderLeaves(skipIds) {
+const MODES = {
+  whisper: { e: '🤫', name: '속삭이기', desc: '비밀, 짝사랑처럼 조용히', color: '#3f9158', ph: '대나무에게만 살짝 털어놓아 보세요', label: '🤫 속삭인 말',
+    bubble: '소곤소곤…', cls: 'soft', reveal: 1700, wind: .15, done: '대나무가 사락사락… 다 들었대요 🍃' },
+  shout:   { e: '📣', name: '소리치기', desc: '화나고 억울한 일, 속 시원하게', color: '#e0663f', ph: '속 시원하게 소리쳐 보세요!', label: '📣 소리친 말',
+    bubble: '임금님 귀는 당나귀 귀!!', other: '으아아아!!', cls: 'loud', reveal: 1000, wind: 1.1, done: '대숲이 쩌렁쩌렁 울렸어요! 속이 좀 시원해졌길 📣' },
+  sigh:    { e: '😮‍💨', name: '한숨 쉬기', desc: '지치고 힘든 날, 내려놓듯이', color: '#6f86c6', ph: '한숨과 함께 내려놓고 싶은 말', label: '😮‍💨 한숨과 함께 놓고 간 말',
+    bubble: '후우…', cls: 'soft', reveal: 1900, wind: .35, done: '한숨이 바람에 실려 갔어요. 오늘도 수고했어요 🌿' },
+};
+const modeOf = (l) => MODES[l.mode] ? l.mode : 'whisper';
+function renderGroveLeaves() {
   document.querySelectorAll('.msg').forEach((m) => m.remove());
-  $('empty').hidden = leaves.length > 0;
-  for (const leaf of leaves) if (!skipIds || !skipIds.has(leaf.id)) drawLeaf(leaf, false);
+  for (const l of leaves) if (l.grove === groveIdx) drawLeaf(l, false);
 }
-function drawLeaf(leaf, fresh) {
+function drawLeaf(leaf, bloom) {
   const a = leafAnchor(leaf); if (!a) return;
-  const { s, x, y } = a; const W = G.W;
+  const { s, x, y } = a, W = G.W;
   const side = x < W * .3 ? 1 : x > W * .7 ? -1 : (hash(leaf.id * 13 + 1) < .5 ? -1 : 1);
-  const L = (s.layer === 3 ? 70 : 60) * Math.max(.82, G.scale);
-  const droop = lerp(-5, 40, hash(leaf.id * 5 + 2));
-  const blen = lerp(12, 26, hash(leaf.id * 17));
+  const L = (s.layer === 3 ? 74 : 58) * Math.max(.82, G.scale);
+  const droop = lerp(0, 45, hash(leaf.id * 5 + 2)), blen = lerp(12, 24, hash(leaf.id * 17));
   const bang = side > 0 ? -25 : -155;
   const bx = x + Math.cos(bang * Math.PI / 180) * blen, by = y + Math.sin(bang * Math.PI / 180) * blen;
   const ang = side > 0 ? droop : 180 - droop;
-  const age = Math.min(1, Math.max(0, (now() - leaf.created) / lifetime));
-  const M = MODES[modeOf(leaf)];
-  const fill = mix(M.fill, '#ffd27a', age * .7);
-  const edge = mix(M.edge, '#b8862a', age * .5);
-  const ribbon = ['#ff8fa3', '#8fc9ff', '#c7a0ff', '#ffb46b', '#6fd3a8'][leaf.id % 5];
+  const age = clamp((now() - leaf.created) / lifetime, 0, 1);
+  const body = mix(s.layer === 3 ? '#4f9643' : '#63a854', '#a8a850', age * .5);
   const g = document.createElementNS(SVGNS, 'g');
-  g.setAttribute('class', 'msg' + (fresh ? ' fresh' : ''));
-  g.setAttribute('data-id', leaf.id);
-  g.setAttribute('tabindex', '0');
-  g.setAttribute('role', 'button');
-  g.setAttribute('aria-label', '누군가의 속마음 읽기: ' + leaf.text.slice(0, 30));
+  g.setAttribute('class', 'msg' + (mine.has(leaf.id) ? ' mine' : '') + (bloom ? ' bloom' : ''));
+  g.setAttribute('data-id', leaf.id); g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
+  g.setAttribute('aria-label', '누군가의 속마음 읽기');
   g.style.setProperty('--d', (2.6 + hash(leaf.id * 3) * 2).toFixed(1) + 's');
   g.style.setProperty('--dl', (-hash(leaf.id * 9) * 4).toFixed(1) + 's');
+  g.style.setProperty('--fd', (4.5 + hash(leaf.id * 11) * 5).toFixed(1) + 's');
+  g.style.setProperty('--fdl', (-hash(leaf.id * 19) * 9).toFixed(1) + 's');
+  let sparks = '';
+  for (let i = 0; i < 9; i++) { const aa = i / 9 * 6.283; sparks += `<circle class="spark" cx="${f1(L * .55)}" cy="0" r="3.4" fill="#f6ffe2" style="--sx:${f1(Math.cos(aa) * 70)}px;--sy:${f1(Math.sin(aa) * 70)}px"/>`; }
   g.innerHTML =
-    `<path d="M${f1(x)} ${f1(y)}L${f1(bx)} ${f1(by)}" stroke="#5f9f4f" stroke-width="1.8" stroke-linecap="round"/>` +
-    `<g transform="translate(${f1(bx)} ${f1(by)})"><g class="flut"><g transform="rotate(${f1(ang)})">` +
-      `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .72)}" ry="${f1(L * .34)}" fill="${M.halo}" filter="url(#glow${s.layer})"/>` +
-      `<path class="body" d="${leafPath(L, L * .16)}" fill="${fill}" stroke="${edge}" stroke-width="1.6"/>` +
-      `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${edge}" stroke-width="1" fill="none" opacity=".7"/>` +
-      `<path d="M3 0l-6 -5v10z M3 0l-2 9 M3 0l3 9" fill="${ribbon}" stroke="${ribbon}" stroke-width="2" stroke-linecap="round"/>` +
-      `<circle cx="3" cy="0" r="2.4" fill="${mix(ribbon, '#000000', .2)}"/>` +
-      `<path class="spark" d="M${f1(L * .78)} ${f1(-L * .24)}l2.5 6 6 2.5 -6 2.5 -2.5 6 -2.5 -6 -6 -2.5 6 -2.5z" fill="#ffe58a"/>` +
-      `<ellipse cx="${f1(L * .5)}" cy="0" rx="${f1(L * .62)}" ry="22" fill="transparent"/>` +
-    `</g></g></g>`;
+    `<path d="M${f1(x)} ${f1(y)}L${f1(bx)} ${f1(by)}" stroke="${s.layer === 3 ? '#3c7837' : '#5a9a4b'}" stroke-width="1.8" stroke-linecap="round"/>` +
+    `<g transform="translate(${f1(bx)} ${f1(by)})"><g class="grow"><g class="flut"><g transform="rotate(${f1(ang)})">` +
+      `<ellipse class="halo" cx="${f1(L * .5)}" cy="0" rx="${f1(L * .85)}" ry="${f1(L * .45)}" fill="#d4ffb0" filter="url(#ffg${s.layer})"/>` +
+      `<path d="${leafPath(L, L * .15)}" fill="${body}"/>` +
+      `<path class="lit" d="${leafPath(L, L * .15)}" fill="#dcffbf"/>` +
+      `<path d="M2 0Q${f1(L * .5)} ${f1(-L * .02)} ${f1(L * .92)} 0" stroke="${mix(body, '#20451c', .35)}" stroke-width="1" fill="none" opacity=".6"/>` +
+      `<circle class="burst" cx="${f1(L * .5)}" cy="0" r="${f1(L * .55)}" fill="#f0ffd8" filter="url(#ffg${s.layer})"/>` + sparks +
+      `<ellipse cx="${f1(L * .5)}" cy="0" rx="${f1(L * .62)}" ry="24" fill="transparent"/>` +
+    `</g></g></g></g>`;
   const open = () => openLeafDialog(leaf);
-  g.addEventListener('click', open);
+  g.addEventListener('click', (e) => { e.stopPropagation(); open(); });
   g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   s.el.appendChild(g);
+  if (bloom) setTimeout(() => g.classList.remove('bloom'), 3200);
 }
 
-// ================= walkers =================
-const PALETTE = ['#ffd6a5', '#ffadad', '#caffbf', '#9bf6ff', '#bdb2ff', '#ffc6ff', '#fdffb6', '#a0c4ff', '#ffcfd2', '#b9fbc0', '#f1c0e8', '#cfbaf0'];
-const HATS = ['sprout', 'sprout', 'leaf', 'bow', 'none', 'cap'];
-const EMOTES = ['🍃', '🎵', '☺️', '…', '🌿', '✨', '🐦', '💭'];
-const walkers = new Map();
-let meWalker = null;
-
-function characterSVG(color, hat) {
-  const dark = mix(color, '#3a2a20', .55), belly = mix(color, '#ffffff', .55);
-  let hatSvg = '';
-  if (hat === 'sprout') hatSvg = `<path d="M22 11V3" stroke="#4f8f3f" stroke-width="2" stroke-linecap="round"/><path d="M22 5C17 1 13 4 13 4s4 4 9 1z" fill="#6cb352"/><path d="M22 4c4-4 9-2 9-2s-3 5-9 2z" fill="#86c56a"/>`;
-  else if (hat === 'leaf') hatSvg = `<path d="M14 12c2-9 14-10 18-6-6 1-11 3-18 6z" fill="#5fa64a"/><path d="M15 11c5-3 10-4 15-5" stroke="#3f7d33" stroke-width="1" fill="none"/>`;
-  else if (hat === 'bow') hatSvg = `<path d="M22 10l-7-5v9zM22 10l7-5v9z" fill="#ff7a8a"/><circle cx="22" cy="10" r="2.3" fill="#e65a6c"/>`;
-  else if (hat === 'cap') hatSvg = `<path d="M9 16c0-8 6-11 13-11s13 3 13 11z" fill="#6a9fd8"/><path d="M27 15h12c0 2-2 3-4 3h-8z" fill="#4f84bf"/>`;
-  return `<svg viewBox="0 0 44 54" width="44" height="54" overflow="visible">
-    <ellipse class="ft1" cx="15" cy="50" rx="5" ry="3.4" fill="${dark}"/>
-    <ellipse class="ft2" cx="29" cy="50" rx="5" ry="3.4" fill="${dark}"/>
-    <rect x="5" y="10" width="34" height="40" rx="17" fill="${color}"/>
-    <ellipse cx="22" cy="38" rx="10" ry="8" fill="${belly}" opacity=".8"/>
-    <g class="eyes"><circle cx="16" cy="26" r="2.4" fill="#2e2a2a"/><circle cx="28" cy="26" r="2.4" fill="#2e2a2a"/>
-      <circle cx="16.8" cy="25.2" r=".8" fill="#fff"/><circle cx="28.8" cy="25.2" r=".8" fill="#fff"/></g>
-    <ellipse cx="11.5" cy="31" rx="3" ry="1.8" fill="#ff8f8f" opacity=".45"/><ellipse cx="32.5" cy="31" rx="3" ry="1.8" fill="#ff8f8f" opacity=".45"/>
-    <path class="ms" d="M20 31q2 2 4 0" stroke="#2e2a2a" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-    <ellipse class="mo" cx="22" cy="33" rx="3" ry="3.6" fill="#7a2f2f"/>
-    ${hatSvg}
-  </svg>`;
+function grovePoint() { return { x: lerp(G.W * .12, G.W * .88, Math.random()), y: lerp(G.groundY + 26, G.H * .9, Math.random()) }; }
+function groveIdle(p) {
+  p.wait = 2 + Math.random() * 5;
+  if (Math.random() < .25) p.say(EMOTES[Math.floor(Math.random() * EMOTES.length)], 2000);
+  if (Math.random() < .5) p.go([grovePoint()]);
+  p.el.classList.toggle('back', Math.random() < .5);
 }
-
-const clampY = (y) => Math.max(G.pathTop + 14, Math.min(G.pathBot - 8, y));
-function randPathPoint() { return { x: lerp(30, G.W - 30, Math.random()), y: lerp(G.pathTop + 14, G.pathBot - 8, Math.random()) }; }
-function makeWalker(id, isMe) {
-  const h = strHash(isMe ? mySid : id);
-  const el = document.createElement('div');
-  el.className = 'walker' + (isMe ? ' me' : '');
-  el.innerHTML = `<div class="shadow"></div><div class="fig"><div class="bob">${characterSVG(PALETTE[h % PALETTE.length], HATS[(h >>> 8) % HATS.length])}</div></div>${isMe ? '<div class="tag">나</div>' : ''}<div class="bubble"></div>`;
-  $('walkers').appendChild(el);
-  const start = isMe ? { x: G.W * .5, y: lerp(G.pathTop + 14, G.pathBot - 8, .6) } : { x: Math.random() < .5 ? -30 : G.W + 30, y: randPathPoint().y };
-  const w = { id, el, isMe, x: start.x, y: start.y, tx: start.x, ty: start.y, speed: 34 + (h % 20), wait: isMe ? 1 : Math.random() * 1.5, leaving: false, onArrive: null };
-  if (!isMe) { const p = randPathPoint(); w.tx = p.x; w.ty = p.y; }
-  walkers.set(id, w);
-  return w;
-}
-function say(w, text, ms = 2200) {
-  const b = w.el.querySelector('.bubble'); b.textContent = text; b.classList.add('show');
-  clearTimeout(w.sayT); w.sayT = setTimeout(() => b.classList.remove('show'), ms);
-}
-function walkTo(w, x, y, onArrive, rush) { w.tx = x; w.ty = y; w.wait = 0; w.onArrive = onArrive || null; w.rush = !!rush; }
-function syncWalkers(ids) {
-  const want = new Set(ids.slice(0, G.small ? 12 : 24));
-  for (const id of want) if (!walkers.has(id)) makeWalker(id, false);
-  for (const [id, w] of walkers) {
-    if (w.isMe || want.has(id) || w.leaving) continue;
-    w.leaving = true; walkTo(w, w.x < G.W / 2 ? -40 : G.W + 40, w.y, () => { w.el.remove(); walkers.delete(id); });
+function syncGrovePeople() {
+  if (scene !== 'grove') return;
+  const here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).slice(0, G.small ? 6 : 12);
+  const ids = new Set(here.map((o) => o.id));
+  const sc = G.small ? 1.35 : 1.6;
+  for (const o of here) if (!grovePeople.has(o.id)) {
+    const p = new Person(o.id, $('groveChars'), { x: Math.random() < .5 ? -30 : G.W + 30, y: lerp(G.groundY + 30, G.H * .9, Math.random()), scale: sc });
+    p.idle = groveIdle; p.go([grovePoint()]); grovePeople.set(o.id, p);
   }
-}
-let lastT = performance.now();
-function tick(t) {
-  const dt = Math.min(.05, (t - lastT) / 1000); lastT = t;
-  const span = G.pathBot - G.pathTop;
-  for (const w of walkers.values()) {
-    const dx = w.tx - w.x, dy = w.ty - w.y, dist = Math.hypot(dx, dy);
-    let walking = false;
-    if (w.wait > 0) w.wait -= dt;
-    else if (dist > 2) {
-      const step = Math.min(dist, (w.rush ? Math.max(170, dist * 1.4) : w.speed) * dt);
-      w.x += dx / dist * step; w.y += dy / dist * step; walking = true;
-      if (Math.abs(dx) > 1) w.el.classList.toggle('flip', dx < 0);
-    } else if (w.onArrive) { const f = w.onArrive; w.onArrive = null; w.rush = false; f(); }
-    else if (!w.isMe) {
-      w.wait = 1.5 + Math.random() * 4;
-      if (Math.random() < .35) say(w, EMOTES[Math.floor(Math.random() * EMOTES.length)]);
-      const p = randPathPoint(); w.tx = p.x; w.ty = p.y;
-    }
-    w.el.classList.toggle('walking', walking);
-    const k = Math.max(0, Math.min(1, (w.y - G.pathTop) / span));
-    const sc = lerp(.82, 1.08, k) * (G.small ? .82 : 1);
-    w.el.style.transform = `translate(${f1(w.x)}px, ${f1(w.y)}px) scale(${sc.toFixed(3)})`;
-    w.el.style.zIndex = Math.round(w.y);
-  }
-  requestAnimationFrame(tick);
+  for (const [id, p] of grovePeople) if (!ids.has(id) && !p.leaving) { p.leaving = true; p.idle = null; p.go([{ x: p.x < G.W / 2 ? -40 : G.W + 40, y: p.y }], () => { p.remove(); grovePeople.delete(id); }); }
 }
 
-$('pathHit').addEventListener('click', (e) => { if (meWalker) walkTo(meWalker, e.clientX, clampY(e.clientY)); });
+function fadeThen(fn) {
+  const f = $('fade'); f.classList.add('on');
+  setTimeout(() => { fn(); setTimeout(() => f.classList.remove('on'), 60); }, 560);
+}
+function enterGrove(k) {
+  fadeThen(() => {
+    scene = 'grove'; groveIdx = k; myPlace = 'g' + k; walkingTo = -1;
+    $('map').hidden = true; $('grove').hidden = false; $('pathPanel').hidden = true; $('backBtn').hidden = false;
+    $('groveChars').innerHTML = ''; grovePeople.clear();
+    buildGrove(k);
+    meG = new Person('me', $('groveChars'), { me: true, x: G.W / 2, y: G.H + 40, scale: G.small ? 2 : 2.4 });
+    meG.el.classList.add('back');
+    meG.go([{ x: G.W / 2, y: G.H - (G.small ? 92 : 70) }], () => {
+      meG.el.classList.add('back');
+      $('kingBtn').classList.add('ready');
+      if (!store.get('bamboo.tip.grove', false)) { toast('깜빡이는 잎을 누르면 누군가의 속마음을 들을 수 있어요', 4000); store.set('bamboo.tip.grove', true); }
+    }, 120);
+    renderGroveLeaves(); syncGrovePeople(); updateStatus();
+    heartbeat();
+  });
+}
+function exitGrove() {
+  if (scene !== 'grove') return;
+  $('kingBtn').classList.remove('ready');
+  const k = groveIdx;
+  fadeThen(() => {
+    scene = 'map'; groveIdx = -1; myPlace = 'plaza';
+    $('grove').hidden = true; $('map').hidden = false; $('pathPanel').hidden = false; $('backBtn').hidden = true;
+    $('pathPanel').classList.remove('walking'); $('pathQ').textContent = '광장으로 돌아가는 중…';
+    me.x = GROVES[k].end.x; me.y = GROVES[k].end.y; camTarget(me, true);
+    walkingTo = 99;
+    me.go(routeFromGrove(k), () => { walkingTo = -1; $('pathQ').textContent = '어느 길로 걸어 볼까요?'; }, 170);
+    renderPathPanel(); updateStatus(); heartbeat();
+  });
+}
+$('backBtn').onclick = exitGrove;
 
-// walk to the bamboo, tell it (whisper / shout / sigh), and the leaf appears
-function burstLeaves(n) { for (let i = 0; i < n; i++) setTimeout(dropLeaf, i * 90); }
-function shoutAt(w, leaf) {
-  const mode = modeOf(leaf), M = MODES[mode];
-  const a = leafAnchor(leaf);
-  const reveal = () => {
-    if (!document.querySelector(`.msg[data-id="${leaf.id}"]`) && leaves.some((l) => l.id === leaf.id)) drawLeaf(leaf, true);
-    if (w && w.isMe) toast(M.done, 3200);
-  };
-  if (!a || !w) { reveal(); return; }
-  const tx = Math.max(24, Math.min(G.W - 24, a.x + (Math.random() < .5 ? -22 : 22)));
-  const fallback = setTimeout(reveal, 10000);
-  walkTo(w, tx, G.pathTop + 14 + Math.random() * 8, () => {
-    clearTimeout(fallback);
-    w.el.classList.toggle('flip', a.x < w.x);           // face the bamboo
-    w.el.classList.add('m-' + mode);
-    const b = w.el.querySelector('.bubble'); b.className = 'bubble ' + M.bubbleCls;
-    say(w, !w.isMe && M.bubbleOther ? M.bubbleOther : M.bubble, M.reveal + 900);
-    whoosh(M.wind);
-    if (mode === 'shout') {
-      $('scene').classList.add('gust'); burstLeaves(14);
-      setTimeout(() => $('scene').classList.remove('gust'), 2200);
-    }
-    setTimeout(reveal, M.reveal);
-    setTimeout(() => { w.el.classList.remove('m-' + mode); b.className = 'bubble'; }, M.reveal + 1200);
-  }, true);
+// ================= telling: 임금님 귀는 당나귀 귀 =================
+let curMode = MODES[store.get('bamboo.mode', 'whisper')] ? store.get('bamboo.mode', 'whisper') : 'whisper';
+const ta = $('text');
+function renderModes() {
+  $('modes').innerHTML = Object.entries(MODES).map(([k, m]) => `<button type="button" class="mode" role="radio" data-mode="${k}" aria-checked="${k === curMode}" style="--mc:${m.color}"><span class="e">${m.e}</span><b>${m.name}</b><small>${m.desc}</small></button>`).join('');
+  $('modes').querySelectorAll('.mode').forEach((b) => b.onclick = () => { curMode = b.dataset.mode; store.set('bamboo.mode', curMode); renderModes(); ta.focus(); });
+  const M = MODES[curMode];
+  $('sheet').style.setProperty('--mc', M.color); ta.placeholder = M.ph; $('sendBtn').textContent = `${M.e} ${M.name}`;
+}
+function syncCount() {
+  const n = [...ta.value.trim()].length;
+  $('count').textContent = `${n} / ${MAX}`; $('count').classList.toggle('over', n > MAX);
+  $('sendBtn').disabled = n === 0 || n > MAX;
+}
+ta.addEventListener('input', syncCount);
+$('kingBtn').onclick = () => { renderModes(); syncCount(); $('sheet').showModal(); setTimeout(() => ta.focus(), 50); };
+$('sendBtn').onclick = async () => {
+  const text = ta.value.trim(); if (!text) return;
+  $('sendBtn').disabled = true;
+  const mode = curMode, M = MODES[mode];
+  let leaf;
+  try { ({ leaf } = await api('/api/leaves', { text, mode, grove: groveIdx })); }
+  catch (e) { toast(e.message, 3500); syncCount(); return; }
+  mine.add(leaf.id); store.set('bamboo.mine', [...mine].slice(-200));
+  leaves.unshift(leaf); ta.value = ''; syncCount(); $('sheet').close();
+  $('kingBtn').classList.remove('ready');
+  perform(meG, mode, true, () => {
+    drawLeaf(leaf, true);
+    toast(M.done, 3400);
+    setTimeout(() => $('kingBtn').classList.add('ready'), 1800);
+  });
+};
+function perform(p, mode, isMe, reveal) {
+  const M = MODES[mode];
+  if (!p) { reveal(); return; }
+  p.el.classList.add('back', 'm-' + mode);
+  p.say(!isMe && M.other ? M.other : M.bubble, M.reveal + 900, M.cls);
+  whoosh(M.wind);
+  if (mode === 'shout') { $('grove').classList.add('gust'); for (let i = 0; i < 14; i++) setTimeout(dropLeaf, i * 90); setTimeout(() => $('grove').classList.remove('gust'), 2200); }
+  setTimeout(reveal, M.reveal);
+  setTimeout(() => p.el.classList.remove('m-' + mode), M.reveal + 1200);
 }
 
-// ================= dialog =================
-function timeAgo(ms) {
-  const m = Math.floor(ms / 60000);
-  if (m < 1) return '방금'; if (m < 60) return m + '분 전';
-  return Math.floor(m / 60) + '시간 전';
-}
-function timeLeft(ms) {
-  const m = Math.max(0, Math.ceil(ms / 60000));
-  return m < 60 ? `${m}분 뒤 바람에 날아가요` : `${Math.floor(m / 60)}시간 뒤 바람에 날아가요`;
-}
+// ================= reading a leaf =================
+let openLeaf = null;
+function timeAgo(ms) { const m = Math.floor(ms / 60000); if (m < 1) return '방금'; if (m < 60) return m + '분 전'; return Math.floor(m / 60) + '시간 전'; }
+function timeLeft(ms) { const m = Math.max(0, Math.ceil(ms / 60000)); return m < 60 ? `${m}분 뒤 바람에 날아가요` : `${Math.floor(m / 60)}시간 뒤 바람에 날아가요`; }
 const CARE = /(죽고\s*싶|자살|살기\s*싫|사라지고\s*싶|극단적|자해|목숨|살\s*이유)/;
 function openLeafDialog(leaf) {
   openLeaf = leaf;
-  const age = now() - leaf.created;
-  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 털어놓은 말' : ''}</span><span>${timeLeft(lifetime - age)}</span>`;
-  $('leafText').textContent = leaf.text;
-  const M = MODES[modeOf(leaf)];
+  const age = now() - leaf.created, M = MODES[modeOf(leaf)];
   $('leafMode').textContent = M.label; $('leafMode').style.background = M.color;
-  $('leafText').classList.toggle('loud', modeOf(leaf) === 'shout');
-  const care = CARE.test(leaf.text);
-  $('leafCare').hidden = !care;
+  $('leafMeta').innerHTML = `<span>${timeAgo(age)}${mine.has(leaf.id) ? ' · 내가 털어놓은 말' : ''}</span><span>${timeLeft(lifetime - age)}</span>`;
+  $('leafText').textContent = leaf.text; $('leafText').classList.toggle('loud', modeOf(leaf) === 'shout');
+  const care = CARE.test(leaf.text); $('leafCare').hidden = !care;
   if (care) $('leafCare').innerHTML = '이 말을 남긴 누군가가 많이 힘든가 봐요. 혹시 당신도 그렇다면, 자살예방상담전화 <a href="tel:109">109</a>는 24시간 열려 있어요.';
-  updateHeardBtn();
-  $('reportBtn').hidden = mine.has(leaf.id);
+  updateHeardBtn(); $('reportBtn').hidden = mine.has(leaf.id);
   $('leafDlg').showModal();
 }
 function updateHeardBtn() {
-  const done = heardSet.has(openLeaf.id);
-  const btn = $('heardBtn');
-  btn.classList.toggle('done', done);
-  btn.textContent = `🍃 들었어요${openLeaf.heard ? ' · ' + openLeaf.heard : ''}`;
+  const done = heardSet.has(openLeaf.id), btn = $('heardBtn');
+  btn.classList.toggle('done', done); btn.textContent = `🍃 들었어요${openLeaf.heard ? ' · ' + openLeaf.heard : ''}`;
   btn.disabled = done || mine.has(openLeaf.id);
-}
-async function api(path, body) {
-  const res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
-  let data = {}; try { data = await res.json(); } catch {}
-  if (!res.ok) throw new Error(data.error || '숲에 잠시 문제가 생겼어요.');
-  return data;
 }
 $('heardBtn').onclick = async () => {
   const leaf = openLeaf; if (!leaf || heardSet.has(leaf.id)) return;
-  heardSet.add(leaf.id); store.set('bamboo.heard', [...heardSet].slice(-500));
-  leaf.heard++; updateHeardBtn();
-  if (meWalker) say(meWalker, '🍃 들었어요', 1800);
-  try { const d = await api(`/api/leaves/${leaf.id}/heard`, {}); leaf.heard = d.heard; if (openLeaf === leaf) updateHeardBtn(); }
-  catch (e) { toast(e.message); }
+  heardSet.add(leaf.id); store.set('bamboo.heard', [...heardSet].slice(-500)); leaf.heard++; updateHeardBtn();
+  if (meG) meG.say('🍃 들었어요', 1800);
+  try { const d = await api(`/api/leaves/${leaf.id}/heard`, {}); leaf.heard = d.heard; if (openLeaf === leaf) updateHeardBtn(); } catch (e) { toast(e.message); }
 };
 $('reportBtn').onclick = async () => {
   const leaf = openLeaf; if (!leaf) return;
   if (reportedSet.has(leaf.id)) { toast('이미 신고했어요.'); return; }
   if (!confirm('이 잎을 신고할까요?\n개인정보 노출, 특정인 비방, 혐오 표현 같은 경우에 신고해 주세요.')) return;
-  try {
-    await api(`/api/leaves/${leaf.id}/report`, {});
-    reportedSet.add(leaf.id); store.set('bamboo.reported', [...reportedSet].slice(-500));
-    toast('신고했어요. 알려줘서 고마워요.');
-  } catch (e) { toast(e.message); }
+  try { await api(`/api/leaves/${leaf.id}/report`, {}); reportedSet.add(leaf.id); store.set('bamboo.reported', [...reportedSet].slice(-500)); toast('신고했어요. 알려줘서 고마워요.'); }
+  catch (e) { toast(e.message); }
 };
 document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => b.closest('dialog').close());
 document.querySelectorAll('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
 $('aboutBtn').onclick = () => $('aboutDlg').showModal();
 
-// ================= composer =================
-const ta = $('text');
-function syncCount() {
-  const n = [...ta.value.trim()].length;
-  $('count').textContent = `${n} / ${MAX}`;
-  $('count').classList.toggle('over', n > MAX);
-  $('shoutBtn').disabled = n === 0 || n > MAX;
-  ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-}
-ta.addEventListener('input', syncCount);
-function setMode(m) {
-  currentMode = m;
-  try { localStorage.setItem('bamboo.mode', m); } catch {}
-  document.querySelectorAll('.modes button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
-  const M = MODES[m];
-  $('shoutBtn').textContent = M.btn;
-  $('form').style.setProperty('--mode', M.color);
-  ta.placeholder = innerWidth < 520 ? M.phS : M.ph;
-}
-document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', () => { setMode(b.dataset.mode); ta.focus(); }));
-ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('form').requestSubmit(); });
-$('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = ta.value.trim(); if (!text) return;
-  $('shoutBtn').disabled = true;
-  try {
-    const { leaf } = await api('/api/leaves', { text, mode: currentMode });
-    mine.add(leaf.id); store.set('bamboo.mine', [...mine].slice(-200));
-    leaves.unshift(leaf); ta.value = ''; syncCount(); ta.blur();
-    updateStatus(); $('empty').hidden = true;
-    shoutAt(meWalker, leaf);
-    toast('대나무에게 다가가는 중…', 1800);
-  } catch (err) { toast(err.message, 3500); }
-  finally { syncCount(); }
-});
-
-// ================= data =================
-let walkerCount = 1;
+// ================= data & presence =================
 function updateStatus() {
-  $('status').textContent = `지금 ${walkerCount}명이 산책 중 · 빛나는 잎 ${leaves.length}장`;
+  const total = others.size + 1;
+  if (scene === 'map') { $('title').textContent = '대나무숲'; $('status').textContent = `입구 광장 · 지금 ${total}명이 숲에 있어요`; }
+  else {
+    const g = GROVES[groveIdx], n = leaves.filter((l) => l.grove === groveIdx).length, here = [...others.values()].filter((o) => o.place === 'g' + groveIdx).length + 1;
+    $('title').textContent = `${g.icon} ${g.name}`; $('status').textContent = innerWidth < 520 ? `잎 ${n}장 · ${here}명` : `깜빡이는 잎 ${n}장 · 여기 ${here}명`;
+  }
 }
 async function load(first) {
   try {
@@ -729,95 +887,96 @@ async function load(first) {
     const known = new Set(leaves.map((l) => l.id));
     const incoming = first ? [] : d.leaves.filter((l) => !known.has(l.id) && !mine.has(l.id));
     const gone = leaves.some((l) => !d.leaves.find((x) => x.id === l.id));
-    leaves = d.leaves;
-    if (first || gone) renderLeaves(new Set(incoming.map((l) => l.id)));
-    // someone else shouted: a stroller walks over and the leaf appears
-    const others = [...walkers.values()].filter((w) => !w.isMe && !w.leaving);
-    for (const l of incoming) shoutAt(others.length ? others[Math.floor(Math.random() * others.length)] : null, l);
-    $('empty').hidden = leaves.length > 0;
-    updateStatus();
+    leaves = d.leaves.map((l) => ({ ...l, grove: l.grove ?? 0 }));
+    if (scene === 'grove') {
+      if (gone || first) renderGroveLeaves();
+      const here = [...grovePeople.values()];
+      for (const l of incoming) if (l.grove === groveIdx) {
+        const p = here.length ? here[Math.floor(Math.random() * here.length)] : null;
+        perform(p, modeOf(l), false, () => drawLeaf(l, true));
+      }
+    }
+    renderPathPanel(); updateStatus();
   } catch (e) { if (first) $('status').textContent = '숲에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
 }
 async function heartbeat() {
   try {
-    const d = await api('/api/presence', { sid: mySid });
-    walkerCount = d.walkers.length + 1;
-    syncWalkers(d.walkers); updateStatus();
+    const d = await api('/api/presence', { sid: mySid, place: myPlace });
+    others = new Map(d.walkers.slice(0, 40).map((w) => [w.id, w]));
+    syncMapPeople(); syncGrovePeople(); renderPathPanel(); updateStatus();
   } catch {}
 }
 
+// ================= ambience =================
 function dropLeaf() {
-  if (document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const L = 14 + Math.random() * 14;
-  const el = document.createElementNS(SVGNS, 'svg');
-  el.setAttribute('class', 'falling'); el.setAttribute('width', L); el.setAttribute('height', L * .4);
-  el.setAttribute('viewBox', `0 ${-L * .2} ${L} ${L * .4}`); el.style.overflow = 'visible';
+  if (document.hidden || scene !== 'grove' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const L = 14 + Math.random() * 14, el = document.createElementNS(SVGNS, 'svg');
+  el.setAttribute('width', L); el.setAttribute('height', L * .4); el.setAttribute('viewBox', `0 ${-L * .2} ${L} ${L * .4}`);
+  el.style.cssText = `position:fixed;z-index:4;pointer-events:none;overflow:visible;left:${Math.random() * innerWidth}px;top:-20px;transition:transform ${11 + Math.random() * 6}s linear, opacity 1s`;
   el.innerHTML = `<path d="${leafPath(L, L * .14)}" fill="${Math.random() < .6 ? '#8cc46c' : '#d9c77a'}"/>`;
-  el.style.left = Math.random() * innerWidth + 'px'; el.style.top = '-20px';
-  el.style.setProperty('--fx', (Math.random() * 240 - 120) + 'px');
-  el.style.setProperty('--fd', (11 + Math.random() * 7) + 's');
-  document.body.appendChild(el); el.addEventListener('animationend', () => el.remove());
+  document.body.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `translate(${Math.random() * 240 - 120}px, ${innerHeight + 40}px) rotate(${400 + Math.random() * 300}deg)`; }));
+  setTimeout(() => el.remove(), 18000);
 }
-
-// ================= sound: wind through bamboo + birds =================
 let audio = null;
 function startSound() {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const len = ctx.sampleRate * 4; const buf = ctx.createBuffer(1, len, ctx.sampleRate); const data = buf.getChannelData(0);
+  const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
   let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
   const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 900; filter.Q.value = .6;
   const gain = ctx.createGain(); gain.gain.value = 0;
-  const lfo = ctx.createOscillator(); lfo.frequency.value = .09; const lfoGain = ctx.createGain(); lfoGain.gain.value = 500;
-  lfo.connect(lfoGain).connect(filter.frequency);
+  const lfo = ctx.createOscillator(); lfo.frequency.value = .09; const lg = ctx.createGain(); lg.gain.value = 500; lfo.connect(lg).connect(filter.frequency);
   src.connect(filter).connect(gain).connect(ctx.destination); src.start(); lfo.start();
-  gain.gain.linearRampToValueAtTime(.28, ctx.currentTime + 2);
+  gain.gain.linearRampToValueAtTime(.26, ctx.currentTime + 2);
   audio = { ctx, gain };
-  const chirp = () => {
-    if (audio.ctx.state !== 'running') return;
-    const t = ctx.currentTime; const n = 2 + Math.floor(Math.random() * 3); const base = 2600 + Math.random() * 1400;
-    for (let i = 0; i < n; i++) {
-      const o = ctx.createOscillator(); const g = ctx.createGain(); o.type = 'sine';
-      const st = t + i * .13;
-      o.frequency.setValueAtTime(base, st); o.frequency.exponentialRampToValueAtTime(base * 1.35, st + .08);
-      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.045, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .11);
-      o.connect(g).connect(ctx.destination); o.start(st); o.stop(st + .12);
-    }
-  };
-  setInterval(() => { if (Math.random() < .5) chirp(); }, 2600);
+  setInterval(() => {
+    if (ctx.state !== 'running' || Math.random() < .5) return;
+    const t = ctx.currentTime, n = 2 + Math.floor(Math.random() * 3), base = 2600 + Math.random() * 1400;
+    for (let i = 0; i < n; i++) { const o = ctx.createOscillator(), g = ctx.createGain(), st = t + i * .13; o.frequency.setValueAtTime(base, st); o.frequency.exponentialRampToValueAtTime(base * 1.35, st + .08); g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.04, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .11); o.connect(g).connect(ctx.destination); o.start(st); o.stop(st + .12); }
+  }, 2600);
 }
-function whoosh(strength) {
-  if (!audio) return; const { ctx, gain } = audio; const t = ctx.currentTime;
-  gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t);
-  gain.gain.linearRampToValueAtTime(.28 + strength, t + .4); gain.gain.linearRampToValueAtTime(.28, t + 2.2);
-}
+function whoosh(k) { if (!audio) return; const { ctx, gain } = audio, t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(.26 + k, t + .4); gain.gain.linearRampToValueAtTime(.26, t + 2.2); }
 $('soundBtn').onclick = () => {
-  const btn = $('soundBtn');
-  if (!audio) { startSound(); btn.textContent = '🔊'; btn.setAttribute('aria-pressed', 'true'); return; }
-  if (audio.ctx.state === 'running') { audio.ctx.suspend(); btn.textContent = '🔈'; btn.setAttribute('aria-pressed', 'false'); }
-  else { audio.ctx.resume(); btn.textContent = '🔊'; btn.setAttribute('aria-pressed', 'true'); }
+  const b = $('soundBtn');
+  if (!audio) { startSound(); b.textContent = '🔊'; b.setAttribute('aria-pressed', 'true'); return; }
+  if (audio.ctx.state === 'running') { audio.ctx.suspend(); b.textContent = '🔈'; b.setAttribute('aria-pressed', 'false'); }
+  else { audio.ctx.resume(); b.textContent = '🔊'; b.setAttribute('aria-pressed', 'true'); }
 };
 
-// ================= boot =================
-function buildAll() {
-  computeGeometry(); buildBamboo(); buildGround(); buildLight();
-  renderLeaves();
-  for (const w of walkers.values()) { w.y = clampY(w.y); w.x = Math.min(w.x, G.W - 20); w.tx = Math.min(w.tx, G.W - 20); w.ty = clampY(w.ty); }
+// ================= loop & boot =================
+let lastT = performance.now();
+function tick(t) {
+  const dt = Math.min(.05, (t - lastT) / 1000); lastT = t;
+  if (scene === 'map') { me && me.step(dt); for (const p of mapPeople.values()) p.step(dt); if (me) camTarget(me); }
+  else { meG && meG.step(dt); for (const p of grovePeople.values()) p.step(dt); }
+  requestAnimationFrame(tick);
 }
 let resizeT;
-addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(buildAll, 200); });
-setMode(currentMode);
-buildAll(); syncCount();
-meWalker = makeWalker('me', true);
-setTimeout(() => say(meWalker, '안녕! 👋', 2500), 600);
-requestAnimationFrame(tick);
-load(true).then(() => {
-  if (!store.get('bamboo.visited2', false)) { toast('빛나는 잎을 눌러 누군가의 속마음을 듣고, 길을 눌러 산책해 보세요 🍃', 4500); store.set('bamboo.visited2', true); }
+addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    layoutMap();
+    for (const p of [me, ...mapPeople.values()]) if (p) p.scale = charScale;
+    if (scene === 'grove') { const k = groveIdx; buildGrove(k); renderGroveLeaves(); if (meG) { meG.x = G.W / 2; meG.y = G.H - (G.small ? 92 : 70); meG.scale = G.small ? 2 : 2.4; } }
+  }, 200);
 });
-heartbeat();
+setInterval(() => { if (scene === 'grove' && Math.random() < .5) dropLeaf(); }, 2400);
+
+buildMap(); layoutMap();
+me = new Person('me', $('mapChars'), { me: true, x: 600, y: WH + 20, scale: charScale });
+camTarget(me, true);
+me.go([{ x: 600, y: 1600 }, { x: 600, y: 1535 }], () => {
+  me.say('안녕! 👋', 2200);
+  $('status').textContent && updateStatus();
+  if (!store.get('bamboo.tip.map', false)) { toast('세 갈래 길 중 하나를 골라 대숲으로 걸어 들어가 보세요 🎋', 4200); store.set('bamboo.tip.map', true); }
+}, 110);
+me.idle = null;
+renderPathPanel();
+requestAnimationFrame(tick);
+load(true); heartbeat();
 setInterval(() => load(false), 20000);
-setInterval(heartbeat, 25000);
-setInterval(dropLeaf, 2600);
+setInterval(heartbeat, 20000);
 </script>
 </body>
 </html>

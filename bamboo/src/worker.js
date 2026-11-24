@@ -9,6 +9,7 @@ const POSTS_PER_DAY = 20;
 const AUTO_HIDE_REPORTS = 3;
 const PRESENCE_MS = 75 * 1000;
 const MODES = ['whisper', 'shout', 'sigh'];
+const PLACES = ['plaza', 'g0', 'g1', 'g2'];
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -85,7 +86,7 @@ async function handleApi(request, env, url) {
 
   if (pathname === '/api/leaves' && method === 'GET') {
     const { results } = await env.DB.prepare(
-      'SELECT id, text, created, heard, mode FROM leaves WHERE hidden = 0 AND created >= ? ORDER BY id DESC LIMIT 300',
+      'SELECT id, text, created, heard, mode, grove FROM leaves WHERE hidden = 0 AND created >= ? ORDER BY id DESC LIMIT 300',
     ).bind(now - LIFETIME_MS).all();
     return json({ now, lifetime: LIFETIME_MS, leaves: results });
   }
@@ -104,8 +105,8 @@ async function handleApi(request, env, url) {
     if ((recent?.d || 0) >= POSTS_PER_DAY) return fail(429, '오늘은 충분히 외쳤어요. 내일 다시 만나요.');
 
     const row = await env.DB.prepare(
-      'INSERT INTO leaves (text, created, author, mode) VALUES (?, ?, ?, ?) RETURNING id, text, created, heard, mode',
-    ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper').first();
+      'INSERT INTO leaves (text, created, author, mode, grove) VALUES (?, ?, ?, ?, ?) RETURNING id, text, created, heard, mode, grove',
+    ).bind(checked.text, now, visitor, MODES.includes(body?.mode) ? body.mode : 'whisper', [0, 1, 2].includes(body?.grove) ? body.grove : 0).first();
     return json({ leaf: row }, 201);
   }
 
@@ -138,14 +139,15 @@ async function handleApi(request, env, url) {
     try { body = await request.json(); } catch { return fail(400, '잘못된 요청이에요.'); }
     const sid = String(body?.sid || '');
     if (!/^[a-z0-9]{12,40}$/.test(sid)) return fail(400, '잘못된 요청이에요.');
-    await env.DB.prepare('INSERT INTO presence (sid, seen) VALUES (?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen')
-      .bind(sid, now).run();
+    const place = PLACES.includes(body?.place) ? body.place : 'plaza';
+    await env.DB.prepare('INSERT INTO presence (sid, seen, place) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET seen = excluded.seen, place = excluded.place')
+      .bind(sid, now, place).run();
     if (Math.random() < .05) await env.DB.prepare('DELETE FROM presence WHERE seen < ?').bind(now - 3600 * 1000).run();
-    const { results } = await env.DB.prepare('SELECT sid FROM presence WHERE seen >= ? ORDER BY seen DESC LIMIT 40')
+    const { results } = await env.DB.prepare('SELECT sid, place FROM presence WHERE seen >= ? ORDER BY seen DESC LIMIT 60')
       .bind(now - PRESENCE_MS).all();
     // other strollers only, as short one-way hashes (enough to tell them apart)
     const short = (x) => { let h = 2166136261; for (const c of x) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(36); };
-    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => short(r.sid)) });
+    return json({ walkers: results.filter((r) => r.sid !== sid).map((r) => ({ id: short(r.sid), place: r.place })) });
   }
 
   // ---- admin ----
@@ -153,7 +155,7 @@ async function handleApi(request, env, url) {
     if (!isAdmin(request, env)) return fail(401, '관리자 비밀번호가 맞지 않아요.');
     if (pathname === '/api/admin/leaves' && method === 'GET') {
       const { results } = await env.DB.prepare(
-        'SELECT id, text, created, heard, reports, hidden, mode FROM leaves WHERE created >= ? ORDER BY hidden DESC, reports DESC, id DESC LIMIT 500',
+        'SELECT id, text, created, heard, reports, hidden, mode, grove FROM leaves WHERE created >= ? ORDER BY hidden DESC, reports DESC, id DESC LIMIT 500',
       ).bind(now - LIFETIME_MS).all();
       return json({ now, leaves: results });
     }
