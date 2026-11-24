@@ -1209,20 +1209,79 @@ function dropLeaf() {
   setTimeout(() => el.remove(), 18000);
 }
 let audio = null;
-const WIND = .045;
+const WIND = .022;          // very soft bed under the music
 function startSound() {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
-  // wind through the bamboo
+  // ---------- the sound of wind in a bamboo grove: several layers, never one constant hiss ----------
   const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
   let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; data[i] = last * 3.5; }
+  const white = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); { const d = white.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const windBus = ctx.createGain(); windBus.gain.value = 0; windBus.connect(master);
+  windBus.gain.linearRampToValueAtTime(1, ctx.currentTime + 3);
+  // 1) distant air: a low, soft body that swells with each gust
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
-  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 520; filter.Q.value = .4;
-  const gain = ctx.createGain(); gain.gain.value = 0;
-  const lfo = ctx.createOscillator(); lfo.frequency.value = .09; const lg = ctx.createGain(); lg.gain.value = 180; lfo.connect(lg).connect(filter.frequency);
-  src.connect(filter).connect(gain).connect(master); src.start(); lfo.start();
-  gain.gain.linearRampToValueAtTime(WIND, ctx.currentTime + 3);
+  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 380; filter.Q.value = .3;
+  const gain = ctx.createGain(); gain.gain.value = WIND * .3;
+  src.connect(filter).connect(gain).connect(windBus); src.start();
+  // 2) leaves brushing together: "사각사각", only while the wind is moving
+  const rsrc = ctx.createBufferSource(); rsrc.buffer = white; rsrc.loop = true;
+  const rbp = ctx.createBiquadFilter(); rbp.type = 'bandpass'; rbp.frequency.value = 4200; rbp.Q.value = .9;
+  const rhp = ctx.createBiquadFilter(); rhp.type = 'highpass'; rhp.frequency.value = 2200;
+  const rgain = ctx.createGain(); rgain.gain.value = 0;
+  // flutter: fast irregular amplitude so it crackles like many small leaves instead of hissing
+  const flut = ctx.createGain(); flut.gain.value = 0;
+  const f1o = ctx.createOscillator(), f2o = ctx.createOscillator(), fg = ctx.createGain();
+  f1o.frequency.value = 7.3; f2o.frequency.value = 11.9; fg.gain.value = .5; f1o.connect(fg); f2o.connect(fg); fg.connect(flut.gain); f1o.start(); f2o.start();
+  rsrc.connect(rhp).connect(rbp).connect(flut).connect(rgain).connect(windBus); rsrc.start();
   audio = { ctx, gain };
+  // how windy each place is
+  const windiness = () => scene !== 'grove' ? .6 : [1.4, .45, .7][groveIdx] ?? .6;
+  // a gust: swell, rustle, fade, then quiet
+  const gust = (strength = 1) => {
+    const t = ctx.currentTime, up = lerp(1.6, 3.2, Math.random()), hold = lerp(.4, 1.6, Math.random()), down = lerp(2.5, 5, Math.random());
+    const k = strength * lerp(.6, 1, Math.random());
+    gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.linearRampToValueAtTime(WIND * (.3 + k * .9), t + up); gain.gain.setValueAtTime(WIND * (.3 + k * .9), t + up + hold); gain.gain.linearRampToValueAtTime(WIND * .3, t + up + hold + down);
+    filter.frequency.cancelScheduledValues(t); filter.frequency.setValueAtTime(filter.frequency.value, t);
+    filter.frequency.linearRampToValueAtTime(380 + 260 * k, t + up); filter.frequency.linearRampToValueAtTime(380, t + up + hold + down);
+    rgain.gain.cancelScheduledValues(t); rgain.gain.setValueAtTime(rgain.gain.value, t);
+    rgain.gain.linearRampToValueAtTime(.010 * k, t + up * .8); rgain.gain.setValueAtTime(.010 * k, t + up + hold); rgain.gain.linearRampToValueAtTime(0, t + up + hold + down * .8);
+    // canes knock together while the gust is strongest
+    const knocks = Math.floor(k * lerp(1, 4, Math.random()));
+    for (let i = 0; i < knocks; i++) knock(t + up * .6 + Math.random() * (hold + up * .8), .5 + Math.random() * .5);
+    if (Math.random() < .25 * k) creak(t + up + Math.random() * hold);
+    return up + hold + down;
+  };
+  // hollow bamboo knock: "톡 / 또독"
+  const knock = (t, vel) => {
+    const twice = Math.random() < .4;
+    for (let n = 0; n < (twice ? 2 : 1); n++) {
+      const st = t + n * lerp(.08, .16, Math.random()), f = lerp(380, 720, Math.random());
+      const o = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter();
+      o.type = 'triangle'; o.frequency.setValueAtTime(f * 1.15, st); o.frequency.exponentialRampToValueAtTime(f, st + .03);
+      bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 6;
+      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.028 * vel * (n ? .6 : 1), st + .003); g.gain.exponentialRampToValueAtTime(.0003, st + .22);
+      o.connect(bp).connect(g).connect(windBus); o.start(st); o.stop(st + .25);
+    }
+  };
+  // a cane bending: a very faint low creak
+  const creak = (t) => {
+    const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(), f = lerp(150, 230, Math.random());
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * lerp(.85, 1.12, Math.random()), t + .6);
+    lp.type = 'lowpass'; lp.frequency.value = 600;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.006, t + .15); g.gain.linearRampToValueAtTime(0, t + .7);
+    o.connect(lp).connect(g).connect(windBus); o.start(t); o.stop(t + .75);
+  };
+  audio.gust = gust;
+  // gusts come and go, with calm in between
+  const loopGust = () => {
+    if (ctx.state === 'running') { const w = windiness(); const d = gust(w * lerp(.5, 1, Math.random())); setTimeout(loopGust, (d + lerp(2, 9, Math.random()) / w) * 1000); }
+    else setTimeout(loopGust, 1500);
+  };
+  setTimeout(loopGust, 1200);
+  // even when it's calm, a leaf or a cane now and then
+  setInterval(() => { if (ctx.state === 'running' && Math.random() < .25 * windiness()) knock(ctx.currentTime + Math.random(), .35); }, 3000);
   // ---------- music: a different theme for the plaza and each grove ----------
   const mus = ctx.createGain(); mus.gain.value = 0;
   const dl = ctx.createDelay(2); dl.delayTime.value = .42; const fb = ctx.createGain(); fb.gain.value = .38;
@@ -1348,7 +1407,7 @@ function startSound() {
     for (let i = 0; i < n; i++) { const o = ctx.createOscillator(), g = ctx.createGain(), st = t + i * .13; o.frequency.setValueAtTime(base, st); o.frequency.exponentialRampToValueAtTime(base * 1.35, st + .08); g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.03, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .11); o.connect(g).connect(master); o.start(st); o.stop(st + .12); }
   }, 2600);
 }
-function whoosh(k) { if (!audio) return; const { ctx, gain } = audio, t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(WIND + k * .12, t + .5); gain.gain.linearRampToValueAtTime(WIND, t + 2.6); }
+function whoosh(k) { if (audio && audio.gust) audio.gust(.6 + k * .8); }
 $('soundBtn').onclick = () => {
   const b = $('soundBtn');
   if (!audio) { startSound(); b.textContent = '🔊'; b.setAttribute('aria-pressed', 'true'); return; }
