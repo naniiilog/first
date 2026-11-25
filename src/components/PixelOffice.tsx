@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 /**
- * 도트 게임 같은 사무실(그림: Kenney "RPG Urban Pack"·"Roguelike Indoors", CC0).
- * - 대화 중인 봇·사람은 사무실을 걸어 다니다가, 말하면 회의 탁자 의자로 가서 앉아요.
- * - 연결 끊긴 봇은 왼쪽 책상에서 졸고(Zz), 쉬는 봇은 휴게실 벤치에, 아직 안 온 봇은 문 앞에 있어요.
+ * 도트 게임 같은 사무실(가구·캐릭터 그림: Kenney "RPG Urban Pack"·"Roguelike Indoors", CC0).
+ * 그림이 흐리지 않게, 화면의 실제 점(픽셀) 수에 딱 맞는 배율(2~6배) 그림을 골라 그대로 그려요.
+ * - 대화 중인 봇·사람은 걸어 다니다가, 말하면 회의 탁자 의자로 가서 앉아요.
+ * - 연결 끊긴 봇은 왼쪽 책상에서 졸고, 쉬는 봇은 휴게실 벤치에, 아직 안 온 봇은 문 앞에 있어요.
  */
 
 export type CharState = 'talking' | 'here' | 'away' | 'new' | 'rest';
@@ -22,12 +23,24 @@ export interface Char {
   onPress?: () => void;
 }
 
-const ROOM = require('../../assets/office/room.png');
-const PEOPLE = require('../../assets/office/people.png');
+/** 배율별 그림(배경 160×192점, 캐릭터 384×240점을 정수배로 키운 것) */
+const ROOM: Record<number, number> = {
+  2: require('../../assets/office/room2.png'),
+  3: require('../../assets/office/room3.png'),
+  4: require('../../assets/office/room4.png'),
+  5: require('../../assets/office/room5.png'),
+  6: require('../../assets/office/room6.png'),
+};
+const PEOPLE: Record<number, number> = {
+  2: require('../../assets/office/people2.png'),
+  3: require('../../assets/office/people3.png'),
+  4: require('../../assets/office/people4.png'),
+  5: require('../../assets/office/people5.png'),
+  6: require('../../assets/office/people6.png'),
+};
 
-const COLS = 14;
-const ROWS = 16;
-const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+const COLS = 10;
+const ROWS = 12;
 
 type Dir = 'left' | 'down' | 'up' | 'right';
 const DIR_COL: Record<Dir, number> = { left: 0, down: 1, up: 2, right: 3 };
@@ -37,24 +50,24 @@ interface Spot {
   dir: Dir;
 }
 
-// 못 지나가는 칸: 벽·테두리·탁자·책상·화분·책장·자판기·벤치
+// 못 지나가는 칸: 탁자·책상·화분·책장·자판기·벤치
 const BLOCK = new Set<string>([
-  ...[5, 6, 7, 8].flatMap((x) => [`${x},6`, `${x},7`]),
-  '1,4', '1,7', '1,10', '1,3', '12,3', '12,8', '10,3', '11,3', '12,9', '12,10',
-  ...[10, 11, 12].flatMap((x) => [`${x},13`, `${x},14`]),
+  ...[3, 4, 5, 6].flatMap((x) => [`${x},5`, `${x},6`]),
+  '0,3', '0,6', '0,9', '0,2', '8,2', '9,2', '9,5', '9,6',
+  ...[7, 8, 9].flatMap((x) => [`${x},10`, `${x},11`]),
 ]);
-const blocked = (x: number, y: number) => x < 1 || x > 12 || y < 3 || y > 14 || BLOCK.has(`${x},${y}`);
+const blocked = (x: number, y: number) => x < 0 || x > 9 || y < 2 || y > 11 || BLOCK.has(`${x},${y}`);
 
-// 방장 자리(탁자 위쪽 가운데), 탁자 의자, 책상 의자, 휴게실 벤치, 문 앞
-const OWNER_SPOT: Spot = { x: 6, y: 5, dir: 'down' };
+const OWNER_SPOT: Spot = { x: 4, y: 4, dir: 'down' };
 const TABLE_SPOTS: Spot[] = [
-  { x: 5, y: 5, dir: 'down' }, { x: 7, y: 5, dir: 'down' }, { x: 8, y: 5, dir: 'down' },
-  { x: 5, y: 8, dir: 'up' }, { x: 6, y: 8, dir: 'up' }, { x: 7, y: 8, dir: 'up' }, { x: 8, y: 8, dir: 'up' },
-  { x: 4, y: 6, dir: 'right' }, { x: 4, y: 7, dir: 'right' }, { x: 9, y: 6, dir: 'left' }, { x: 9, y: 7, dir: 'left' },
+  { x: 3, y: 4, dir: 'down' }, { x: 5, y: 4, dir: 'down' }, { x: 6, y: 4, dir: 'down' },
+  { x: 3, y: 7, dir: 'up' }, { x: 4, y: 7, dir: 'up' }, { x: 5, y: 7, dir: 'up' }, { x: 6, y: 7, dir: 'up' },
+  { x: 2, y: 5, dir: 'right' }, { x: 2, y: 6, dir: 'right' }, { x: 7, y: 5, dir: 'left' }, { x: 7, y: 6, dir: 'left' },
 ];
-const DESK_SPOTS: Spot[] = [4, 7, 10].map((y) => ({ x: 2, y, dir: 'left' as Dir }));
-const REST_SPOTS: Spot[] = [10, 11, 12, 10, 11, 12].map((x, i) => ({ x, y: i < 3 ? 13 : 14, dir: 'down' as Dir }));
-const DOOR_SPOTS: Spot[] = [3, 4, 2, 3, 4].map((x, i) => ({ x, y: i < 3 ? 14 : 13, dir: 'up' as Dir }));
+const DESK_SPOTS: Spot[] = [3, 6, 9].map((y) => ({ x: 1, y, dir: 'left' as Dir }));
+const REST_SPOTS: Spot[] = [7, 8, 9, 7, 8, 9].map((x, i) => ({ x, y: i < 3 ? 10 : 11, dir: 'down' as Dir }));
+const DOOR_SPOTS: Spot[] = [2, 3, 4, 2, 3].map((x, i) => ({ x, y: i < 3 ? 11 : 10, dir: 'up' as Dir }));
+const isSeat = (x: number, y: number) => TABLE_SPOTS.some((s) => s.x === x && s.y === y);
 
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 /** 캐릭터 그림: 기본 6명 × 색 5가지 = 30가지(그림판에서 가로 6묶음 × 세로 5묶음) */
@@ -62,8 +75,15 @@ export const SKINS = 30;
 export const OWNER_SKIN = 5;
 const skinOf = (c: Char) => (c.kind === 'owner' ? OWNER_SKIN : (c.skin ?? hash(c.id)) % SKINS);
 
-export function PixelOffice({ width, chars, notice, status, clock }: { width: number; chars: Char[]; notice: string; status: string; clock: string }) {
-  const T = Math.floor(width / COLS);
+/** 이 너비(dp)에 들어가는 가장 큰 정수 배율과 그때 한 칸 크기(dp) */
+export function officeScale(maxWidth: number) {
+  const ratio = PixelRatio.get();
+  const k = Math.max(2, Math.min(6, Math.floor((maxWidth * ratio) / (COLS * 16))));
+  return { k, T: (16 * k) / ratio };
+}
+
+export function PixelOffice({ maxWidth, chars, notice, status, clock }: { maxWidth: number; chars: Char[]; notice: string; status: string; clock: string }) {
+  const { k, T } = officeScale(maxWidth);
   const W = T * COLS;
   const H = T * ROWS;
 
@@ -73,13 +93,13 @@ export function PixelOffice({ width, chars, notice, status, clock }: { width: nu
     charsRef.current = chars;
   }, [chars]);
 
-  // 0.9초마다 한 걸음: 고정 자리 캐릭터는 제자리, 대화 중인 캐릭터는 어슬렁, 방금 말한 캐릭터는 탁자 의자로
+  // 0.9초마다 한 걸음
   useEffect(() => {
     const step = () =>
       setPos((prev) => {
         const next: typeof prev = {};
         const taken = new Set<string>();
-        const k = (x: number, y: number) => `${x},${y}`;
+        const key = (x: number, y: number) => `${x},${y}`;
         let desk = 0;
         let rest = 0;
         let door = 0;
@@ -92,25 +112,25 @@ export function PixelOffice({ width, chars, notice, status, clock }: { width: nu
             c.state === 'new' ? DOOR_SPOTS[door++ % DOOR_SPOTS.length] : null;
           if (fixed) {
             next[c.id] = { ...fixed, sit: c.state !== 'new' };
-            taken.add(k(fixed.x, fixed.y));
+            taken.add(key(fixed.x, fixed.y));
           }
         }
         for (const c of list) {
           if (next[c.id]) continue;
           let p: (Spot & { sit: boolean }) | undefined = prev[c.id];
-          if (!p || taken.has(k(p.x, p.y)) || (blocked(p.x, p.y) && !TABLE_SPOTS.some((s) => s.x === p!.x && s.y === p!.y))) {
+          if (!p || taken.has(key(p.x, p.y)) || (blocked(p.x, p.y) && !isSeat(p.x, p.y))) {
             p = undefined;
             for (let tries = 0; tries < 100 && !p; tries++) {
-              const x = 1 + Math.floor(Math.random() * 12);
-              const y = 3 + Math.floor(Math.random() * 12);
-              if (!blocked(x, y) && !taken.has(k(x, y))) p = { x, y, dir: 'down', sit: false };
+              const x = Math.floor(Math.random() * COLS);
+              const y = 2 + Math.floor(Math.random() * (ROWS - 2));
+              if (!blocked(x, y) && !isSeat(x, y) && !taken.has(key(x, y))) p = { x, y, dir: 'down', sit: false };
             }
-            p = p ?? { x: 5, y: 11, dir: 'down', sit: false };
+            p = p ?? { x: 4, y: 9, dir: 'down', sit: false };
           }
           let { x, y, dir } = p;
           const goal = c.bubble?.newest ? TABLE_SPOTS[hash(c.id) % TABLE_SPOTS.length] : null;
           const atGoal = !!goal && goal.x === x && goal.y === y;
-          if (!atGoal && Math.random() < (goal ? 0.95 : c.state === 'talking' ? 0.45 : 0.2)) {
+          if (!atGoal && Math.random() < (goal ? 0.95 : c.state === 'talking' ? 0.4 : 0.2)) {
             const moves: [number, number, Dir][] = [
               [1, 0, 'right'],
               [-1, 0, 'left'],
@@ -122,8 +142,8 @@ export function PixelOffice({ width, chars, notice, status, clock }: { width: nu
             for (const [dx, dy, d] of moves) {
               const nx = x + dx;
               const ny = y + dy;
-              const isGoal = !!goal && goal.x === nx && goal.y === ny;
-              if ((isGoal || !blocked(nx, ny)) && !taken.has(k(nx, ny))) {
+              const ok = goal && goal.x === nx && goal.y === ny ? true : !blocked(nx, ny) && !isSeat(nx, ny);
+              if (ok && !taken.has(key(nx, ny))) {
                 x = nx;
                 y = ny;
                 dir = d;
@@ -133,7 +153,7 @@ export function PixelOffice({ width, chars, notice, status, clock }: { width: nu
           }
           const seated = !!goal && goal.x === x && goal.y === y;
           next[c.id] = { x, y, dir: seated ? goal!.dir : dir, sit: seated };
-          taken.add(k(x, y));
+          taken.add(key(x, y));
         }
         return next;
       });
@@ -143,38 +163,37 @@ export function PixelOffice({ width, chars, notice, status, clock }: { width: nu
   }, []);
 
   return (
-    <View style={{ width: W, height: H, borderRadius: 6, overflow: 'hidden', borderWidth: 3, borderColor: '#1A1424', backgroundColor: '#1A1424' }}>
-      <Image source={ROOM} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }} resizeMode="stretch" />
-      {/* 화이트보드(공지)와 시계 */}
-      <View style={[styles.board, { left: T * 3.3, top: T * 0.25, width: T * 6.4, height: T * 1.35 }]}>
-        <Text style={{ fontFamily: MONO, color: '#1A1424', fontWeight: '700', fontSize: Math.max(9, T * 0.27), lineHeight: Math.max(12, T * 0.36) }} numberOfLines={3}>
+    <View style={{ width: W, height: H, borderRadius: 10, overflow: 'hidden', backgroundColor: '#E2DACE' }}>
+      <Image source={ROOM[k]} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }} fadeDuration={0} />
+      {/* 화이트보드(공지)와 벽시계 */}
+      <View style={[styles.board, { left: T * 2.6, top: T * 0.22, width: T * 4.9, height: T * 1.3 }]}>
+        <Text style={[styles.boardText, { fontSize: Math.max(10, T * 0.3), lineHeight: Math.max(13, T * 0.4) }]} numberOfLines={3}>
           📌 {notice || '공지 없음'}
         </Text>
       </View>
-      <View style={[styles.clock, { left: T * 9.85, top: T * 0.4, width: T * 1.05, height: T * 0.8 }]}>
-        <Text style={{ fontFamily: MONO, color: '#7CFF9B', fontWeight: '800', fontSize: Math.max(8, T * 0.24) }}>{clock}</Text>
+      <View style={[styles.clock, { left: T * 8.1, top: T * 0.3, width: T * 1.4, height: T * 0.75 }]}>
+        <Text style={{ color: '#3B3B3B', fontWeight: '800', fontSize: Math.max(9, T * 0.3) }}>{clock}</Text>
       </View>
       {/* 탁자 위 상태 */}
-      <View style={[styles.status, { left: T * 5.2, top: T * 6.62, width: T * 3.6 }]}>
-        <Text style={{ fontFamily: MONO, color: '#FFFFFF', fontWeight: '800', fontSize: Math.max(8, T * 0.26), textAlign: 'center' }} numberOfLines={1}>
+      <View style={[styles.status, { left: T * 3.25, top: T * 5.62, width: T * 3.5 }]}>
+        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(9, T * 0.27), textAlign: 'center' }} numberOfLines={1}>
           {status}
         </Text>
       </View>
 
-      {/* 캐릭터(아래쪽이 앞에 보이게) */}
       {[...chars]
         .sort((a, b) => (pos[a.id]?.y ?? 0) - (pos[b.id]?.y ?? 0))
         .map((c) => {
           const p = pos[c.id];
           if (!p) return null;
-          return <Walker key={c.id} c={c} p={p} T={T} />;
+          return <Walker key={c.id} c={c} p={p} T={T} k={k} W={W} />;
         })}
     </View>
   );
 }
 
-/** 걸어 다니는 캐릭터: 칸이 바뀌면 부드럽게 걸어가며 걷는 그림을 번갈아 보여줘요. */
-function Walker({ c, p, T }: { c: Char; p: Spot & { sit: boolean }; T: number }) {
+/** 걸어 다니는 캐릭터 */
+function Walker({ c, p, T, k, W }: { c: Char; p: Spot & { sit: boolean }; T: number; k: number; W: number }) {
   const [xy] = useState(() => new Animated.ValueXY({ x: p.x * T, y: p.y * T }));
   const [frame, setFrame] = useState(0);
   const first = useRef(true);
@@ -194,36 +213,57 @@ function Walker({ c, p, T }: { c: Char; p: Spot & { sit: boolean }; T: number })
     return () => clearInterval(legs);
   }, [p.x, p.y, T, xy]);
 
-  const Z = Math.round(T * 1.4);
   const skin = skinOf(c);
   const row = Math.floor(skin / 6) * 3 + frame;
   const col = (skin % 6) * 4 + DIR_COL[p.dir];
   const asleep = c.state === 'away';
-  const dot = c.state === 'talking' || c.state === 'here' ? '#3DFF7A' : c.state === 'rest' ? '#FF5A5A' : c.state === 'new' ? '#7CA8FF' : '#9AA0AE';
+  const dot = c.state === 'talking' || c.state === 'here' ? '#22C55E' : c.state === 'rest' ? '#EF4444' : c.state === 'new' ? '#60A5FA' : '#9CA3AF';
+  // 말풍선이 방 밖으로 잘리지 않게: 풍선 칸을 방 안으로 밀고, 꼬리는 늘 캐릭터 머리 위를 가리켜요
+  const bw = Math.min(T * 6, W - 8);
+  const me = p.x * T;
+  const wrapLeft = Math.max(4, Math.min(W - bw - 4, me + T / 2 - bw / 2)) - me;
+  const align = me + T / 2 - bw / 2 < 4 ? 'flex-start' : me + T / 2 + bw / 2 > W - 4 ? 'flex-end' : 'center';
+  const tailLeft = T / 2 - wrapLeft - 5;
+  // 앉으면 2점만 위로(정수 점 단위라 흐려지지 않아요)
+  const lift = p.sit ? -(k / PixelRatio.get()) * 2 : 0;
 
   return (
-    <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: T, height: T, transform: xy.getTranslateTransform(), zIndex: c.bubble?.newest ? 50 : 10 }}>
+    <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: T, height: T, transform: xy.getTranslateTransform(), zIndex: c.bubble?.newest ? 50 : c.bubble ? 40 : 10 }}>
       <Pressable onPress={c.onPress} disabled={!c.onPress} accessibilityLabel={c.name} style={{ width: T, height: T }}>
-        {/* 캐릭터 그림(그림판에서 한 칸만 잘라 보여줘요) */}
-        {/* 칸보다 조금 크게(1.4배) 그려서 잘 보이게, 발이 칸 아래에 닿게 */}
-        <View style={{ position: 'absolute', left: -(Z - T) / 2, top: -(Z - T) - (p.sit ? T * 0.12 : 0), width: Z, height: Z, overflow: 'hidden', opacity: c.state === 'new' ? 0.6 : 1 }}>
-          <Image source={PEOPLE} style={{ position: 'absolute', width: Z * 24, height: Z * 15, left: -col * Z, top: -row * Z }} resizeMode="stretch" />
+        <View style={{ position: 'absolute', left: 0, top: lift, width: T, height: T, overflow: 'hidden', opacity: c.state === 'new' ? 0.6 : 1 }}>
+          <Image source={PEOPLE[k]} fadeDuration={0} style={{ position: 'absolute', width: T * 24, height: T * 15, left: -col * T, top: -row * T }} />
         </View>
-        {/* 이름표 */}
-        <View style={[styles.tag, { top: -(Z - T) - T * 0.42 }]}>
-          <View style={{ width: Math.max(4, T * 0.16), height: Math.max(4, T * 0.16), backgroundColor: dot }} />
-          <Text style={{ fontFamily: MONO, color: '#FFFFFF', fontSize: Math.max(8, T * 0.24), fontWeight: '800' }} numberOfLines={1}>
-            {c.badge ?? ''}
-            {c.name}
-          </Text>
-        </View>
-        {asleep ? <Text style={{ position: 'absolute', right: -T * 0.3, top: -T * 0.85, fontFamily: MONO, color: '#FFFFFF', fontWeight: '900', fontSize: T * 0.32 }}>Zz</Text> : null}
-        {/* 말풍선 */}
-        {c.bubble ? (
-          <View style={[styles.bubble, { bottom: T * 1.9, width: T * 4.4, left: -T * 1.7, borderColor: c.bubble.newest ? '#FFB020' : '#1A1424' }]}>
-            <Text style={{ fontFamily: MONO, fontSize: Math.max(9, T * 0.26), color: '#1A1424', lineHeight: Math.max(12, T * 0.34) }} numberOfLines={3}>
-              {c.bubble.text}
+        {/* 이름표: 머리 바로 위, 가운데 */}
+        <View
+          style={[
+            styles.tagWrap,
+            {
+              width: T * 4,
+              left: Math.max(2, Math.min(W - T * 4 - 2, me - T * 1.5)) - me,
+              bottom: T + 1,
+              alignItems: me - T * 1.5 < 2 ? 'flex-start' : me + T * 2.5 > W - 2 ? 'flex-end' : 'center',
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <View style={styles.tag}>
+            <View style={[styles.tagDot, { backgroundColor: dot }]} />
+            <Text style={[styles.tagText, { fontSize: Math.max(9, T * 0.27) }]} numberOfLines={1}>
+              {c.badge ?? ''}
+              {c.name}
             </Text>
+          </View>
+        </View>
+        {asleep ? <Text style={[styles.zz, { right: -T * 0.25, top: -T * 0.55, fontSize: Math.max(10, T * 0.3) }]}>z z</Text> : null}
+        {/* 말풍선: 글 길이에 맞춰 늘어나는 둥근 풍선, 꼬리가 말한 사람을 가리켜요 */}
+        {c.bubble ? (
+          <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft, bottom: T + Math.max(16, T * 0.5) + 2, alignItems: align }]} pointerEvents="none">
+            <View style={[styles.bubble, c.bubble.newest && styles.bubbleNew, { maxWidth: bw }]}>
+              <Text style={[styles.bubbleText, { fontSize: Math.max(11, T * 0.32), lineHeight: Math.max(15, T * 0.44) }]} numberOfLines={3}>
+                {c.bubble.text}
+              </Text>
+            </View>
+            <View style={[styles.tail, c.bubble.newest && styles.tailNew, { position: 'absolute', bottom: -5, left: tailLeft }]} />
           </View>
         ) : null}
       </Pressable>
@@ -232,9 +272,32 @@ function Walker({ c, p, T }: { c: Char; p: Spot & { sit: boolean }; T: number })
 }
 
 const styles = StyleSheet.create({
-  board: { position: 'absolute', backgroundColor: '#FAFAF5', borderWidth: 3, borderColor: '#9AA0AE', paddingHorizontal: 6, paddingVertical: 2, justifyContent: 'center' },
-  clock: { position: 'absolute', backgroundColor: '#11141C', borderWidth: 2, borderColor: '#2E3445', alignItems: 'center', justifyContent: 'center' },
-  status: { position: 'absolute', backgroundColor: 'rgba(30,20,40,0.55)', paddingVertical: 1, borderRadius: 3 },
-  tag: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(20,16,30,0.78)', paddingHorizontal: 4, paddingVertical: 1 },
-  bubble: { position: 'absolute', backgroundColor: '#FFFFFF', borderWidth: 3, paddingHorizontal: 5, paddingVertical: 3 },
+  board: { position: 'absolute', backgroundColor: '#FFFFFF', borderRadius: 4, borderWidth: 2, borderColor: '#B9B2A6', paddingHorizontal: 6, paddingVertical: 2, justifyContent: 'center' },
+  boardText: { color: '#2B2B2B', fontWeight: '600' },
+  clock: { position: 'absolute', backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 2, borderColor: '#B9B2A6', alignItems: 'center', justifyContent: 'center' },
+  status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.55)', paddingVertical: 2, borderRadius: 999 },
+  tagWrap: { position: 'absolute', alignItems: 'center' },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.72)', borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  tagDot: { width: 6, height: 6, borderRadius: 3 },
+  tagText: { color: '#FFFFFF', fontWeight: '700' },
+  zz: { position: 'absolute', color: '#6B7280', fontWeight: '900', fontStyle: 'italic' },
+  bubbleWrap: { position: 'absolute', alignItems: 'center' },
+  bubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  bubbleNew: { borderColor: '#F5B544', borderWidth: 2 },
+  bubbleText: { color: '#1F2937' },
+  // 꼬리: 45° 돌린 작은 네모를 풍선 아래 가운데에 반쯤 겹쳐요
+  tail: { width: 10, height: 10, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderRightWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(0,0,0,0.08)', elevation: 4 },
+  tailNew: { borderColor: '#F5B544', borderRightWidth: 2, borderBottomWidth: 2 },
 });
