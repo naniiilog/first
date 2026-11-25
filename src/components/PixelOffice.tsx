@@ -1,3 +1,4 @@
+import { useFonts } from 'expo-font';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -26,6 +27,8 @@ export interface Char {
 }
 
 const BG = require('../../assets/office/office.jpg');
+/** 도트 글꼴(갈무리9, OFL). 그림과 어울리게 칠판·이름표·시계에 써요 */
+const PIXEL_FONT = { Galmuri9: require('../../assets/fonts/Galmuri9.ttf') };
 const BG_W = 1672;
 const BG_H = 941;
 const PEOPLE: Record<number, number> = {
@@ -163,6 +166,8 @@ interface Plan {
  * rotate면 90° 돌려서 그려요(폰을 옆으로 돌려서 크게 보기).
  */
 export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status, clock }: { boxW: number; boxH: number; rotate?: boolean; chars: Char[]; notice: string; status: string; clock: string }) {
+  const [fontReady] = useFonts(PIXEL_FONT);
+  const px = fontReady ? { fontFamily: 'Galmuri9' } : null;
   const s = rotate ? Math.min(boxW / BG_H, boxH / BG_W) : Math.min(boxW / BG_W, boxH / BG_H);
   const W = BG_W * s;
   const height = BG_H * s;
@@ -270,19 +275,24 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status,
       >
         <Image source={BG} style={{ position: 'absolute', left: 0, top: 0, width: W, height }} fadeDuration={0} />
         {/* 칠판: 원래 내용을 지운 흰 칠판에 공지를 써요 */}
-        <View style={[styles.notice, { left: 622 * s, top: 76 * s, width: 430 * s, height: 86 * s }]}>
-          <Text style={[styles.noticeTitle, { fontSize: Math.max(7, 15 * s) }]}>📌 공지</Text>
-          <Text style={[styles.noticeText, { fontSize: Math.max(8, 20 * s), lineHeight: Math.max(10, 26 * s) }]} numberOfLines={2}>
+        <View style={[styles.notice, { left: 630 * s, top: 80 * s, width: 414 * s, height: 78 * s }]}>
+          <Text
+            style={[styles.noticeText, px, { fontSize: Math.max(7, Math.round(14 * s * 2) / 2), lineHeight: Math.max(9, Math.round(19 * s)) }]}
+            numberOfLines={3}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            <Text style={styles.noticeTitle}>공지 </Text>
             {notice || '아직 공지가 없어요'}
           </Text>
         </View>
         {/* 벽시계 */}
         <View style={[styles.clock, { left: 790 * s, top: 6 * s }]}>
-          <Text style={{ color: '#1F2937', fontWeight: '800', fontSize: Math.max(8, 16 * s) }}>{clock}</Text>
+          <Text style={[{ color: '#1F2937', fontSize: Math.max(8, 15 * s) }, px]}>{clock}</Text>
         </View>
         {/* 회의 탁자 위 상태 */}
         <View style={[styles.status, { left: 700 * s, top: 340 * s, width: 270 * s }]}>
-          <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(8, 15 * s), textAlign: 'center' }} numberOfLines={1}>
+          <Text style={[{ color: '#FFFFFF', fontSize: Math.max(8, 14 * s), textAlign: 'center' }, px]} numberOfLines={1}>
             {status}
           </Text>
         </View>
@@ -299,6 +309,7 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status,
               k={k}
               W={W}
               size={size}
+              font={fontReady ? 'Galmuri9' : undefined}
               onDone={(last) => {
                 posRef.current[c.id] = last;
                 busyRef.current[c.id] = false;
@@ -312,7 +323,7 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status,
 }
 
 /** 걸어 다니는 캐릭터: 길(점 목록)을 한 칸씩 걸어가며 방향과 걷는 그림을 바꿔요. */
-function Walker({ c, plan, s, k, W, size, onDone }: { c: Char; plan: Plan; s: number; k: number; W: number; size: number; onDone: (last: P) => void }) {
+function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan; s: number; k: number; W: number; size: number; font?: string; onDone: (last: P) => void }) {
   const first = plan.route[0];
   const [xy] = useState(() => new Animated.ValueXY({ x: first.x * s, y: first.y * s }));
   const [frame, setFrame] = useState(0);
@@ -398,7 +409,7 @@ function Walker({ c, plan, s, k, W, size, onDone }: { c: Char; plan: Plan; s: nu
       <View style={[styles.tagWrap, { width: tagW, left: tagLeft, top: -size * 0.95 - (sit ? 6 * s : 0) - 20 }]} pointerEvents="none">
         <View style={styles.tag}>
           <View style={[styles.tagDot, { backgroundColor: dot }]} />
-          <Text style={styles.tagText} numberOfLines={1}>
+          <Text style={[styles.tagText, font ? { fontFamily: font, fontWeight: 'normal' } : null]} numberOfLines={1}>
             {c.badge ?? ''}
             {c.name}
           </Text>
@@ -428,15 +439,16 @@ function Walker({ c, plan, s, k, W, size, onDone }: { c: Char; plan: Plan; s: nu
 }
 
 const styles = StyleSheet.create({
-  notice: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
-  noticeTitle: { color: '#C2410C', fontWeight: '800' },
-  noticeText: { color: '#1E3A8A', fontWeight: '800', textAlign: 'center' },
+  notice: { position: 'absolute', justifyContent: 'center' },
+  noticeTitle: { color: '#C2410C' },
+  // 칠판에 마커로 쓴 느낌: 굵지 않게, 진한 남색
+  noticeText: { color: '#24325C' },
   clock: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
   status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.6)', paddingVertical: 2, borderRadius: 999 },
   tagWrap: { position: 'absolute', alignItems: 'center' },
-  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.75)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.72)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
   tagDot: { width: 6, height: 6, borderRadius: 3 },
-  tagText: { color: '#FFFFFF', fontWeight: '700', fontSize: 11 },
+  tagText: { color: '#FFFFFF', fontWeight: '700', fontSize: 10 },
   zz: { position: 'absolute', color: '#4B5563', fontWeight: '900', fontStyle: 'italic', fontSize: 13 },
   bubbleWrap: { position: 'absolute', alignItems: 'center' },
   bubble: {

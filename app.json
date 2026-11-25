@@ -89,7 +89,8 @@
         {
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "dabot",
     "owner": "minnaniis-team",
