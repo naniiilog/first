@@ -420,7 +420,7 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
       {c.bubble ? (
         <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft }, below ? { top: 10 } : { bottom: size * 0.95 + 26 }]} pointerEvents="none">
           <View style={[styles.bubble, c.bubble.newest && styles.bubbleNew, { maxWidth: bw }]}>
-            <Text style={styles.bubbleText} numberOfLines={3}>
+            <Text style={[styles.bubbleText, font ? { fontFamily: font, fontSize: 12, lineHeight: 17 } : null]} numberOfLines={3}>
               {c.bubble.text}
             </Text>
           </View>
