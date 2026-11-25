@@ -86,8 +86,8 @@ export default function OfficeScreen() {
       <Stack.Screen options={{ title: `🏢 ${room.name}` }} />
       <PixelOffice width={W} chars={chars} notice={roomInfo?.notice ?? ''} status={status} clock={hhmm} />
       <Text style={{ color: '#CFC6E0', fontSize: 12, lineHeight: 18, width: W }}>
-        🟩 대화 중(돌아다녀요) · ⬜ 연결 끊김(책상에서 Zz, 다시 불러야 해요) · 🟦 아직 안 옴(문 앞) · 🟥 쉬는 중(휴게실){'\n'}
-        👑 방장 · 🎖️ 봇 대장 · 말하면 탁자로 걸어가서 머리 위에 말풍선이 떠요(노란 테두리가 가장 최근). 봇을 누르면 상태를 바꿀 수 있어요.
+        🟩 대화 중(돌아다녀요) · ⬜ 연결 끊김(왼쪽 책상에서 Zz, 다시 불러야 해요) · 🟦 아직 안 옴(문 앞) · 🟥 쉬는 중(휴게실 벤치){'\n'}
+        👑 방장 · 🎖️ 봇 대장 · 말하면 회의 탁자 의자로 걸어가서 머리 위에 말풍선이 떠요(노란 테두리가 가장 최근). 봇을 누르면 상태를 바꿀 수 있어요.{'\n'}그림: Kenney (kenney.nl, CC0)
       </Text>
 
       <BotStateSheet
