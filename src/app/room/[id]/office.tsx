@@ -9,6 +9,14 @@ import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
 import { OWNER_ID, SYSTEM_ID, type ChatMessage } from '../../../lib/types';
 
+/** 목록 시각: 오늘이면 시:분, 아니면 월/일 시:분 */
+const hm = (t: number) => {
+  const d = new Date(t);
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const today = new Date().toDateString() === d.toDateString();
+  return `${today ? '' : `${d.getMonth() + 1}/${d.getDate()} `}${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
+
 /** 말풍선을 띄워 두는 시간 */
 const BUBBLE_MS = 3 * 60_000;
 
@@ -62,6 +70,9 @@ export default function OfficeScreen() {
   const order = [...guests.map((g) => `guest:${g.id}`), ...[...members].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)).map((m) => m.id)];
   const skinFor = (cid: string) => pool[Math.max(0, order.indexOf(cid)) % pool.length];
 
+  /** 아래 목록에 보여줄 최근 글 30개(새 글이 위) */
+  const talk = messages.filter((m) => m.authorId !== SYSTEM_ID).slice(-30).reverse();
+
   const chars: Char[] = [
     { id: OWNER_ID, name: settings.userName === '나' ? '나' : settings.userName, kind: 'owner', state: 'here', badge: '👑' },
     ...guests.map<Char>((g) => ({
@@ -97,9 +108,27 @@ export default function OfficeScreen() {
       <Pressable onPress={() => setBig(true)} style={{ backgroundColor: '#F5B544', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 }}>
         <Text style={{ color: '#1A1424', fontWeight: '800' }}>📱↻ 폰을 옆으로 돌려 크게 보기</Text>
       </Pressable>
-      <Text style={{ color: '#CFC6E0', fontSize: 12, lineHeight: 18, width: width - 24 }}>
+      {/* 최근 대화: 말풍선은 짧게만, 전체 글은 여기서 봐요(새 글이 위) */}
+      <View style={{ width: width - 20, backgroundColor: '#241C33', borderRadius: 12, padding: 10, gap: 8 }}>
+        <Text style={{ color: '#F5B544', fontWeight: '800', fontSize: 13 }}>💬 최근 대화</Text>
+        {talk.length ? (
+          talk.map((m) => (
+            <View key={m.id} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+              <Text style={{ color: m.authorId === OWNER_ID ? '#F5B544' : '#A7F3D0', fontWeight: '700', fontSize: 13, minWidth: 52 }} numberOfLines={1}>
+                {m.authorId === OWNER_ID ? '👑 나' : m.authorName}
+              </Text>
+              <Text style={{ color: '#EDE9F6', fontSize: 13, lineHeight: 19, flex: 1 }}>{m.image && !m.text ? '📷 사진' : m.text}</Text>
+              <Text style={{ color: '#8C82A3', fontSize: 10, marginTop: 3 }}>{hm(m.createdAt)}</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={{ color: '#8C82A3', fontSize: 12 }}>아직 대화가 없어요.</Text>
+        )}
+      </View>
+
+      <Text style={{ color: '#8C82A3', fontSize: 11, lineHeight: 16, width: width - 24 }}>
         🟩 대화 중(돌아다니다가 가끔 컴퓨터 자리에서 일해요) · ⬜ 연결 끊김(소파·빈백에서 z z, 다시 불러야 해요) · 🟥 쉬는 중·사용량 다 씀(소파·빈백) · 🟦 아직 안 옴(출입문 앞){'\n'}
-        👑 방장 · 🎖️ 봇 대장 · 말하면 회의실 의자로 걸어가서 머리 위에 말풍선이 떠요(노란 테두리가 가장 최근). 봇을 누르면 상태를 바꿀 수 있어요.{'\n'}
+        👑 방장 · 🎖️ 봇 대장 · 말하면 회의실 의자로 걸어가서 머리 위에 짧은 말풍선이 떠요(노란 테두리가 가장 최근, 전체 글은 위 목록에서). 봇을 누르면 상태를 바꿀 수 있어요.{'\n'}
         캐릭터 그림: Kenney (kenney.nl, CC0)
       </Text>
 
