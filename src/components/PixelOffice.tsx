@@ -15,6 +15,8 @@ export interface Char {
   state: CharState;
   /** 이름 앞 표시(👑 방장, 🎖️ 대장) */
   badge?: string;
+  /** 캐릭터 그림 번호(0~29). 방 안에서 겹치지 않게 office 화면이 정해줘요 */
+  skin?: number;
   /** 말풍선(최근에 한 말) */
   bubble?: { text: string; newest: boolean };
   onPress?: () => void;
@@ -55,8 +57,10 @@ const REST_SPOTS: Spot[] = [10, 11, 12, 10, 11, 12].map((x, i) => ({ x, y: i < 3
 const DOOR_SPOTS: Spot[] = [3, 4, 2, 3, 4].map((x, i) => ({ x, y: i < 3 ? 14 : 13, dir: 'up' as Dir }));
 
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-/** 캐릭터 그림 6가지 중 하나(방장은 늘 같은 그림) */
-const skinOf = (c: Char) => (c.kind === 'owner' ? 5 : hash(c.id) % 5);
+/** 캐릭터 그림: 기본 6명 × 색 5가지 = 30가지(그림판에서 가로 6묶음 × 세로 5묶음) */
+export const SKINS = 30;
+export const OWNER_SKIN = 5;
+const skinOf = (c: Char) => (c.kind === 'owner' ? OWNER_SKIN : (c.skin ?? hash(c.id)) % SKINS);
 
 export function PixelOffice({ width, chars, notice, status, clock }: { width: number; chars: Char[]; notice: string; status: string; clock: string }) {
   const T = Math.floor(width / COLS);
@@ -191,8 +195,9 @@ function Walker({ c, p, T }: { c: Char; p: Spot & { sit: boolean }; T: number })
   }, [p.x, p.y, T, xy]);
 
   const Z = Math.round(T * 1.4);
-  const row = skinOf(c) * 3 + frame;
-  const col = DIR_COL[p.dir];
+  const skin = skinOf(c);
+  const row = Math.floor(skin / 6) * 3 + frame;
+  const col = (skin % 6) * 4 + DIR_COL[p.dir];
   const asleep = c.state === 'away';
   const dot = c.state === 'talking' || c.state === 'here' ? '#3DFF7A' : c.state === 'rest' ? '#FF5A5A' : c.state === 'new' ? '#7CA8FF' : '#9AA0AE';
 
@@ -202,7 +207,7 @@ function Walker({ c, p, T }: { c: Char; p: Spot & { sit: boolean }; T: number })
         {/* 캐릭터 그림(그림판에서 한 칸만 잘라 보여줘요) */}
         {/* 칸보다 조금 크게(1.4배) 그려서 잘 보이게, 발이 칸 아래에 닿게 */}
         <View style={{ position: 'absolute', left: -(Z - T) / 2, top: -(Z - T) - (p.sit ? T * 0.12 : 0), width: Z, height: Z, overflow: 'hidden', opacity: c.state === 'new' ? 0.6 : 1 }}>
-          <Image source={PEOPLE} style={{ position: 'absolute', width: Z * 4, height: Z * 18, left: -col * Z, top: -row * Z }} resizeMode="stretch" />
+          <Image source={PEOPLE} style={{ position: 'absolute', width: Z * 24, height: Z * 15, left: -col * Z, top: -row * Z }} resizeMode="stretch" />
         </View>
         {/* 이름표 */}
         <View style={[styles.tag, { top: -(Z - T) - T * 0.42 }]}>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, Text, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
-import { PixelOffice, type Char } from '../../../components/PixelOffice';
+import { OWNER_SKIN, PixelOffice, SKINS, type Char } from '../../../components/PixelOffice';
 import { api, type Guest } from '../../../lib/api';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
@@ -55,12 +55,18 @@ export default function OfficeScreen() {
     return { text: m.image && !m.text ? '📷 사진' : m.text, newest: i === 0 };
   };
 
+  // 캐릭터 그림이 방 안에서 겹치지 않게: 들어온 순서대로 30가지 중 하나씩(방장 그림은 빼고)
+  const pool = Array.from({ length: SKINS }, (_, i) => i).filter((i) => i !== OWNER_SKIN);
+  const order = [...guests.map((g) => `guest:${g.id}`), ...[...members].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)).map((m) => m.id)];
+  const skinFor = (cid: string) => pool[Math.max(0, order.indexOf(cid)) % pool.length];
+
   const chars: Char[] = [
     { id: OWNER_ID, name: settings.userName === '나' ? '나' : settings.userName, kind: 'owner', state: 'here', badge: '👑', bubble: bubbleOf(OWNER_ID) },
     ...guests.map<Char>((g) => ({
       id: `guest:${g.id}`,
       name: g.name,
       kind: 'guest',
+      skin: skinFor(`guest:${g.id}`),
       state: g.online ? 'here' : g.joined ? 'away' : 'new',
       bubble: bubbleOf(`guest:${g.id}`),
     })),
@@ -68,6 +74,7 @@ export default function OfficeScreen() {
       id: m.id,
       name: m.name,
       kind: 'bot',
+      skin: skinFor(m.id),
       state: !m.active || m.exhausted ? 'rest' : m.online ? 'talking' : m.joined ? 'away' : 'new',
       badge: m.id === leaderId ? '🎖️' : undefined,
       bubble: bubbleOf(m.id),
