@@ -63,7 +63,7 @@ export default function OfficeScreen() {
   const skinFor = (cid: string) => pool[Math.max(0, order.indexOf(cid)) % pool.length];
 
   const chars: Char[] = [
-    { id: OWNER_ID, name: settings.userName === '나' ? '나' : settings.userName, kind: 'owner', state: 'here', badge: '👑', bubble: bubbleOf(OWNER_ID) },
+    { id: OWNER_ID, name: settings.userName === '나' ? '나' : settings.userName, kind: 'owner', state: 'here', badge: '👑' },
     ...guests.map<Char>((g) => ({
       id: `guest:${g.id}`,
       name: g.name,

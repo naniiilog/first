@@ -405,16 +405,22 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
           <Image source={PEOPLE[k]} fadeDuration={0} style={{ position: 'absolute', width: size * 24, height: size * 15, left: -col * size, top: -row * size }} />
         </View>
       </Pressable>
-      {/* 이름표 */}
-      <View style={[styles.tagWrap, { width: tagW, left: tagLeft, top: -size * 0.95 - (sit ? 6 * s : 0) - 20 }]} pointerEvents="none">
-        <View style={styles.tag}>
-          <View style={[styles.tagDot, { backgroundColor: dot }]} />
-          <Text style={[styles.tagText, font ? { fontFamily: font, fontWeight: 'normal' } : null]} numberOfLines={1}>
-            {c.badge ?? ''}
-            {c.name}
-          </Text>
+      {/* 방장은 이름표 없이 머리 위에 왕관만, 나머지는 작은 이름표 */}
+      {c.kind === 'owner' ? (
+        <Text style={[styles.crown, { left: -size * 0.3, top: -size * 0.95 - (sit ? 6 * s : 0) - size * 0.55, fontSize: Math.max(11, size * 0.55) }]} pointerEvents="none">
+          👑
+        </Text>
+      ) : (
+        <View style={[styles.tagWrap, { width: tagW, left: tagLeft, top: -size * 0.95 - (sit ? 6 * s : 0) - 15 }]} pointerEvents="none">
+          <View style={styles.tag}>
+            <View style={[styles.tagDot, { backgroundColor: dot }]} />
+            <Text style={[styles.tagText, font ? { fontFamily: font, fontWeight: 'normal' } : null]} numberOfLines={1}>
+              {c.badge ?? ''}
+              {c.name}
+            </Text>
+          </View>
         </View>
-      </View>
+      )}
       {asleep ? <Text style={[styles.zz, { left: size * 0.25, top: -size * 1.25 }]}>z z</Text> : null}
       {/* 말풍선 */}
       {c.bubble ? (
@@ -447,8 +453,9 @@ const styles = StyleSheet.create({
   status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.6)', paddingVertical: 2, borderRadius: 999 },
   tagWrap: { position: 'absolute', alignItems: 'center' },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.72)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
-  tagDot: { width: 6, height: 6, borderRadius: 3 },
-  tagText: { color: '#FFFFFF', fontWeight: '700', fontSize: 10 },
+  tagDot: { width: 4, height: 4, borderRadius: 2 },
+  tagText: { color: '#FFFFFF', fontWeight: '700', fontSize: 8 },
+  crown: { position: 'absolute', textAlign: 'center' },
   zz: { position: 'absolute', color: '#4B5563', fontWeight: '900', fontStyle: 'italic', fontSize: 13 },
   bubbleWrap: { position: 'absolute', alignItems: 'center' },
   bubble: {
