@@ -388,10 +388,11 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
   const asleep = c.state === 'away';
   const dot = c.state === 'talking' || c.state === 'here' ? '#22C55E' : c.state === 'rest' ? '#EF4444' : c.state === 'new' ? '#60A5FA' : '#9CA3AF';
   // 말풍선·이름표가 그림 밖으로 안 잘리게(발 위치 기준으로 계산)
-  const bw = Math.min(260 * s + 60, W - 8);
+  // 말풍선은 작게: 그림 크기에 맞춰 폭을 줄이고 2줄까지만
+  const bw = Math.min(150 * s + 60, W - 8);
   const me = feet.x * s;
   const wrapLeft = Math.max(4, Math.min(W - bw - 4, me - bw / 2)) - me;
-  const tailLeft = -wrapLeft - 5;
+  const tailLeft = -wrapLeft - 3;
   // 위쪽 끝에 있으면 말풍선을 아래로(그림 밖으로 잘리지 않게)
   const below = feet.y * s - size - 80 < 0;
   const tagW = 160 * s + 40;
@@ -424,9 +425,9 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
       {asleep ? <Text style={[styles.zz, { left: size * 0.25, top: -size * 1.25 }]}>z z</Text> : null}
       {/* 말풍선 */}
       {c.bubble ? (
-        <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft }, below ? { top: 10 } : { bottom: size * 0.95 + 26 }]} pointerEvents="none">
+        <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft }, below ? { top: 6 } : { bottom: size * 0.95 + 16 }]} pointerEvents="none">
           <View style={[styles.bubble, c.bubble.newest && styles.bubbleNew, { maxWidth: bw }]}>
-            <Text style={[styles.bubbleText, font ? { fontFamily: font, fontSize: 12, lineHeight: 17 } : null]} numberOfLines={3}>
+            <Text style={[styles.bubbleText, font ? { fontFamily: font, fontSize: 9, lineHeight: 12 } : null]} numberOfLines={2}>
               {c.bubble.text}
             </Text>
           </View>
@@ -435,7 +436,7 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
               styles.tail,
               c.bubble.newest && styles.tailNew,
               { position: 'absolute', left: tailLeft },
-              below ? { top: -5, transform: [{ rotate: '225deg' }] } : { bottom: -5 },
+              below ? { top: -3, transform: [{ rotate: '225deg' }] } : { bottom: -3 },
             ]}
           />
         </View>
@@ -460,9 +461,9 @@ const styles = StyleSheet.create({
   bubbleWrap: { position: 'absolute', alignItems: 'center' },
   bubble: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 7,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
     shadowColor: '#000',
@@ -471,8 +472,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
-  bubbleNew: { borderColor: '#F5B544', borderWidth: 2 },
-  bubbleText: { color: '#1F2937', fontSize: 13, lineHeight: 18 },
-  tail: { width: 10, height: 10, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderRightWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(0,0,0,0.08)', elevation: 4 },
-  tailNew: { borderColor: '#F5B544', borderRightWidth: 2, borderBottomWidth: 2 },
+  bubbleNew: { borderColor: '#F5B544', borderWidth: 1.5 },
+  bubbleText: { color: '#1F2937', fontSize: 10, lineHeight: 13 },
+  tail: { width: 6, height: 6, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderRightWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(0,0,0,0.08)', elevation: 4 },
+  tailNew: { borderColor: '#F5B544', borderRightWidth: 1.5, borderBottomWidth: 1.5 },
 });
