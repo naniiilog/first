@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 /**
- * 도트 게임 같은 사무실(가구·캐릭터 그림: Kenney "RPG Urban Pack"·"Roguelike Indoors", CC0).
- * 그림이 흐리지 않게, 화면의 실제 점(픽셀) 수에 딱 맞는 배율(2~6배) 그림을 골라 그대로 그려요.
- * - 대화 중인 봇·사람은 걸어 다니다가, 말하면 회의 탁자 의자로 가서 앉아요.
- * - 연결 끊긴 봇은 왼쪽 책상에서 졸고, 쉬는 봇은 휴게실 벤치에, 아직 안 온 봇은 문 앞에 있어요.
+ * 도트 게임 같은 사무실.
+ * 배경: 방장이 AI로 만든 사무실 그림(1672×941점). 캐릭터: Kenney "RPG Urban Pack"(CC0)을 색만 바꾼 30가지.
+ * - 대화 중인 봇·사람은 통로를 따라 걸어 다니다가, 말하면 회의실 의자로 가서 앉아요.
+ * - 연결 끊긴 봇은 컴퓨터 자리에서 졸고, 쉬는 봇은 소파·빈백에, 아직 안 온 봇은 출입문 앞에 있어요.
+ * 그림 좌표(점) 기준으로 위치를 정하고, 화면에 그릴 때 배율 s를 곱해요.
  */
 
 export type CharState = 'talking' | 'here' | 'away' | 'new' | 'rest';
@@ -23,14 +24,9 @@ export interface Char {
   onPress?: () => void;
 }
 
-/** 배율별 그림(배경 160×192점, 캐릭터 384×240점을 정수배로 키운 것) */
-const ROOM: Record<number, number> = {
-  2: require('../../assets/office/room2.png'),
-  3: require('../../assets/office/room3.png'),
-  4: require('../../assets/office/room4.png'),
-  5: require('../../assets/office/room5.png'),
-  6: require('../../assets/office/room6.png'),
-};
+const BG = require('../../assets/office/office.jpg');
+const BG_W = 1672;
+const BG_H = 941;
 const PEOPLE: Record<number, number> = {
   2: require('../../assets/office/people2.png'),
   3: require('../../assets/office/people3.png'),
@@ -38,249 +34,377 @@ const PEOPLE: Record<number, number> = {
   5: require('../../assets/office/people5.png'),
   6: require('../../assets/office/people6.png'),
 };
-
-const COLS = 10;
-const ROWS = 12;
+/** 그림 속 캐릭터 크기(점). 의자 크기에 맞췄어요 */
+const BODY = 54;
+/** 걷는 빠르기(그림 점/초) */
+const SPEED = 110;
 
 type Dir = 'left' | 'down' | 'up' | 'right';
 const DIR_COL: Record<Dir, number> = { left: 0, down: 1, up: 2, right: 3 };
-interface Spot {
+interface P {
   x: number;
   y: number;
+}
+interface Seat extends P {
   dir: Dir;
 }
 
-// 못 지나가는 칸: 탁자·책상·화분·책장·자판기·벤치
-const BLOCK = new Set<string>([
-  ...[3, 4, 5, 6].flatMap((x) => [`${x},5`, `${x},6`]),
-  '0,3', '0,6', '0,9', '0,2', '8,2', '9,2', '9,5', '9,6',
-  ...[7, 8, 9].flatMap((x) => [`${x},10`, `${x},11`]),
-]);
-const blocked = (x: number, y: number) => x < 0 || x > 9 || y < 2 || y > 11 || BLOCK.has(`${x},${y}`);
-
-const OWNER_SPOT: Spot = { x: 4, y: 4, dir: 'down' };
-const TABLE_SPOTS: Spot[] = [
-  { x: 3, y: 4, dir: 'down' }, { x: 5, y: 4, dir: 'down' }, { x: 6, y: 4, dir: 'down' },
-  { x: 3, y: 7, dir: 'up' }, { x: 4, y: 7, dir: 'up' }, { x: 5, y: 7, dir: 'up' }, { x: 6, y: 7, dir: 'up' },
-  { x: 2, y: 5, dir: 'right' }, { x: 2, y: 6, dir: 'right' }, { x: 7, y: 5, dir: 'left' }, { x: 7, y: 6, dir: 'left' },
+// ── 자리(발 위치 기준) ──
+const OWNER_SEAT: Seat = { x: 560, y: 300, dir: 'right' };
+const TOP_X = [633, 690, 750, 808, 866, 925, 985, 1043];
+const MEETING: Seat[] = [
+  ...TOP_X.map((x) => ({ x, y: 248, dir: 'down' as Dir })),
+  ...TOP_X.map((x) => ({ x, y: 392, dir: 'up' as Dir })),
+  { x: 560, y: 348, dir: 'right' },
+  { x: 1118, y: 300, dir: 'left' },
+  { x: 1118, y: 348, dir: 'left' },
 ];
-const DESK_SPOTS: Spot[] = [3, 6, 9].map((y) => ({ x: 1, y, dir: 'left' as Dir }));
-const REST_SPOTS: Spot[] = [7, 8, 9, 7, 8, 9].map((x, i) => ({ x, y: i < 3 ? 10 : 11, dir: 'down' as Dir }));
-const DOOR_SPOTS: Spot[] = [2, 3, 4, 2, 3].map((x, i) => ({ x, y: i < 3 ? 11 : 10, dir: 'up' as Dir }));
-const isSeat = (x: number, y: number) => TABLE_SPOTS.some((s) => s.x === x && s.y === y);
+const DESKS: Seat[] = [
+  { x: 425, y: 640, dir: 'up' }, { x: 565, y: 640, dir: 'up' }, { x: 1105, y: 640, dir: 'up' }, { x: 1245, y: 640, dir: 'up' },
+  { x: 425, y: 772, dir: 'up' }, { x: 565, y: 772, dir: 'up' }, { x: 1105, y: 772, dir: 'up' }, { x: 1245, y: 772, dir: 'up' },
+];
+const LOUNGE: Seat[] = [
+  { x: 1400, y: 395, dir: 'down' }, { x: 1455, y: 395, dir: 'down' }, { x: 1355, y: 455, dir: 'down' },
+  { x: 1465, y: 630, dir: 'down' }, { x: 1545, y: 655, dir: 'down' }, { x: 1435, y: 690, dir: 'down' },
+  { x: 315, y: 200, dir: 'down' }, { x: 210, y: 220, dir: 'down' }, { x: 185, y: 278, dir: 'down' },
+  { x: 180, y: 450, dir: 'down' }, { x: 240, y: 500, dir: 'down' },
+  { x: 1330, y: 195, dir: 'down' }, { x: 1525, y: 190, dir: 'down' }, { x: 1355, y: 250, dir: 'down' },
+];
+const DOOR: Seat[] = [
+  { x: 800, y: 905, dir: 'up' }, { x: 870, y: 905, dir: 'up' }, { x: 740, y: 912, dir: 'up' }, { x: 930, y: 912, dir: 'up' }, { x: 835, y: 930, dir: 'up' },
+];
+
+// ── 걸어 다니는 통로(가로·세로 선). 교차점과 50점마다 길목을 만들어 이어요 ──
+const LANES: [P, P][] = [
+  [{ x: 300, y: 515 }, { x: 1360, y: 515 }], // 회의실 아래 큰 복도
+  [{ x: 350, y: 805 }, { x: 1330, y: 805 }], // 아래 복도
+  [{ x: 325, y: 515 }, { x: 325, y: 805 }],
+  [{ x: 682, y: 515 }, { x: 682, y: 805 }],
+  [{ x: 988, y: 515 }, { x: 988, y: 805 }],
+  [{ x: 1350, y: 515 }, { x: 1350, y: 805 }],
+  [{ x: 440, y: 130 }, { x: 440, y: 515 }], // 왼쪽 휴게실 옆
+  [{ x: 1258, y: 115 }, { x: 1258, y: 515 }], // 오른쪽 휴게실 옆
+  [{ x: 835, y: 432 }, { x: 835, y: 515 }], // 회의실 문
+  [{ x: 505, y: 432 }, { x: 1165, y: 432 }], // 회의실 안 아래
+  [{ x: 520, y: 205 }, { x: 520, y: 432 }],
+  [{ x: 1150, y: 205 }, { x: 1150, y: 432 }],
+  [{ x: 520, y: 205 }, { x: 1150, y: 205 }], // 회의실 안 위(의자 뒤)
+  [{ x: 835, y: 805 }, { x: 835, y: 860 }], // 출입문
+];
+const NODES: P[] = [];
+const EDGES = new Map<number, Set<number>>();
+{
+  const idOf = (p: P) => {
+    let i = NODES.findIndex((n) => Math.abs(n.x - p.x) < 8 && Math.abs(n.y - p.y) < 8);
+    if (i < 0) {
+      NODES.push(p);
+      i = NODES.length - 1;
+      EDGES.set(i, new Set());
+    }
+    return i;
+  };
+  // 다른 통로와 만나는 점도 길목으로
+  const cuts = (a: P, b: P) => {
+    const pts: P[] = [a, b];
+    for (const [c, d] of LANES) {
+      if (a.y === b.y && c.x === d.x && c.x > Math.min(a.x, b.x) && c.x < Math.max(a.x, b.x) && a.y >= Math.min(c.y, d.y) && a.y <= Math.max(c.y, d.y)) pts.push({ x: c.x, y: a.y });
+      if (a.x === b.x && c.y === d.y && c.y > Math.min(a.y, b.y) && c.y < Math.max(a.y, b.y) && a.x >= Math.min(c.x, d.x) && a.x <= Math.max(c.x, d.x)) pts.push({ x: a.x, y: c.y });
+    }
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let t = 50; t < len; t += 50) pts.push({ x: Math.round(a.x + ((b.x - a.x) * t) / len), y: Math.round(a.y + ((b.y - a.y) * t) / len) });
+    return pts.sort((p, q) => (a.x === b.x ? p.y - q.y : p.x - q.x));
+  };
+  for (const [a, b] of LANES) {
+    const ids = cuts(a, b).map(idOf);
+    for (let i = 1; i < ids.length; i++) {
+      if (ids[i] === ids[i - 1]) continue;
+      EDGES.get(ids[i])!.add(ids[i - 1]);
+      EDGES.get(ids[i - 1])!.add(ids[i]);
+    }
+  }
+}
+const nearest = (p: P) => NODES.reduce((best, n, i) => (Math.hypot(n.x - p.x, n.y - p.y) < Math.hypot(NODES[best].x - p.x, NODES[best].y - p.y) ? i : best), 0);
+/** 통로를 따라 가는 길(BFS). 마지막 자리까지는 곧장 걸어가요 */
+function route(from: P, to: P): P[] {
+  const a = nearest(from);
+  const b = nearest(to);
+  const prev = new Map<number, number>([[a, -1]]);
+  const q = [a];
+  while (q.length) {
+    const cur = q.shift()!;
+    if (cur === b) break;
+    for (const n of EDGES.get(cur) ?? []) {
+      if (prev.has(n)) continue;
+      prev.set(n, cur);
+      q.push(n);
+    }
+  }
+  const path: P[] = [];
+  for (let c = b; c !== -1 && prev.has(c); c = prev.get(c)!) path.unshift(NODES[c]);
+  return [...path, to];
+}
 
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-/** 캐릭터 그림: 기본 6명 × 색 5가지 = 30가지(그림판에서 가로 6묶음 × 세로 5묶음) */
 export const SKINS = 30;
 export const OWNER_SKIN = 5;
 const skinOf = (c: Char) => (c.kind === 'owner' ? OWNER_SKIN : (c.skin ?? hash(c.id)) % SKINS);
 
-/** 이 너비(dp)에 들어가는 가장 큰 정수 배율과 그때 한 칸 크기(dp) */
-export function officeScale(maxWidth: number) {
-  const ratio = PixelRatio.get();
-  const k = Math.max(2, Math.min(6, Math.floor((maxWidth * ratio) / (COLS * 16))));
-  return { k, T: (16 * k) / ratio };
+/** 화면 높이에 맞춘 배율(그림 1점 = s dp) */
+export const officeHeight = (screenH: number) => Math.max(340, Math.min(640, screenH - 230));
+
+interface Plan {
+  route: P[];
+  seq: number;
+  face?: Dir;
+  sit: boolean;
 }
 
-export function PixelOffice({ maxWidth, chars, notice, status, clock }: { maxWidth: number; chars: Char[]; notice: string; status: string; clock: string }) {
-  const { k, T } = officeScale(maxWidth);
-  const W = T * COLS;
-  const H = T * ROWS;
+export function PixelOffice({ height, viewWidth, chars, notice, status, clock }: { height: number; viewWidth: number; chars: Char[]; notice: string; status: string; clock: string }) {
+  const s = height / BG_H;
+  const W = BG_W * s;
+  const ratio = PixelRatio.get();
+  const k = Math.max(2, Math.min(6, Math.round((BODY * s * ratio) / 16)));
 
-  const [pos, setPos] = useState<Record<string, Spot & { sit: boolean }>>({});
+  const posRef = useRef<Record<string, P>>({});
+  const goalRef = useRef<Record<string, string>>({});
+  const [plans, setPlans] = useState<Record<string, Plan>>({});
+  const busyRef = useRef<Record<string, boolean>>({});
   const charsRef = useRef(chars);
   useEffect(() => {
     charsRef.current = chars;
   }, [chars]);
 
-  // 0.9초마다 한 걸음
+  // 1.2초마다: 각자 가야 할 곳을 정하고, 바뀌었으면 길을 짜서 걸어가게 해요
   useEffect(() => {
-    const step = () =>
-      setPos((prev) => {
-        const next: typeof prev = {};
-        const taken = new Set<string>();
-        const key = (x: number, y: number) => `${x},${y}`;
-        let desk = 0;
-        let rest = 0;
-        let door = 0;
-        const list = charsRef.current;
-        for (const c of list) {
-          const fixed =
-            c.kind === 'owner' ? OWNER_SPOT :
-            c.state === 'away' ? DESK_SPOTS[desk++ % DESK_SPOTS.length] :
-            c.state === 'rest' ? REST_SPOTS[rest++ % REST_SPOTS.length] :
-            c.state === 'new' ? DOOR_SPOTS[door++ % DOOR_SPOTS.length] : null;
-          if (fixed) {
-            next[c.id] = { ...fixed, sit: c.state !== 'new' };
-            taken.add(key(fixed.x, fixed.y));
+    const tick = () => {
+      const list = charsRef.current;
+      const used = new Set<string>();
+      const take = (spots: Seat[], start: number) => {
+        for (let i = 0; i < spots.length; i++) {
+          const sp = spots[(start + i) % spots.length];
+          const key = `${sp.x},${sp.y}`;
+          if (!used.has(key)) {
+            used.add(key);
+            return sp;
           }
         }
-        for (const c of list) {
-          if (next[c.id]) continue;
-          let p: (Spot & { sit: boolean }) | undefined = prev[c.id];
-          if (!p || taken.has(key(p.x, p.y)) || (blocked(p.x, p.y) && !isSeat(p.x, p.y))) {
-            p = undefined;
-            for (let tries = 0; tries < 100 && !p; tries++) {
-              const x = Math.floor(Math.random() * COLS);
-              const y = 2 + Math.floor(Math.random() * (ROWS - 2));
-              if (!blocked(x, y) && !isSeat(x, y) && !taken.has(key(x, y))) p = { x, y, dir: 'down', sit: false };
-            }
-            p = p ?? { x: 4, y: 9, dir: 'down', sit: false };
-          }
-          let { x, y, dir } = p;
-          const goal = c.bubble?.newest ? TABLE_SPOTS[hash(c.id) % TABLE_SPOTS.length] : null;
-          const atGoal = !!goal && goal.x === x && goal.y === y;
-          if (!atGoal && Math.random() < (goal ? 0.95 : c.state === 'talking' ? 0.4 : 0.2)) {
-            const moves: [number, number, Dir][] = [
-              [1, 0, 'right'],
-              [-1, 0, 'left'],
-              [0, 1, 'down'],
-              [0, -1, 'up'],
-            ];
-            moves.sort(() => Math.random() - 0.5);
-            if (goal) moves.sort((a, b) => Math.abs(x + a[0] - goal.x) + Math.abs(y + a[1] - goal.y) - (Math.abs(x + b[0] - goal.x) + Math.abs(y + b[1] - goal.y)));
-            for (const [dx, dy, d] of moves) {
-              const nx = x + dx;
-              const ny = y + dy;
-              const ok = goal && goal.x === nx && goal.y === ny ? true : !blocked(nx, ny) && !isSeat(nx, ny);
-              if (ok && !taken.has(key(nx, ny))) {
-                x = nx;
-                y = ny;
-                dir = d;
-                break;
-              }
-            }
-          }
-          const seated = !!goal && goal.x === x && goal.y === y;
-          next[c.id] = { x, y, dir: seated ? goal!.dir : dir, sit: seated };
-          taken.add(key(x, y));
+        return spots[start % spots.length];
+      };
+      const updates: Record<string, Plan> = {};
+      for (const c of list) {
+        const h = hash(c.id);
+        const seat: Seat | null =
+          c.kind === 'owner' ? OWNER_SEAT :
+          c.state === 'away' ? take(DESKS, h) :
+          c.state === 'rest' ? take(LOUNGE, h) :
+          c.state === 'new' ? take(DOOR, h) :
+          c.bubble?.newest ? take(MEETING, h) : null;
+        const goalKey = seat ? `${seat.x},${seat.y}` : 'wander';
+        const here = posRef.current[c.id];
+        if (!here) {
+          // 처음엔 바로 그 자리(돌아다니는 캐릭터는 아무 길목)에 놓아요
+          const start = seat ?? NODES[h % NODES.length];
+          posRef.current[c.id] = start;
+          goalRef.current[c.id] = goalKey;
+          updates[c.id] = { route: [start], seq: 0, face: seat?.dir ?? 'down', sit: !!seat && c.state !== 'new' };
+          continue;
         }
-        return next;
-      });
-    step();
-    const timer = setInterval(step, 900);
+        if (busyRef.current[c.id]) continue;
+        if (seat) {
+          if (goalRef.current[c.id] !== goalKey) {
+            goalRef.current[c.id] = goalKey;
+            busyRef.current[c.id] = true;
+            updates[c.id] = { route: route(here, seat), seq: Date.now(), face: seat.dir, sit: c.state !== 'new' };
+          }
+        } else {
+          goalRef.current[c.id] = 'wander';
+          // 가끔 근처 길목으로 산책
+          if (Math.random() < (c.state === 'talking' ? 0.35 : 0.15)) {
+            const near = NODES.filter((n) => Math.hypot(n.x - here.x, n.y - here.y) < 320 && Math.hypot(n.x - here.x, n.y - here.y) > 40);
+            const to = near[Math.floor(Math.random() * near.length)];
+            if (to) {
+              busyRef.current[c.id] = true;
+              updates[c.id] = { route: route(here, to), seq: Date.now(), sit: false };
+            }
+          }
+        }
+      }
+      if (Object.keys(updates).length) setPlans((p) => ({ ...p, ...updates }));
+    };
+    tick();
+    const timer = setInterval(tick, 1200);
     return () => clearInterval(timer);
   }, []);
 
-  return (
-    <View style={{ width: W, height: H, borderRadius: 10, overflow: 'hidden', backgroundColor: '#E2DACE' }}>
-      <Image source={ROOM[k]} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }} fadeDuration={0} />
-      {/* 화이트보드(공지)와 벽시계 */}
-      <View style={[styles.board, { left: T * 2.6, top: T * 0.22, width: T * 4.9, height: T * 1.3 }]}>
-        <Text style={[styles.boardText, { fontSize: Math.max(10, T * 0.3), lineHeight: Math.max(13, T * 0.4) }]} numberOfLines={3}>
-          📌 {notice || '공지 없음'}
-        </Text>
-      </View>
-      <View style={[styles.clock, { left: T * 8.1, top: T * 0.3, width: T * 1.4, height: T * 0.75 }]}>
-        <Text style={{ color: '#3B3B3B', fontWeight: '800', fontSize: Math.max(9, T * 0.3) }}>{clock}</Text>
-      </View>
-      {/* 탁자 위 상태 */}
-      <View style={[styles.status, { left: T * 3.25, top: T * 5.62, width: T * 3.5 }]}>
-        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(9, T * 0.27), textAlign: 'center' }} numberOfLines={1}>
-          {status}
-        </Text>
-      </View>
+  // 처음엔 회의실이 가운데 오게
+  const scroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  useEffect(() => {
+    const t = setTimeout(() => scroller.current?.scrollTo({ x: Math.max(0, W / 2 - viewWidth / 2), animated: false }), 50);
+    return () => clearTimeout(t);
+  }, [W, viewWidth]);
 
-      {[...chars]
-        .sort((a, b) => (pos[a.id]?.y ?? 0) - (pos[b.id]?.y ?? 0))
-        .map((c) => {
-          const p = pos[c.id];
-          if (!p) return null;
-          return <Walker key={c.id} c={c} p={p} T={T} k={k} W={W} />;
+  return (
+    <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} style={{ width: viewWidth, height }} contentContainerStyle={{ width: W, height }}>
+      <View style={{ width: W, height }}>
+        <Image source={BG} style={{ position: 'absolute', left: 0, top: 0, width: W, height }} fadeDuration={0} />
+        {/* 화이트보드 아래쪽에 공지 */}
+        <View style={[styles.notice, { left: 612 * s, top: 132 * s, width: 448 * s, minHeight: 36 * s }]}>
+          <Text style={[styles.noticeText, { fontSize: Math.max(10, 17 * s) }]} numberOfLines={2}>
+            📌 {notice || '공지 없음'}
+          </Text>
+        </View>
+        {/* 벽시계 */}
+        <View style={[styles.clock, { left: 790 * s, top: 6 * s }]}>
+          <Text style={{ color: '#1F2937', fontWeight: '800', fontSize: Math.max(10, 16 * s) }}>{clock}</Text>
+        </View>
+        {/* 회의 탁자 위 상태 */}
+        <View style={[styles.status, { left: 700 * s, top: 340 * s, width: 270 * s }]}>
+          <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(10, 15 * s), textAlign: 'center' }} numberOfLines={1}>
+            {status}
+          </Text>
+        </View>
+
+        {chars.map((c) => {
+          const plan = plans[c.id];
+          if (!plan) return null;
+          return (
+            <Walker
+              key={c.id}
+              c={c}
+              plan={plan}
+              s={s}
+              k={k}
+              W={W}
+              onDone={(last) => {
+                posRef.current[c.id] = last;
+                busyRef.current[c.id] = false;
+              }}
+            />
+          );
         })}
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
-/** 걸어 다니는 캐릭터 */
-function Walker({ c, p, T, k, W }: { c: Char; p: Spot & { sit: boolean }; T: number; k: number; W: number }) {
-  const [xy] = useState(() => new Animated.ValueXY({ x: p.x * T, y: p.y * T }));
+/** 걸어 다니는 캐릭터: 길(점 목록)을 한 칸씩 걸어가며 방향과 걷는 그림을 바꿔요. */
+function Walker({ c, plan, s, k, W, onDone }: { c: Char; plan: Plan; s: number; k: number; W: number; onDone: (last: P) => void }) {
+  const first = plan.route[0];
+  const [xy] = useState(() => new Animated.ValueXY({ x: first.x * s, y: first.y * s }));
   const [frame, setFrame] = useState(0);
-  const first = useRef(true);
+  const [dir, setDir] = useState<Dir>(plan.face ?? 'down');
+  const [sit, setSit] = useState(plan.sit);
+  const [feet, setFeet] = useState<P>(first);
+  const doneRef = useRef(onDone);
   useEffect(() => {
-    const to = { x: p.x * T, y: p.y * T };
-    if (first.current) {
-      first.current = false;
-      xy.setValue(to);
+    doneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    if (plan.seq === 0) {
+      xy.setValue({ x: first.x * s, y: first.y * s });
       return;
     }
+    let cancelled = false;
+    let from: P = feet;
     let f = 0;
-    const legs = setInterval(() => setFrame((++f % 2) + 1), 150);
-    Animated.timing(xy, { toValue: to, duration: 720, useNativeDriver: Platform.OS !== 'web' }).start(() => {
+    const legs = setInterval(() => {
+      setSit(false);
+      setFrame((++f % 2) + 1);
+    }, 160);
+    const walk = (i: number) => {
+      if (cancelled) return;
+      if (i >= plan.route.length) {
+        clearInterval(legs);
+        setFrame(0);
+        if (plan.face) setDir(plan.face);
+        setSit(plan.sit);
+        doneRef.current(from);
+        return;
+      }
+      const to = plan.route[i];
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 2) {
+        from = to;
+        walk(i + 1);
+        return;
+      }
+      setDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up');
+      Animated.timing(xy, { toValue: { x: to.x * s, y: to.y * s }, duration: (dist / SPEED) * 1000, easing: Easing.linear, useNativeDriver: Platform.OS !== 'web' }).start(({ finished }) => {
+        from = to;
+        setFeet(to);
+        if (finished) walk(i + 1);
+      });
+    };
+    walk(0);
+    return () => {
+      cancelled = true;
       clearInterval(legs);
-      setFrame(0);
-    });
-    return () => clearInterval(legs);
-  }, [p.x, p.y, T, xy]);
+    };
+    // 새 길(seq)이 올 때만 걸어요
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.seq]);
 
+  const size = BODY * s;
   const skin = skinOf(c);
   const row = Math.floor(skin / 6) * 3 + frame;
-  const col = (skin % 6) * 4 + DIR_COL[p.dir];
+  const col = (skin % 6) * 4 + DIR_COL[dir];
   const asleep = c.state === 'away';
   const dot = c.state === 'talking' || c.state === 'here' ? '#22C55E' : c.state === 'rest' ? '#EF4444' : c.state === 'new' ? '#60A5FA' : '#9CA3AF';
-  // 말풍선이 방 밖으로 잘리지 않게: 풍선 칸을 방 안으로 밀고, 꼬리는 늘 캐릭터 머리 위를 가리켜요
-  const bw = Math.min(T * 6, W - 8);
-  const me = p.x * T;
-  const wrapLeft = Math.max(4, Math.min(W - bw - 4, me + T / 2 - bw / 2)) - me;
-  const align = me + T / 2 - bw / 2 < 4 ? 'flex-start' : me + T / 2 + bw / 2 > W - 4 ? 'flex-end' : 'center';
-  const tailLeft = T / 2 - wrapLeft - 5;
-  // 앉으면 2점만 위로(정수 점 단위라 흐려지지 않아요)
-  const lift = p.sit ? -(k / PixelRatio.get()) * 2 : 0;
+  // 말풍선·이름표가 그림 밖으로 안 잘리게(발 위치 기준으로 계산)
+  const bw = Math.min(260 * s + 60, W - 8);
+  const me = feet.x * s;
+  const wrapLeft = Math.max(4, Math.min(W - bw - 4, me - bw / 2)) - me;
+  const tailLeft = -wrapLeft - 5;
+  const tagW = 160 * s + 40;
+  const tagLeft = Math.max(2, Math.min(W - tagW - 2, me - tagW / 2)) - me;
 
   return (
-    <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: T, height: T, transform: xy.getTranslateTransform(), zIndex: c.bubble?.newest ? 50 : c.bubble ? 40 : 10 }}>
-      <Pressable onPress={c.onPress} disabled={!c.onPress} accessibilityLabel={c.name} style={{ width: T, height: T }}>
-        <View style={{ position: 'absolute', left: 0, top: lift, width: T, height: T, overflow: 'hidden', opacity: c.state === 'new' ? 0.6 : 1 }}>
-          <Image source={PEOPLE[k]} fadeDuration={0} style={{ position: 'absolute', width: T * 24, height: T * 15, left: -col * T, top: -row * T }} />
+    // 이 View의 (0,0)이 발 위치예요
+    <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transform: xy.getTranslateTransform(), zIndex: Math.round(feet.y) + (c.bubble ? 2000 : 0) }}>
+      <Pressable onPress={c.onPress} disabled={!c.onPress} accessibilityLabel={c.name} style={{ position: 'absolute', left: -size / 2, top: -size * 0.95 - (sit ? 6 * s : 0), width: size, height: size }}>
+        <View style={{ width: size, height: size, overflow: 'hidden', opacity: c.state === 'new' ? 0.65 : 1 }}>
+          <Image source={PEOPLE[k]} fadeDuration={0} style={{ position: 'absolute', width: size * 24, height: size * 15, left: -col * size, top: -row * size }} />
         </View>
-        {/* 이름표: 머리 바로 위, 가운데 */}
-        <View
-          style={[
-            styles.tagWrap,
-            {
-              width: T * 4,
-              left: Math.max(2, Math.min(W - T * 4 - 2, me - T * 1.5)) - me,
-              bottom: T + 1,
-              alignItems: me - T * 1.5 < 2 ? 'flex-start' : me + T * 2.5 > W - 2 ? 'flex-end' : 'center',
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <View style={styles.tag}>
-            <View style={[styles.tagDot, { backgroundColor: dot }]} />
-            <Text style={[styles.tagText, { fontSize: Math.max(9, T * 0.27) }]} numberOfLines={1}>
-              {c.badge ?? ''}
-              {c.name}
+      </Pressable>
+      {/* 이름표 */}
+      <View style={[styles.tagWrap, { width: tagW, left: tagLeft, top: -size * 0.95 - (sit ? 6 * s : 0) - 20 }]} pointerEvents="none">
+        <View style={styles.tag}>
+          <View style={[styles.tagDot, { backgroundColor: dot }]} />
+          <Text style={styles.tagText} numberOfLines={1}>
+            {c.badge ?? ''}
+            {c.name}
+          </Text>
+        </View>
+      </View>
+      {asleep ? <Text style={[styles.zz, { left: size * 0.25, top: -size * 1.25 }]}>z z</Text> : null}
+      {/* 말풍선 */}
+      {c.bubble ? (
+        <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft, bottom: size * 0.95 + 26 }]} pointerEvents="none">
+          <View style={[styles.bubble, c.bubble.newest && styles.bubbleNew, { maxWidth: bw }]}>
+            <Text style={styles.bubbleText} numberOfLines={3}>
+              {c.bubble.text}
             </Text>
           </View>
+          <View style={[styles.tail, c.bubble.newest && styles.tailNew, { position: 'absolute', bottom: -5, left: tailLeft }]} />
         </View>
-        {asleep ? <Text style={[styles.zz, { right: -T * 0.25, top: -T * 0.55, fontSize: Math.max(10, T * 0.3) }]}>z z</Text> : null}
-        {/* 말풍선: 글 길이에 맞춰 늘어나는 둥근 풍선, 꼬리가 말한 사람을 가리켜요 */}
-        {c.bubble ? (
-          <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft, bottom: T + Math.max(16, T * 0.5) + 2, alignItems: align }]} pointerEvents="none">
-            <View style={[styles.bubble, c.bubble.newest && styles.bubbleNew, { maxWidth: bw }]}>
-              <Text style={[styles.bubbleText, { fontSize: Math.max(11, T * 0.32), lineHeight: Math.max(15, T * 0.44) }]} numberOfLines={3}>
-                {c.bubble.text}
-              </Text>
-            </View>
-            <View style={[styles.tail, c.bubble.newest && styles.tailNew, { position: 'absolute', bottom: -5, left: tailLeft }]} />
-          </View>
-        ) : null}
-      </Pressable>
+      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  board: { position: 'absolute', backgroundColor: '#FFFFFF', borderRadius: 4, borderWidth: 2, borderColor: '#B9B2A6', paddingHorizontal: 6, paddingVertical: 2, justifyContent: 'center' },
-  boardText: { color: '#2B2B2B', fontWeight: '600' },
-  clock: { position: 'absolute', backgroundColor: '#FFFFFF', borderRadius: 6, borderWidth: 2, borderColor: '#B9B2A6', alignItems: 'center', justifyContent: 'center' },
-  status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.55)', paddingVertical: 2, borderRadius: 999 },
+  notice: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 6, borderWidth: 1.5, borderColor: '#F5B544', paddingHorizontal: 8, paddingVertical: 3, justifyContent: 'center' },
+  noticeText: { color: '#1F2937', fontWeight: '700' },
+  clock: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
+  status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.6)', paddingVertical: 2, borderRadius: 999 },
   tagWrap: { position: 'absolute', alignItems: 'center' },
-  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.72)', borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.75)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 },
   tagDot: { width: 6, height: 6, borderRadius: 3 },
-  tagText: { color: '#FFFFFF', fontWeight: '700' },
-  zz: { position: 'absolute', color: '#6B7280', fontWeight: '900', fontStyle: 'italic' },
+  tagText: { color: '#FFFFFF', fontWeight: '700', fontSize: 11 },
+  zz: { position: 'absolute', color: '#4B5563', fontWeight: '900', fontStyle: 'italic', fontSize: 13 },
   bubbleWrap: { position: 'absolute', alignItems: 'center' },
   bubble: {
     backgroundColor: '#FFFFFF',
@@ -296,8 +420,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bubbleNew: { borderColor: '#F5B544', borderWidth: 2 },
-  bubbleText: { color: '#1F2937' },
-  // 꼬리: 45° 돌린 작은 네모를 풍선 아래 가운데에 반쯤 겹쳐요
+  bubbleText: { color: '#1F2937', fontSize: 13, lineHeight: 18 },
   tail: { width: 10, height: 10, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderRightWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(0,0,0,0.08)', elevation: 4 },
   tailNew: { borderColor: '#F5B544', borderRightWidth: 2, borderBottomWidth: 2 },
 });
