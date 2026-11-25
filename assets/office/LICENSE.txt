@@ -1,2 +1,1 @@
-회의실 배경(office.jpg): 방장이 AI로 직접 만든 그림
-캐릭터(people*.png): Kenney (www.kenney.nl) "RPG Urban Pack" — CC0 1.0, 색만 바꿔 씀
+회의실 배경(office.jpg)과 캐릭터(walk.png·bean.png): 방장이 AI로 직접 만든 그림. 캐릭터는 한 사람 그림의 머리·넥타이 색을 바꿔 30가지로 만들었어요.

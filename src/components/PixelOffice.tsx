@@ -1,10 +1,10 @@
 import { useFonts } from 'expo-font';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 /**
  * 도트 게임 같은 사무실.
- * 배경: 방장이 AI로 만든 사무실 그림(1672×941점). 캐릭터: Kenney "RPG Urban Pack"(CC0)을 색만 바꾼 30가지.
+ * 배경: 방장이 AI로 만든 사무실 그림(1672×941점). 캐릭터: 방장이 AI로 만든 한 사람 그림을 머리·넥타이 색만 바꾼 30가지.
  * - 대화 중인 봇·사람은 통로를 따라 걸어 다니다가, 말하면 회의실 의자로 가서 앉아요.
  * - 연결 끊긴 봇(z z)과 쉬는·사용량 다 쓴 봇은 라운지 소파·빈백에 앉아 있고, 아직 안 온 봇은 출입문 앞에 있어요.
  * - 돌아다니던 봇은 가끔 컴퓨터 자리에 앉아 일하기도 해요.
@@ -31,20 +31,20 @@ const BG = require('../../assets/office/office.jpg');
 const PIXEL_FONT = { Galmuri9: require('../../assets/fonts/Galmuri9.ttf') };
 const BG_W = 1672;
 const BG_H = 941;
-const PEOPLE: Record<number, number> = {
-  2: require('../../assets/office/people2.png'),
-  3: require('../../assets/office/people3.png'),
-  4: require('../../assets/office/people4.png'),
-  5: require('../../assets/office/people5.png'),
-  6: require('../../assets/office/people6.png'),
-};
+/** 캐릭터 그림(방장이 AI로 만든 한 사람 그림을 머리·넥타이 색만 바꿔 30가지).
+ * walk: 한 줄 = 한 사람, 칸 0~3 앞으로 걷기 · 4~7 뒤로 걷기 · 8~11 왼쪽으로 걷기(오른쪽은 뒤집어요), 칸 60×96
+ * bean: 한 줄 = 한 사람, 칸 0 태블릿 · 1 음악 · 2 미소 · 3 기지개 · 4 잠(z z) · 5 커피, 칸 132×126 */
+const WALK = require('../../assets/office/walk.png');
+const BEAN = require('../../assets/office/bean.png');
+const WCELL = { w: 60, h: 96 };
+const BCELL = { w: 132, h: 126 };
 /** 그림 속 캐릭터 크기(점). 의자 크기에 맞췄어요 */
-const BODY = 54;
+const BODY = 66;
 /** 걷는 빠르기(그림 점/초) */
 const SPEED = 110;
 
 type Dir = 'left' | 'down' | 'up' | 'right';
-const DIR_COL: Record<Dir, number> = { left: 0, down: 1, up: 2, right: 3 };
+const DIR_COL: Record<Dir, number> = { down: 0, up: 4, left: 8, right: 8 };
 interface P {
   x: number;
   y: number;
@@ -151,7 +151,7 @@ function route(from: P, to: P): P[] {
 
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 export const SKINS = 30;
-export const OWNER_SKIN = 5;
+export const OWNER_SKIN = 0;
 const skinOf = (c: Char) => (c.kind === 'owner' ? OWNER_SKIN : (c.skin ?? hash(c.id)) % SKINS);
 
 
@@ -188,10 +188,8 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status 
   const s = rotate ? Math.min(boxW / BG_H, boxH / BG_W) : Math.min(boxW / BG_W, boxH / BG_H);
   const W = BG_W * s;
   const height = BG_H * s;
-  const ratio = PixelRatio.get();
   // 작게 볼 때도 캐릭터가 너무 작아지지 않게 최소 크기를 둬요
   const size = Math.max(BODY * s, 18);
-  const k = Math.max(2, Math.min(6, Math.round((size * ratio) / 16)));
 
   const posRef = useRef<Record<string, P>>({});
   const goalRef = useRef<Record<string, string>>({});
@@ -324,7 +322,6 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status 
               c={c}
               plan={plan}
               s={s}
-              k={k}
               W={W}
               size={c.kind === 'owner' ? size * 1.25 : size}
               font={fontReady ? 'Galmuri9' : undefined}
@@ -341,7 +338,7 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status 
 }
 
 /** 걸어 다니는 캐릭터: 길(점 목록)을 한 칸씩 걸어가며 방향과 걷는 그림을 바꿔요. */
-function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan; s: number; k: number; W: number; size: number; font?: string; onDone: (last: P) => void }) {
+function Walker({ c, plan, s, W, size, font, onDone }: { c: Char; plan: Plan; s: number; W: number; size: number; font?: string; onDone: (last: P) => void }) {
   const first = plan.route[0];
   const [xy] = useState(() => new Animated.ValueXY({ x: first.x * s, y: first.y * s }));
   const [frame, setFrame] = useState(0);
@@ -363,7 +360,7 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
     let f = 0;
     const legs = setInterval(() => {
       setSit(false);
-      setFrame((++f % 2) + 1);
+      setFrame(++f % 4);
     }, 160);
     const walk = (i: number) => {
       if (cancelled) return;
@@ -401,8 +398,13 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
   }, [plan.seq]);
 
   const skin = skinOf(c);
-  const row = Math.floor(skin / 6) * 3 + frame;
-  const col = (skin % 6) * 4 + DIR_COL[dir];
+  // 소파·빈백 자리에 앉아 있으면 빈백 그림(끊긴 봇은 잠, 쉬는 봇은 여러 모습)
+  const lounging = sit && (c.state === 'away' || c.state === 'rest');
+  const beanFrame = c.state === 'away' ? 4 : [0, 1, 2, 3, 5][hash(c.id) % 5];
+  const spriteW = lounging ? size * 1.55 : size * (WCELL.w / WCELL.h);
+  const spriteH = lounging ? spriteW * (BCELL.h / BCELL.w) : size;
+  const col = lounging ? beanFrame : DIR_COL[dir] + (sit ? 0 : frame);
+  const flip = !lounging && dir === 'right';
   const asleep = c.state === 'away';
   const dot = c.state === 'talking' || c.state === 'here' ? '#22C55E' : c.state === 'rest' ? '#EF4444' : c.state === 'new' ? '#60A5FA' : '#9CA3AF';
   // 말풍선·이름표가 그림 밖으로 안 잘리게(발 위치 기준으로 계산)
@@ -423,18 +425,27 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
       {c.kind === 'owner' ? (
         <View pointerEvents="none" style={[styles.glow, { left: -size * 0.62, top: -size * 0.2, width: size * 1.24, height: size * 0.42, borderRadius: size }]} />
       ) : null}
-      <Pressable onPress={c.onPress} disabled={!c.onPress} accessibilityLabel={c.name} style={{ position: 'absolute', left: -size / 2, top: -size * 0.95 - (sit ? 6 * s : 0), width: size, height: size }}>
-        <View style={{ width: size, height: size, overflow: 'hidden', opacity: c.state === 'new' ? 0.65 : 1 }}>
-          <Image source={PEOPLE[k]} fadeDuration={0} style={{ position: 'absolute', width: size * 24, height: size * 15, left: -col * size, top: -row * size }} />
+      <Pressable
+        onPress={c.onPress}
+        disabled={!c.onPress}
+        accessibilityLabel={c.name}
+        style={{ position: 'absolute', left: -spriteW / 2, top: -spriteH * (lounging ? 0.85 : 0.97), width: spriteW, height: spriteH }}
+      >
+        <View style={{ width: spriteW, height: spriteH, overflow: 'hidden', opacity: c.state === 'new' ? 0.65 : 1, transform: flip ? [{ scaleX: -1 }] : [] }}>
+          <Image
+            source={lounging ? BEAN : WALK}
+            fadeDuration={0}
+            style={{ position: 'absolute', width: spriteW * (lounging ? 6 : 12), height: spriteH * 30, left: -col * spriteW, top: -skin * spriteH }}
+          />
         </View>
       </Pressable>
       {/* 방장은 이름표 없이 머리 위에 왕관만, 나머지는 작은 이름표 */}
       {c.kind === 'owner' ? (
-        <Text style={[styles.crown, { left: -size * 0.28, top: -size * 0.95 - (sit ? 6 * s : 0) - size * 0.46, fontSize: Math.max(12, size * 0.48) }]} pointerEvents="none">
+        <Text style={[styles.crown, { left: -size * 0.28, top: -spriteH * (lounging ? 0.85 : 0.97) - size * 0.4, fontSize: Math.max(12, size * 0.48) }]} pointerEvents="none">
           👑
         </Text>
       ) : (
-        <View style={[styles.tagWrap, { width: tagW, left: tagLeft, top: -size * 0.95 - (sit ? 6 * s : 0) - 15 }]} pointerEvents="none">
+        <View style={[styles.tagWrap, { width: tagW, left: tagLeft, top: -spriteH * (lounging ? 0.8 : 0.97) - 12 }]} pointerEvents="none">
           <View style={styles.tag}>
             <View style={[styles.tagDot, { backgroundColor: dot }]} />
             <Text style={[styles.tagText, font ? { fontFamily: font, fontWeight: 'normal' } : null]} numberOfLines={1}>
@@ -444,7 +455,7 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
           </View>
         </View>
       )}
-      {asleep ? <Text style={[styles.zz, { left: size * 0.25, top: -size * 1.25 }]}>z z</Text> : null}
+      {asleep && !lounging ? <Text style={[styles.zz, { left: size * 0.25, top: -size * 1.25 }]}>z z</Text> : null}
       {/* 말풍선 */}
       {c.bubble ? (
         <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft }, below ? { top: 6 } : { bottom: size * 0.95 + 13 }]} pointerEvents="none">
