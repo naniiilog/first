@@ -97,14 +97,12 @@ export default function OfficeScreen() {
 
   const turnNow = roomInfo?.turnCurrent ? members.find((m) => m.id === roomInfo.turnCurrent)?.name : null;
   const status = closed ? '모두 쉬는 중' : turnNow ? `순서: ${turnNow} 차례` : freeTalk ? '자동대화 중' : '부르면 답해요';
-  const clock = new Date(now);
-  const hhmm = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
 
   return (
     <ScrollView style={{ backgroundColor: '#1A1424' }} contentContainerStyle={{ paddingVertical: 8, gap: 10, alignItems: 'center', paddingBottom: insets.bottom + 24 }}>
       <Stack.Screen options={{ title: `🏢 ${room.name}` }} />
       {/* 사무실 전체가 한눈에(잘리지 않게) */}
-      <PixelOffice boxW={width - 12} boxH={height} chars={chars} notice={roomInfo?.notice ?? ''} status={status} clock={hhmm} />
+      <PixelOffice boxW={width - 12} boxH={height} chars={chars} notice={roomInfo?.notice ?? ''} status={status} />
       <Pressable onPress={() => setBig(true)} style={{ backgroundColor: '#F5B544', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 }}>
         <Text style={{ color: '#1A1424', fontWeight: '800' }}>📱↻ 폰을 옆으로 돌려 크게 보기</Text>
       </Pressable>
@@ -136,7 +134,7 @@ export default function OfficeScreen() {
       <Modal visible={big} animationType="fade" onRequestClose={() => setBig(false)} statusBarTranslucent>
         <StatusBar hidden />
         <View style={{ flex: 1, backgroundColor: '#0E0B16', alignItems: 'center', justifyContent: 'center' }}>
-          <PixelOffice boxW={width - 8} boxH={height - 8} rotate chars={chars} notice={roomInfo?.notice ?? ''} status={status} clock={hhmm} />
+          <PixelOffice boxW={width - 8} boxH={height - 8} rotate chars={chars} notice={roomInfo?.notice ?? ''} status={status} />
           <Pressable onPress={() => setBig(false)} style={{ position: 'absolute', top: insets.top + 8, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
             <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>✕ 닫기</Text>
           </Pressable>

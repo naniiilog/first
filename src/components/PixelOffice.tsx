@@ -54,11 +54,12 @@ interface Seat extends P {
 }
 
 // ── 자리(발 위치 기준) ──
-const OWNER_SEAT: Seat = { x: 560, y: 300, dir: 'right' };
-const TOP_X = [633, 690, 750, 808, 866, 925, 985, 1043];
+const OWNER_SEAT: Seat = { x: 808, y: 248, dir: 'down' };
+const TOP_X = [633, 690, 750, 866, 925, 985, 1043];
 const MEETING: Seat[] = [
   ...TOP_X.map((x) => ({ x, y: 248, dir: 'down' as Dir })),
   ...TOP_X.map((x) => ({ x, y: 392, dir: 'up' as Dir })),
+  { x: 560, y: 300, dir: 'right' },
   { x: 560, y: 348, dir: 'right' },
   { x: 1118, y: 300, dir: 'left' },
   { x: 1118, y: 348, dir: 'left' },
@@ -165,7 +166,23 @@ interface Plan {
  * boxW×boxH 안에 사무실 그림 전체가 들어가게 그려요(잘리지 않게).
  * rotate면 90° 돌려서 그려요(폰을 옆으로 돌려서 크게 보기).
  */
-export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status, clock }: { boxW: number; boxH: number; rotate?: boolean; chars: Char[]; notice: string; status: string; clock: string }) {
+/** 날짜·요일·시:분:초 시계(이 칸만 1초마다 다시 그려요) */
+function WallClock({ size, font }: { size: number; font?: string }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const text = `${now.getMonth() + 1}/${now.getDate()}(${'일월화수목금토'[now.getDay()]}) ${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
+  return (
+    <View style={styles.clockPill}>
+      <Text style={[{ color: '#1F2937', fontSize: size }, font ? { fontFamily: font } : null]}>{text}</Text>
+    </View>
+  );
+}
+
+export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status }: { boxW: number; boxH: number; rotate?: boolean; chars: Char[]; notice: string; status: string; clock?: string }) {
   const [fontReady] = useFonts(PIXEL_FONT);
   const px = fontReady ? { fontFamily: 'Galmuri9' } : null;
   const s = rotate ? Math.min(boxW / BG_H, boxH / BG_W) : Math.min(boxW / BG_W, boxH / BG_H);
@@ -287,8 +304,9 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status,
           </Text>
         </View>
         {/* 벽시계 */}
-        <View style={[styles.clock, { left: 790 * s, top: 6 * s }]}>
-          <Text style={[{ color: '#1F2937', fontSize: Math.max(8, 15 * s) }, px]}>{clock}</Text>
+        {/* 칠판 위 시계: 날짜·요일·초까지, 1초마다 */}
+        <View style={[styles.clock, { left: 835 * s - 160, width: 320, top: 6 * s }]} pointerEvents="none">
+          <WallClock size={Math.max(8, 15 * s)} font={fontReady ? 'Galmuri9' : undefined} />
         </View>
         {/* 회의 탁자 위 상태 */}
         <View style={[styles.status, { left: 700 * s, top: 340 * s, width: 270 * s }]}>
@@ -308,7 +326,7 @@ export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status,
               s={s}
               k={k}
               W={W}
-              size={size}
+              size={c.kind === 'owner' ? size * 1.25 : size}
               font={fontReady ? 'Galmuri9' : undefined}
               onDone={(last) => {
                 posRef.current[c.id] = last;
@@ -401,6 +419,10 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
   return (
     // 이 View의 (0,0)이 발 위치예요
     <Animated.View style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transform: xy.getTranslateTransform(), zIndex: Math.round(feet.y) + (c.bubble ? 2000 : 0) }}>
+      {/* 방장: 발밑에 금색 빛(어디 있는지 한눈에) */}
+      {c.kind === 'owner' ? (
+        <View pointerEvents="none" style={[styles.glow, { left: -size * 0.62, top: -size * 0.2, width: size * 1.24, height: size * 0.42, borderRadius: size }]} />
+      ) : null}
       <Pressable onPress={c.onPress} disabled={!c.onPress} accessibilityLabel={c.name} style={{ position: 'absolute', left: -size / 2, top: -size * 0.95 - (sit ? 6 * s : 0), width: size, height: size }}>
         <View style={{ width: size, height: size, overflow: 'hidden', opacity: c.state === 'new' ? 0.65 : 1 }}>
           <Image source={PEOPLE[k]} fadeDuration={0} style={{ position: 'absolute', width: size * 24, height: size * 15, left: -col * size, top: -row * size }} />
@@ -408,7 +430,7 @@ function Walker({ c, plan, s, k, W, size, font, onDone }: { c: Char; plan: Plan;
       </Pressable>
       {/* 방장은 이름표 없이 머리 위에 왕관만, 나머지는 작은 이름표 */}
       {c.kind === 'owner' ? (
-        <Text style={[styles.crown, { left: -size * 0.3, top: -size * 0.95 - (sit ? 6 * s : 0) - size * 0.55, fontSize: Math.max(11, size * 0.55) }]} pointerEvents="none">
+        <Text style={[styles.crown, { left: -size * 0.28, top: -size * 0.95 - (sit ? 6 * s : 0) - size * 0.46, fontSize: Math.max(12, size * 0.48) }]} pointerEvents="none">
           👑
         </Text>
       ) : (
@@ -450,13 +472,15 @@ const styles = StyleSheet.create({
   noticeTitle: { color: '#C2410C' },
   // 칠판에 마커로 쓴 느낌: 굵지 않게, 진한 남색
   noticeText: { color: '#24325C' },
-  clock: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
+  clock: { position: 'absolute', alignItems: 'center' },
+  clockPill: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
   status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.6)', paddingVertical: 2, borderRadius: 999 },
   tagWrap: { position: 'absolute', alignItems: 'center' },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(17,24,39,0.72)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
   tagDot: { width: 4, height: 4, borderRadius: 2 },
   tagText: { color: '#FFFFFF', fontWeight: '700', fontSize: 8 },
-  crown: { position: 'absolute', textAlign: 'center' },
+  crown: { position: 'absolute', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.55)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
+  glow: { position: 'absolute', backgroundColor: 'rgba(255,196,40,0.5)', borderWidth: 1.5, borderColor: 'rgba(255,215,80,0.95)' },
   zz: { position: 'absolute', color: '#4B5563', fontWeight: '900', fontStyle: 'italic', fontSize: 13 },
   bubbleWrap: { position: 'absolute', alignItems: 'center' },
   bubble: {
