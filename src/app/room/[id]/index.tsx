@@ -374,6 +374,7 @@ export default function RoomScreen() {
           ),
           headerRight: () => (
             <View style={{ paddingRight: 8, flexDirection: 'row' }}>
+              <HeaderIcon name="business-outline" label="회의실 보기" onPress={() => router.push({ pathname: '/room/[id]/office', params: { id: room.id } })} />
               <HeaderIcon name="search" label="메시지 검색" onPress={() => setSearching(true)} />
               <HeaderIcon name="menu" label="메뉴" onPress={openMenu} />
             </View>
@@ -703,6 +704,7 @@ export default function RoomScreen() {
           },
           { icon: 'repeat-outline', label: roomInfo?.turnOrder ? '순서 바꾸기' : '순서 정해서 대화', onPress: () => setTurnEdit(true) },
           { icon: 'bookmark-outline', label: `북마크 (${bookmarks.length})`, onPress: () => setShowMarks(true) },
+          { icon: 'business-outline', label: '회의실 보기 (그림으로)', onPress: () => router.push({ pathname: '/room/[id]/office', params: { id: room.id } }) },
           { icon: 'images-outline', label: '사진 앨범', onPress: () => router.push({ pathname: '/room/[id]/album', params: { id: room.id } }) },
           { icon: 'calendar-outline', label: '타임라인 (달력)', onPress: () => router.push({ pathname: '/room/[id]/timeline', params: { id: room.id } }) },
           { icon: 'stats-chart-outline', label: '봇 사용량', onPress: () => router.push({ pathname: '/usage', params: { room: room.id } }) },

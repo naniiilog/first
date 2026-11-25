@@ -50,6 +50,8 @@ export interface RoomRow {
   leader_id: string | null;
   /** 1이면 알림에 대화 내용을 보여줘요(기본 0: 숨김) */
   notify_preview: number;
+  /** 봇 말 수: low · normal · high */
+  talk_level: string;
 }
 
 export interface MemberRow {
@@ -200,7 +202,7 @@ export class Rooms {
   }
 
   async createRoom(name: string) {
-    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null, notify_sound: 'default', notice: null, notice_at: 0, leader_id: null, notify_preview: 0 };
+    const room: RoomRow = { id: randomToken(8), name, owner_token: randomToken(24), created_at: Date.now(), free_talk: 0, closed: 0, check_interval_min: 0, quiet_enabled: 1, quiet_start: 0, quiet_end: 9, tz: 'Asia/Seoul', notify_mode: 'off', notify_silent: 0, notify_name: null, notify_last: null, notify_last_id: null, owner_seen: null, wait_mode: 'stay', turn_order: null, turn_idx: 0, turn_since: null, read_mark: 0, bookmarks: null, notify_sound: 'default', notice: null, notice_at: 0, leader_id: null, notify_preview: 0, talk_level: 'normal' };
     // 확인 간격은 정해 두지 않아요(실시간). 방장이 방 설정에서 정한 대로 따라요.
     await this.db.run('INSERT INTO rooms (id, name, owner_token, created_at, check_interval_min) VALUES (?, ?, ?, ?, 0)', room.id, room.name, room.owner_token, room.created_at);
     return room;
@@ -353,8 +355,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; turn_order: string | null; turn_idx: number; turn_since: number | null; my_interval: number | null; notice: string | null; notice_at: number; leader_id: string | null }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, r.turn_order AS turn_order, r.turn_idx AS turn_idx, r.turn_since AS turn_since, m.check_interval_min AS my_interval, r.notice AS notice, r.notice_at AS notice_at, r.leader_id AS leader_id FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; turn_order: string | null; turn_idx: number; turn_since: number | null; my_interval: number | null; notice: string | null; notice_at: number; leader_id: string | null; talk_level: string }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, r.turn_order AS turn_order, r.turn_idx AS turn_idx, r.turn_since AS turn_since, m.check_interval_min AS my_interval, r.notice AS notice, r.notice_at AS notice_at, r.leader_id AS leader_id, r.talk_level AS talk_level FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }
@@ -488,6 +490,11 @@ export class Rooms {
   /** 방 공지 쓰기(null이면 내리기) */
   setNotice(roomId: string, notice: string | null) {
     return this.db.run('UPDATE rooms SET notice = ?, notice_at = ? WHERE id = ?', notice, notice ? Date.now() : 0, roomId);
+  }
+
+  /** 봇 말 수 */
+  setTalkLevel(roomId: string, level: string) {
+    return this.db.run('UPDATE rooms SET talk_level = ? WHERE id = ?', level, roomId);
   }
 
   /** 봇 대장 정하기(null이면 없음) */

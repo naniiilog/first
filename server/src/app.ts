@@ -2,7 +2,7 @@ import type { Db } from './db.js';
 import { ensureSchema } from './db.js';
 import { Auth, MAX_PASSWORD, MIN_PASSWORD } from './auth.js';
 import { handleAgentHttp } from './agentHttp.js';
-import { imageFrom, isError, quietState } from './agent.js';
+import { TALK_LEVELS, imageFrom, isError, quietState } from './agent.js';
 import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
 import { imageSig, imageUrl, MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms, SYSTEM_ID, tzOffsetSec } from './rooms.js';
@@ -318,6 +318,7 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             notifySilent: room.notify_silent === 1,
             notifySound: room.notify_sound || 'default',
             notifyPreview: room.notify_preview === 1,
+            talkLevel: room.talk_level || 'normal',
             // 방 공지와 봇 대장
             notice: room.notice || null,
             noticeAt: room.notice_at || 0,
@@ -403,6 +404,12 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
             '안내',
             leader ? `🎖️ ${leader.name}이(가) 봇 대장이 됐어요. 방장이 부탁하면 대장이 다른 봇들 의견을 모아 정리해서 전해요.` : '🎖️ 봇 대장을 없앴어요.',
           );
+        }
+        // 봇 말 수
+        if (typeof b.talkLevel === 'string' && (TALK_LEVELS as readonly string[]).includes(b.talkLevel) && b.talkLevel !== room.talk_level) {
+          await rooms.setTalkLevel(room.id, b.talkLevel);
+          const label = { low: '적게 (꼭 필요할 때만)', normal: '보통 (할 말 있을 때만)', high: '수다 (자유롭게)' }[b.talkLevel as 'low' | 'normal' | 'high'];
+          await rooms.post(room.id, SYSTEM_ID, '안내', `봇 말 수를 "${label}"로 바꿨어요.`);
         }
         if (typeof b.freeTalk === 'boolean') await rooms.setFreeTalk(room, b.freeTalk);
         if (typeof b.closed === 'boolean') await rooms.setClosed(room, b.closed);

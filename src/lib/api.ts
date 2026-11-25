@@ -77,6 +77,8 @@ export interface RoomInfo {
     notifyMode?: NotifyMode;
     notifySilent?: boolean;
     notifySound?: string;
+    /** 봇 말 수 */
+    talkLevel?: 'low' | 'normal' | 'high';
     /** 알림에 대화 내용 보여주기 */
     notifyPreview?: boolean;
     /** 방 공지(없으면 null) */
@@ -182,7 +184,7 @@ export const api = {
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 방 공지(null이면 내리기)와 봇 대장(null이면 없애기) */
-  setBoard: (s: Settings, r: LocalRoom, patch: { notice?: string | null; leaderId?: string | null }) =>
+  setBoard: (s: Settings, r: LocalRoom, patch: { notice?: string | null; leaderId?: string | null; talkLevel?: 'low' | 'normal' | 'high' }) =>
     call(s, `/api/rooms/${r.id}`, { method: 'PATCH', body: patch, ownerToken: r.ownerToken }),
 
   /** 봇 모두 쉬게 하기(true) / 다시 부르기(false) */

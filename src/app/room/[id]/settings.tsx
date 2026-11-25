@@ -17,6 +17,12 @@ const WAIT_MODES: { key: 'stay' | 'away'; label: string; hint: string }[] = [
   { key: 'away', label: '쉬었다 오기 (토큰 아껴요)', hint: '간격 동안 아예 안 들러요. 토큰을 거의 안 쓰지만, 채팅 앱 봇은 끊길 수 있어서 다시 불러야 할 수 있어요.' },
 ];
 const pad2 = (n: number) => String(n).padStart(2, '0');
+/** 봇 말 수 */
+const TALK: { key: 'low' | 'normal' | 'high'; label: string; hint: string }[] = [
+  { key: 'low', label: '🤫 적게 — 꼭 필요할 때만', hint: '내 글(초대한 사람 글)이나 이름이 불렸을 때만 답해요. 봇끼리 잡담은 안 해요.' },
+  { key: 'normal', label: '🙂 보통 — 할 말 있을 때만', hint: '맞장구·인사 없이 새 의견이 있을 때만. 부르지 않으면 한 봇이 3분에 한 번까지만 말해요.' },
+  { key: 'high', label: '🗣️ 수다 — 자유롭게', hint: '봇들이 알아서 화제를 꺼내며 계속 이야기해요. 토큰을 가장 많이 써요.' },
+];
 
 /** 이 휴대폰의 시간대(예: Asia/Seoul). 모르면 한국 시간. */
 function deviceTz(): string {
@@ -54,6 +60,7 @@ export default function RoomSettingsScreen() {
   /** 저장 중에는 누른 값을 먼저 보여줘요(버튼 반응을 바로 보이게). */
   const [draft, setDraft] = useState<{ checkIntervalMin?: number; quietEnabled?: boolean; quietStart?: number; quietEnd?: number; waitMode?: 'stay' | 'away' }>({});
   const [saving, setSaving] = useState(false);
+  const [talkDraft, setTalkDraft] = useState<'low' | 'normal' | 'high' | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   if (!room) return <Text style={{ padding: 20, color: t.subtext }}>방을 찾을 수 없어요.</Text>;
@@ -113,6 +120,35 @@ export default function RoomSettingsScreen() {
         )}
       </Section>
 
+
+      <Section title="봇 말 수">
+        <Text style={{ color: t.subtext, fontSize: 13, lineHeight: 19 }}>자동대화가 켜져 있을 때 봇들이 얼마나 말할지 정해요. 서버가 지키게 해서, 봇이 규칙을 잊어도 너무 자주 못 말해요.</Text>
+        {TALK.map((w) => {
+          const on = (talkDraft ?? roomInfo.talkLevel ?? 'normal') === w.key;
+          return (
+            <Pressable
+              key={w.key}
+              onPress={() => {
+                if (on) return;
+                setTalkDraft(w.key);
+                setMsg(null);
+                api
+                  .setBoard(settings, room, { talkLevel: w.key })
+                  .then(() => refreshMembers())
+                  .then(() => setMsg('저장했어요. 봇들에게도 바로 알려줘요.'))
+                  .catch((e) => setMsg(e instanceof Error ? e.message : String(e)));
+              }}
+              style={[styles.option, { borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accentSoft : t.card }]}
+            >
+              <View style={[styles.radio, { borderColor: on ? t.accent : t.subtext }]}>{on ? <View style={[styles.radioDot, { backgroundColor: t.accent }]} /> : null}</View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }}>{w.label}</Text>
+                <Text style={{ color: t.subtext, fontSize: 12, lineHeight: 17 }}>{w.hint}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </Section>
 
       <Section title="매너타임">
         <View style={[styles.switchRow, { backgroundColor: t.card, borderColor: t.border }]}>

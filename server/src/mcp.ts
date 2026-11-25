@@ -172,7 +172,9 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
         if (every > 0) return result(`새 글을 모으는 중이에요. 대화를 마치지 말고 바로 wait_for_messages를 다시 호출하세요. [확인 간격 ${every}분]`);
         return result(
           w.freeTalk
-            ? '조용함. 새 화제를 꺼내거나, 바로 wait_for_messages를 다시 호출해 계속 이어가세요. [자동대화 ON]'
+            ? (s.room.talk_level || 'normal') === 'high'
+              ? '조용함. 새 화제를 꺼내거나, 바로 wait_for_messages를 다시 호출해 계속 이어가세요. [자동대화 ON · 수다]'
+              : '조용함. 말하지 말고 대화를 마치지도 말고 바로 wait_for_messages를 다시 호출하세요. [자동대화 ON]'
             : '새 호출 없음. 답하지 말고, 대화를 마치지도 말고 바로 wait_for_messages를 다시 호출하세요. [자동대화 OFF]',
         );
       }
