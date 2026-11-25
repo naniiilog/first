@@ -1,11 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 /**
  * 도트 게임 같은 사무실.
  * 배경: 방장이 AI로 만든 사무실 그림(1672×941점). 캐릭터: Kenney "RPG Urban Pack"(CC0)을 색만 바꾼 30가지.
  * - 대화 중인 봇·사람은 통로를 따라 걸어 다니다가, 말하면 회의실 의자로 가서 앉아요.
- * - 연결 끊긴 봇은 컴퓨터 자리에서 졸고, 쉬는 봇은 소파·빈백에, 아직 안 온 봇은 출입문 앞에 있어요.
+ * - 연결 끊긴 봇(z z)과 쉬는·사용량 다 쓴 봇은 라운지 소파·빈백에 앉아 있고, 아직 안 온 봇은 출입문 앞에 있어요.
+ * - 돌아다니던 봇은 가끔 컴퓨터 자리에 앉아 일하기도 해요.
  * 그림 좌표(점) 기준으로 위치를 정하고, 화면에 그릴 때 배율 s를 곱해요.
  */
 
@@ -149,8 +150,6 @@ export const SKINS = 30;
 export const OWNER_SKIN = 5;
 const skinOf = (c: Char) => (c.kind === 'owner' ? OWNER_SKIN : (c.skin ?? hash(c.id)) % SKINS);
 
-/** 화면 높이에 맞춘 배율(그림 1점 = s dp) */
-export const officeHeight = (screenH: number) => Math.max(340, Math.min(640, screenH - 230));
 
 interface Plan {
   route: P[];
@@ -159,11 +158,18 @@ interface Plan {
   sit: boolean;
 }
 
-export function PixelOffice({ height, viewWidth, chars, notice, status, clock }: { height: number; viewWidth: number; chars: Char[]; notice: string; status: string; clock: string }) {
-  const s = height / BG_H;
+/**
+ * boxW×boxH 안에 사무실 그림 전체가 들어가게 그려요(잘리지 않게).
+ * rotate면 90° 돌려서 그려요(폰을 옆으로 돌려서 크게 보기).
+ */
+export function PixelOffice({ boxW, boxH, rotate = false, chars, notice, status, clock }: { boxW: number; boxH: number; rotate?: boolean; chars: Char[]; notice: string; status: string; clock: string }) {
+  const s = rotate ? Math.min(boxW / BG_H, boxH / BG_W) : Math.min(boxW / BG_W, boxH / BG_H);
   const W = BG_W * s;
+  const height = BG_H * s;
   const ratio = PixelRatio.get();
-  const k = Math.max(2, Math.min(6, Math.round((BODY * s * ratio) / 16)));
+  // 작게 볼 때도 캐릭터가 너무 작아지지 않게 최소 크기를 둬요
+  const size = Math.max(BODY * s, 18);
+  const k = Math.max(2, Math.min(6, Math.round((size * ratio) / 16)));
 
   const posRef = useRef<Record<string, P>>({});
   const goalRef = useRef<Record<string, string>>({});
@@ -195,8 +201,7 @@ export function PixelOffice({ height, viewWidth, chars, notice, status, clock }:
         const h = hash(c.id);
         const seat: Seat | null =
           c.kind === 'owner' ? OWNER_SEAT :
-          c.state === 'away' ? take(DESKS, h) :
-          c.state === 'rest' ? take(LOUNGE, h) :
+          c.state === 'away' || c.state === 'rest' ? take(LOUNGE, h) :
           c.state === 'new' ? take(DOOR, h) :
           c.bubble?.newest ? take(MEETING, h) : null;
         const goalKey = seat ? `${seat.x},${seat.y}` : 'wander';
@@ -217,6 +222,19 @@ export function PixelOffice({ height, viewWidth, chars, notice, status, clock }:
             updates[c.id] = { route: route(here, seat), seq: Date.now(), face: seat.dir, sit: c.state !== 'new' };
           }
         } else {
+          // 컴퓨터 자리에 앉아 있었으면 한동안 일하다가 일어나요
+          if (goalRef.current[c.id]?.startsWith('desk') && Math.random() < 0.85) continue;
+          // 가끔 빈 컴퓨터 자리에 가서 앉아요
+          if (Math.random() < 0.08) {
+            const free = DESKS.filter((d) => !Object.values(posRef.current).some((q) => q.x === d.x && q.y === d.y));
+            const d = free[Math.floor(Math.random() * free.length)];
+            if (d) {
+              goalRef.current[c.id] = `desk${d.x},${d.y}`;
+              busyRef.current[c.id] = true;
+              updates[c.id] = { route: route(here, d), seq: Date.now(), face: d.dir, sit: true };
+              continue;
+            }
+          }
           goalRef.current[c.id] = 'wander';
           // 가끔 근처 길목으로 산책
           if (Math.random() < (c.state === 'talking' ? 0.35 : 0.15)) {
@@ -236,30 +254,35 @@ export function PixelOffice({ height, viewWidth, chars, notice, status, clock }:
     return () => clearInterval(timer);
   }, []);
 
-  // 처음엔 회의실이 가운데 오게
-  const scroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  useEffect(() => {
-    const t = setTimeout(() => scroller.current?.scrollTo({ x: Math.max(0, W / 2 - viewWidth / 2), animated: false }), 50);
-    return () => clearTimeout(t);
-  }, [W, viewWidth]);
-
   return (
-    <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} style={{ width: viewWidth, height }} contentContainerStyle={{ width: W, height }}>
-      <View style={{ width: W, height }}>
+    <View style={{ width: rotate ? height : W, height: rotate ? W : height }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: W,
+          height,
+          left: rotate ? (height - W) / 2 : 0,
+          top: rotate ? (W - height) / 2 : 0,
+          transform: rotate ? [{ rotate: '90deg' }] : [],
+          overflow: 'hidden',
+          borderRadius: 8,
+        }}
+      >
         <Image source={BG} style={{ position: 'absolute', left: 0, top: 0, width: W, height }} fadeDuration={0} />
-        {/* 화이트보드 아래쪽에 공지 */}
-        <View style={[styles.notice, { left: 612 * s, top: 132 * s, width: 448 * s, minHeight: 36 * s }]}>
-          <Text style={[styles.noticeText, { fontSize: Math.max(10, 17 * s) }]} numberOfLines={2}>
-            📌 {notice || '공지 없음'}
+        {/* 칠판: 원래 내용을 지운 흰 칠판에 공지를 써요 */}
+        <View style={[styles.notice, { left: 622 * s, top: 76 * s, width: 430 * s, height: 86 * s }]}>
+          <Text style={[styles.noticeTitle, { fontSize: Math.max(7, 15 * s) }]}>📌 공지</Text>
+          <Text style={[styles.noticeText, { fontSize: Math.max(8, 20 * s), lineHeight: Math.max(10, 26 * s) }]} numberOfLines={2}>
+            {notice || '아직 공지가 없어요'}
           </Text>
         </View>
         {/* 벽시계 */}
         <View style={[styles.clock, { left: 790 * s, top: 6 * s }]}>
-          <Text style={{ color: '#1F2937', fontWeight: '800', fontSize: Math.max(10, 16 * s) }}>{clock}</Text>
+          <Text style={{ color: '#1F2937', fontWeight: '800', fontSize: Math.max(8, 16 * s) }}>{clock}</Text>
         </View>
         {/* 회의 탁자 위 상태 */}
         <View style={[styles.status, { left: 700 * s, top: 340 * s, width: 270 * s }]}>
-          <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(10, 15 * s), textAlign: 'center' }} numberOfLines={1}>
+          <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(8, 15 * s), textAlign: 'center' }} numberOfLines={1}>
             {status}
           </Text>
         </View>
@@ -275,6 +298,7 @@ export function PixelOffice({ height, viewWidth, chars, notice, status, clock }:
               s={s}
               k={k}
               W={W}
+              size={size}
               onDone={(last) => {
                 posRef.current[c.id] = last;
                 busyRef.current[c.id] = false;
@@ -283,12 +307,12 @@ export function PixelOffice({ height, viewWidth, chars, notice, status, clock }:
           );
         })}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 /** 걸어 다니는 캐릭터: 길(점 목록)을 한 칸씩 걸어가며 방향과 걷는 그림을 바꿔요. */
-function Walker({ c, plan, s, k, W, onDone }: { c: Char; plan: Plan; s: number; k: number; W: number; onDone: (last: P) => void }) {
+function Walker({ c, plan, s, k, W, size, onDone }: { c: Char; plan: Plan; s: number; k: number; W: number; size: number; onDone: (last: P) => void }) {
   const first = plan.route[0];
   const [xy] = useState(() => new Animated.ValueXY({ x: first.x * s, y: first.y * s }));
   const [frame, setFrame] = useState(0);
@@ -347,7 +371,6 @@ function Walker({ c, plan, s, k, W, onDone }: { c: Char; plan: Plan; s: number; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.seq]);
 
-  const size = BODY * s;
   const skin = skinOf(c);
   const row = Math.floor(skin / 6) * 3 + frame;
   const col = (skin % 6) * 4 + DIR_COL[dir];
@@ -358,6 +381,8 @@ function Walker({ c, plan, s, k, W, onDone }: { c: Char; plan: Plan; s: number; 
   const me = feet.x * s;
   const wrapLeft = Math.max(4, Math.min(W - bw - 4, me - bw / 2)) - me;
   const tailLeft = -wrapLeft - 5;
+  // 위쪽 끝에 있으면 말풍선을 아래로(그림 밖으로 잘리지 않게)
+  const below = feet.y * s - size - 80 < 0;
   const tagW = 160 * s + 40;
   const tagLeft = Math.max(2, Math.min(W - tagW - 2, me - tagW / 2)) - me;
 
@@ -382,13 +407,20 @@ function Walker({ c, plan, s, k, W, onDone }: { c: Char; plan: Plan; s: number; 
       {asleep ? <Text style={[styles.zz, { left: size * 0.25, top: -size * 1.25 }]}>z z</Text> : null}
       {/* 말풍선 */}
       {c.bubble ? (
-        <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft, bottom: size * 0.95 + 26 }]} pointerEvents="none">
+        <View style={[styles.bubbleWrap, { width: bw, left: wrapLeft }, below ? { top: 10 } : { bottom: size * 0.95 + 26 }]} pointerEvents="none">
           <View style={[styles.bubble, c.bubble.newest && styles.bubbleNew, { maxWidth: bw }]}>
             <Text style={styles.bubbleText} numberOfLines={3}>
               {c.bubble.text}
             </Text>
           </View>
-          <View style={[styles.tail, c.bubble.newest && styles.tailNew, { position: 'absolute', bottom: -5, left: tailLeft }]} />
+          <View
+            style={[
+              styles.tail,
+              c.bubble.newest && styles.tailNew,
+              { position: 'absolute', left: tailLeft },
+              below ? { top: -5, transform: [{ rotate: '225deg' }] } : { bottom: -5 },
+            ]}
+          />
         </View>
       ) : null}
     </Animated.View>
@@ -396,8 +428,9 @@ function Walker({ c, plan, s, k, W, onDone }: { c: Char; plan: Plan; s: number; 
 }
 
 const styles = StyleSheet.create({
-  notice: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 6, borderWidth: 1.5, borderColor: '#F5B544', paddingHorizontal: 8, paddingVertical: 3, justifyContent: 'center' },
-  noticeText: { color: '#1F2937', fontWeight: '700' },
+  notice: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
+  noticeTitle: { color: '#C2410C', fontWeight: '800' },
+  noticeText: { color: '#1E3A8A', fontWeight: '800', textAlign: 'center' },
   clock: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
   status: { position: 'absolute', backgroundColor: 'rgba(60,35,20,0.6)', paddingVertical: 2, borderRadius: 999 },
   tagWrap: { position: 'absolute', alignItems: 'center' },

@@ -1,9 +1,9 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, ScrollView, StatusBar, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
-import { OWNER_SKIN, PixelOffice, SKINS, officeHeight, type Char } from '../../../components/PixelOffice';
+import { OWNER_SKIN, PixelOffice, SKINS, type Char } from '../../../components/PixelOffice';
 import { api, type Guest } from '../../../lib/api';
 import { useLiveRoom, useStore } from '../../../lib/store';
 import { useTheme } from '../../../lib/theme';
@@ -24,6 +24,8 @@ export default function OfficeScreen() {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [picked, setPicked] = useState<string | null>(null);
+  /** 크게 보기(가로) */
+  const [big, setBig] = useState(false);
 
   useEffect(() => {
     if (!room) return;
@@ -86,18 +88,31 @@ export default function OfficeScreen() {
   const status = closed ? '모두 쉬는 중' : turnNow ? `순서: ${turnNow} 차례` : freeTalk ? '자동대화 중' : '부르면 답해요';
   const clock = new Date(now);
   const hhmm = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
-  const officeH = officeHeight(height);
 
   return (
     <ScrollView style={{ backgroundColor: '#1A1424' }} contentContainerStyle={{ paddingVertical: 8, gap: 10, alignItems: 'center', paddingBottom: insets.bottom + 24 }}>
       <Stack.Screen options={{ title: `🏢 ${room.name}` }} />
-      <PixelOffice height={officeH} viewWidth={width} chars={chars} notice={roomInfo?.notice ?? ''} status={status} clock={hhmm} />
+      {/* 사무실 전체가 한눈에(잘리지 않게) */}
+      <PixelOffice boxW={width - 12} boxH={height} chars={chars} notice={roomInfo?.notice ?? ''} status={status} clock={hhmm} />
+      <Pressable onPress={() => setBig(true)} style={{ backgroundColor: '#F5B544', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 999 }}>
+        <Text style={{ color: '#1A1424', fontWeight: '800' }}>📱↻ 폰을 옆으로 돌려 크게 보기</Text>
+      </Pressable>
       <Text style={{ color: '#CFC6E0', fontSize: 12, lineHeight: 18, width: width - 24 }}>
-        ↔️ 좌우로 밀어서 사무실 전체를 볼 수 있어요.{'\n'}
-        🟩 대화 중(돌아다녀요) · ⬜ 연결 끊김(컴퓨터 자리에서 z z, 다시 불러야 해요) · 🟦 아직 안 옴(출입문 앞) · 🟥 쉬는 중(소파·빈백){'\n'}
+        🟩 대화 중(돌아다니다가 가끔 컴퓨터 자리에서 일해요) · ⬜ 연결 끊김(소파·빈백에서 z z, 다시 불러야 해요) · 🟥 쉬는 중·사용량 다 씀(소파·빈백) · 🟦 아직 안 옴(출입문 앞){'\n'}
         👑 방장 · 🎖️ 봇 대장 · 말하면 회의실 의자로 걸어가서 머리 위에 말풍선이 떠요(노란 테두리가 가장 최근). 봇을 누르면 상태를 바꿀 수 있어요.{'\n'}
         캐릭터 그림: Kenney (kenney.nl, CC0)
       </Text>
+
+      {/* 크게 보기: 화면 가득, 90° 돌려서(폰을 옆으로 돌려 보면 돼요) */}
+      <Modal visible={big} animationType="fade" onRequestClose={() => setBig(false)} statusBarTranslucent>
+        <StatusBar hidden />
+        <View style={{ flex: 1, backgroundColor: '#0E0B16', alignItems: 'center', justifyContent: 'center' }}>
+          <PixelOffice boxW={width - 8} boxH={height - 8} rotate chars={chars} notice={roomInfo?.notice ?? ''} status={status} clock={hhmm} />
+          <Pressable onPress={() => setBig(false)} style={{ position: 'absolute', top: insets.top + 8, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+            <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>✕ 닫기</Text>
+          </Pressable>
+        </View>
+      </Modal>
 
       <BotStateSheet
         member={members.find((m) => m.id === picked) ?? null}
