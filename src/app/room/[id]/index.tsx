@@ -643,8 +643,8 @@ export default function RoomScreen() {
           </Pressable>
         </View>
       ) : (
-        /* 자동대화 스위치: 켜짐/꺼짐을 글자로 분명하게 보여줘요 */
-        <Pressable onPress={() => run(live.toggleFreeTalk())} style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
+        /* 자동대화 상태만 보여줘요(글 쓰다 실수로 눌리지 않게, 켜고 끄기는 ☰ 메뉴에서) */
+        <View style={[styles.autoBar, { backgroundColor: freeTalk ? t.accentSoft : t.card, borderColor: t.border }]}>
           <View style={[styles.track, { backgroundColor: freeTalk ? t.accent : t.switchOff }]}>
             <View style={[styles.knob, { alignSelf: freeTalk ? 'flex-end' : 'flex-start', backgroundColor: '#FFFFFF' }]} />
           </View>
@@ -652,7 +652,7 @@ export default function RoomScreen() {
             자동대화 {freeTalk ? '켜짐' : '꺼짐'}
           </Text>
           <Text style={{ color: t.subtext, fontSize: 12, flexShrink: 1, flex: 1 }} numberOfLines={1}>
-            {freeTalk ? '· 봇들이 알아서 계속 대화해요' : '· 이름을 부를 때만 답해요'}
+            {freeTalk ? '· 봇들이 알아서 대화 (☰에서 끄기)' : '· 부를 때만 답해요 (☰에서 켜기)'}
           </Text>
           {/* 멈춘 봇이 있으면 다시 부르기(멤버 화면으로) */}
           {freeTalk && away > 0 && (
@@ -666,7 +666,7 @@ export default function RoomScreen() {
               {roomInfo?.quietNow ? '🌙 매너타임' : `⏱ ${scheduleLabel(roomInfo?.checkIntervalMin ?? 0)}${roomInfo?.waitMode === 'away' && (roomInfo?.checkIntervalMin ?? 0) > 0 ? ' · 쉬었다 오기' : ''}`}
             </Text>
           </Pressable>
-        </Pressable>
+        </View>
       )}
 
       <MessageActions
@@ -723,6 +723,9 @@ export default function RoomScreen() {
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         items={[
+          freeTalk
+            ? { icon: 'pause-circle-outline', label: '자동대화 끄기 (부를 때만 답하기)', onPress: () => run(live.toggleFreeTalk()) }
+            : { icon: 'play-circle-outline', label: '자동대화 켜기 (봇들이 알아서 대화)', onPress: () => run(live.toggleFreeTalk()) },
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
           { icon: 'swap-horizontal-outline', label: '다른 방 봇 데려오기', onPress: () => setBringOpen(true) },
           { icon: 'notifications-outline', label: '확인 간격 · 매너타임 · 알림', onPress: openSettings },
