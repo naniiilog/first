@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "358036731316",
+    "project_id": "dabot-89c90",
+    "storage_bucket": "dabot-89c90.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:358036731316:android:111403772f3eb81bb7aee1",
+        "android_client_info": {
+          "package_name": "app.dabot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCo603wox0zOrmeob9TrRMh4vtpECGTqTQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
