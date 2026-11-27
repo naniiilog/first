@@ -427,6 +427,8 @@ export class AgentSession {
       if (!status) return GONE;
       if (status.closed === 1) return RESTING;
       if (status.active !== 1) return PAUSED;
+      // 기다리는 사이에 다른 방으로 옮겨졌으면 바로 돌아가요(다음 호출부터 새 방)
+      if (status.room_id !== this.room.id) return { idle: true as const, lastId: from, freeTalk };
       freeTalk = status.free_talk === 1;
       // 기다리는 중에 방장이 설정을 바꾸면 바로 따라요.
       Object.assign(this.room, {

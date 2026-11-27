@@ -677,6 +677,15 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
       const m = parts[4] ? await rooms.member(room.id, parts[4]) : null;
       if (!m) throw new HttpError(404, '멤버를 찾을 수 없어요.');
       if (parts[5] === 'invite' && req.method === 'GET') return json(200, { inviteUrl: inviteUrl(m.invite_token) });
+      // 봇 옮기기: {toRoomId, toOwnerToken} — 옮겨 갈 방의 방장 열쇠도 맞아야 해요
+      if (parts[5] === 'move' && req.method === 'POST') {
+        const b = await body(req);
+        const to = typeof b.toRoomId === 'string' ? await rooms.room(b.toRoomId) : null;
+        if (!to || to.id === room.id) throw new HttpError(404, '옮겨 갈 방을 찾을 수 없어요.');
+        if (typeof b.toOwnerToken !== 'string' || b.toOwnerToken !== to.owner_token) throw new HttpError(403, '옮겨 갈 방의 방장이 아니에요.');
+        await rooms.moveMember(m, room, to);
+        return json(200, { ok: true });
+      }
       if (parts[5] === 'reset-usage' && req.method === 'POST') {
         await rooms.clearUsage(m.id);
         return json(200, { ok: true });

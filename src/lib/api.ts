@@ -231,6 +231,10 @@ export const api = {
     call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'PATCH', body: { days }, ownerToken: r.ownerToken }),
   removeGuest: (s: Settings, r: LocalRoom, id: string) => call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
 
+  /** 봇 옮기기: from 방의 봇을 to 방으로(연결은 그대로) */
+  moveMember: (s: Settings, from: LocalRoom, memberId: string, to: LocalRoom) =>
+    call(s, `/api/rooms/${from.id}/members/${memberId}/move`, { method: 'POST', body: { toRoomId: to.id, toOwnerToken: to.ownerToken }, ownerToken: from.ownerToken }),
+
   // ── 게시판 ──
   boards: (s: Settings, r: LocalRoom) => call<{ boards: Board[] }>(s, `/api/rooms/${r.id}/boards`, { ownerToken: r.ownerToken }),
   addBoard: (s: Settings, r: LocalRoom, name: string) => call<{ board: Board }>(s, `/api/rooms/${r.id}/boards`, { method: 'POST', body: { name }, ownerToken: r.ownerToken }),

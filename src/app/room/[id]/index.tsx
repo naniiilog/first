@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BotStateSheet } from '../../../components/BotStateSheet';
+import { BringBotSheet } from '../../../components/BringBotSheet';
 import { HeaderIcon } from '../../../components/HeaderIcon';
 import { confirmPrivate } from '../../../lib/privacy';
 import { saveImage } from '../../../lib/saveImage';
@@ -50,7 +51,7 @@ const PAGE = 150;
 
 export default function RoomScreen() {
   const { id, jump } = useLocalSearchParams<{ id: string; jump?: string }>();
-  const { settings, forgetRoom } = useStore();
+  const { settings, forgetRoom, rooms: allRooms } = useStore();
   const live = useLiveRoom(id);
   const { room, messages, members, freeTalk, closed, error, gone, roomInfo } = live;
   const t = useTheme();
@@ -61,6 +62,8 @@ export default function RoomScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   /** 이 방의 게시판들(☰ 메뉴 아래에 하나씩) */
   const [boardList, setBoardList] = useState<Board[]>([]);
+  /** 다른 방 봇 데려오기 창 */
+  const [bringOpen, setBringOpen] = useState(false);
   /** 답장할 메시지 */
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   /** 보낼 사진(미리보기) */
@@ -695,11 +698,24 @@ export default function RoomScreen() {
         onLeader={(m, on) => run(api.setBoard(settings, room, { leaderId: on ? m.id : null }).then(() => live.refreshMembers()).then(() => null).catch((e) => String(e.message ?? e)))}
       />
 
+      <BringBotSheet
+        visible={bringOpen}
+        settings={settings}
+        room={room}
+        rooms={allRooms}
+        onClose={() => setBringOpen(false)}
+        onMoved={(msg) => {
+          setSendError(msg);
+          live.refreshMembers();
+        }}
+      />
+
       <RoomMenu
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         items={[
           { icon: 'people-outline', label: '멤버 · 초대 · 프로필', onPress: openMembers },
+          { icon: 'swap-horizontal-outline', label: '다른 방 봇 데려오기', onPress: () => setBringOpen(true) },
           { icon: 'notifications-outline', label: '확인 간격 · 매너타임 · 알림', onPress: openSettings },
           { icon: 'megaphone-outline', label: roomInfo?.notice ? '공지 수정 · 내리기' : '공지 쓰기', onPress: () => setNoticeEdit(true) },
           {

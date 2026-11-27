@@ -382,8 +382,8 @@ export class Rooms {
 
   /** 기다리는 동안 가볍게 확인하는 용도: 참가 상태와 방의 자동대화 상태를 한 번에 읽어요. 없으면 null(내보내짐). */
   memberStatus(memberId: string) {
-    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; turn_order: string | null; turn_idx: number; turn_since: number | null; my_interval: number | null; notice: string | null; notice_at: number; leader_id: string | null; talk_level: string }>(
-      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, r.turn_order AS turn_order, r.turn_idx AS turn_idx, r.turn_since AS turn_since, m.check_interval_min AS my_interval, r.notice AS notice, r.notice_at AS notice_at, r.leader_id AS leader_id, r.talk_level AS talk_level FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
+    return this.db.first<{ active: number; free_talk: number; closed: number; check_interval_min: number; quiet_enabled: number; quiet_start: number; quiet_end: number; wait_mode: string; turn_order: string | null; turn_idx: number; turn_since: number | null; my_interval: number | null; notice: string | null; notice_at: number; leader_id: string | null; talk_level: string; room_id: string }>(
+      'SELECT m.active AS active, r.free_talk AS free_talk, r.closed AS closed, r.check_interval_min AS check_interval_min, r.quiet_enabled AS quiet_enabled, r.quiet_start AS quiet_start, r.quiet_end AS quiet_end, r.wait_mode AS wait_mode, r.turn_order AS turn_order, r.turn_idx AS turn_idx, r.turn_since AS turn_since, m.check_interval_min AS my_interval, r.notice AS notice, r.notice_at AS notice_at, r.leader_id AS leader_id, r.talk_level AS talk_level, m.room_id AS room_id FROM members m JOIN rooms r ON r.id = m.room_id WHERE m.id = ?',
       memberId,
     );
   }
@@ -457,6 +457,26 @@ export class Rooms {
       const name = patch.name ?? m.name;
       await this.post(m.room_id, SYSTEM_ID, '안내', patch.active ? `${name} 님이 다시 대화에 참가해요.` : `${name} 님의 대화 참가를 멈췄어요.`);
     }
+  }
+
+  /**
+   * 봇 옮기기: 초대 링크(연결)는 그대로 두고 다른 방으로 옮겨요.
+   * 새 방에서는 지금부터 올라오는 글만 읽게 하고(옛 대화가 쏟아지지 않게), 원래 방의 대장·순서에서는 빼요.
+   */
+  async moveMember(m: MemberRow, from: RoomRow, to: RoomRow) {
+    const last = (await this.db.first<{ id: number }>('SELECT MAX(id) AS id FROM messages WHERE room_id = ?', to.id))?.id ?? 0;
+    await this.db.run('UPDATE members SET room_id = ?, read_cursor = ?, last_check = NULL WHERE id = ?', to.id, last, m.id);
+    if (from.leader_id === m.id) await this.setLeader(from.id, null);
+    if (from.turn_order) {
+      try {
+        const order = (JSON.parse(from.turn_order) as string[]).filter((id) => id !== m.id);
+        await this.setTurn(from.id, order.length >= 2 ? order : null, 0, Date.now());
+      } catch {
+        // 순서 정보가 깨졌으면 그냥 둬요
+      }
+    }
+    await this.post(from.id, SYSTEM_ID, '안내', `${m.name} 님이 "${to.name}" 방으로 옮겨 갔어요.`);
+    await this.post(to.id, SYSTEM_ID, '안내', `${m.name} 님이 "${from.name}" 방에서 옮겨 왔어요. 연결은 그대로예요.`);
   }
 
   async removeMember(m: MemberRow) {
