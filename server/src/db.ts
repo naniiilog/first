@@ -88,7 +88,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '20';
+const SCHEMA_VERSION = '22';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {
@@ -125,6 +125,11 @@ export function ensureSchema(db: Db): Promise<void> {
       'exhausted INTEGER NOT NULL DEFAULT 0',
       // 이 봇만의 확인 간격(분). NULL이면 방 설정을 따라요
       'check_interval_min INTEGER',
+      // 연결 끊김 알림을 보냈는지(다시 들어오면 0)
+      'disc_notified INTEGER NOT NULL DEFAULT 0',
+      // 연결 문구(주소)로 들어오는 봇인지, 게시판 주소를 쓴 적 있는지(= 새 연결 문구를 받았는지)
+      'via_http INTEGER NOT NULL DEFAULT 0',
+      'http_boards INTEGER NOT NULL DEFAULT 0',
     ]) {
       await db.run(`ALTER TABLE members ADD COLUMN ${col}`).catch(() => {});
     }

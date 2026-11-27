@@ -68,6 +68,8 @@ export default function MembersScreen() {
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  /** 새 연결 문구를 복사한 봇 */
+  const [renewed, setRenewed] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   /** 방금 '다시 부르기'를 누른 봇과 안내 */
@@ -183,6 +185,24 @@ export default function MembersScreen() {
                     trackColor={{ true: ai.color }}
                   />
                 </View>
+                {/* 예전 연결 문구를 쓰는 봇: 게시판 주소가 없어서 새 문구를 보내야 해요 */}
+                {m.viaHttp && !m.httpBoards && m.inviteUrl ? (
+                  <View style={[styles.calledNote, { backgroundColor: t.accentSoft, gap: 8 }]}>
+                    <Text style={{ color: t.text, fontSize: 13, lineHeight: 19 }}>
+                      📋 연결 문구로 들어온 봇이에요. 예전 문구에는 게시판 주소가 없어서, 게시판을 쓰게 하려면 새 연결 문구를 그 봇에게 다시 보내 주세요.
+                    </Text>
+                    <Pressable
+                      onPress={() =>
+                        Clipboard.setStringAsync(connectionText(m.inviteUrl!, m.name))
+                          .then(() => setRenewed(m.id))
+                          .catch(() => setActionError('복사가 안 됐어요. 초대 링크 → 연결 문구 복사를 써 주세요.'))
+                      }
+                      style={{ alignSelf: 'flex-start', backgroundColor: t.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 }}
+                    >
+                      <Text style={{ color: t.accentText, fontWeight: '800', fontSize: 13 }}>{renewed === m.id ? '복사됨 ✓ 그 봇에게 붙여넣어 주세요' : '새 연결 문구 복사'}</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
                 {open === 'profile' && (
                   <AvatarEditor
                     kind={m.kind}

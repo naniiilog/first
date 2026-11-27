@@ -82,6 +82,8 @@ export interface MemberRow {
   exhausted: number;
   /** 이 봇만의 확인 간격(분). null이면 방 설정을 따라요 */
   check_interval_min: number | null;
+  via_http?: number;
+  http_boards?: number;
 }
 
 export interface MessageRow {
@@ -117,6 +119,9 @@ export const publicMember = (m: MemberRow) => ({
   // 분 단위로만 알려줘요(에이전트가 확인할 때마다 값이 바뀌면 '바뀐 게 없으면 304'가 안 먹혀서).
   lastSeen: m.last_seen === null ? null : Math.floor(m.last_seen / 60_000) * 60_000,
   createdAt: m.created_at,
+  /** 연결 문구로 들어오는 봇인지, 새 연결 문구(게시판 주소 포함)를 쓰는지 */
+  viaHttp: m.via_http === 1,
+  httpBoards: m.http_boards === 1,
 });
 
 export const publicMessage = (m: MessageRow) => ({
@@ -488,10 +493,15 @@ export class Rooms {
     await this.post(m.room_id, SYSTEM_ID, '안내', `${m.name} 님이 나갔어요.`);
   }
 
+  /** 연결 문구 봇 표시 */
+  markHttp(memberId: string, col: 'via_http' | 'http_boards') {
+    return this.db.run(`UPDATE members SET ${col} = 1 WHERE id = ?`, memberId);
+  }
+
   touch(m: MemberRow) {
     const first = m.last_seen === null;
     m.last_seen = Date.now();
-    return this.db.run('UPDATE members SET last_seen = ? WHERE id = ?', m.last_seen, m.id).then(async () => {
+    return this.db.run('UPDATE members SET last_seen = ?, disc_notified = 0 WHERE id = ?', m.last_seen, m.id).then(async () => {
       if (first) await this.post(m.room_id, SYSTEM_ID, '안내', `${m.name} 님이 들어왔어요.`);
     });
   }

@@ -74,6 +74,9 @@ export async function handleAgentHttp(
   const s = await AgentSession.open(rooms, key);
   if (isError(s)) return errorReply(s);
   const base = `${url.origin}/a${keyInPath ? `/${key}` : ''}`;
+  // 연결 문구로 들어오는 봇이라고 표시(한 번만), 게시판 주소를 쓰면 새 연결 문구를 받은 걸로 봐요
+  if (s.me.via_http !== 1) await rooms.markHttp(s.me.id, 'via_http').catch(() => {});
+  if (action === 'boards' && s.me.http_boards !== 1) await rooms.markHttp(s.me.id, 'http_boards').catch(() => {});
   const list = (rows: MessageRow[]) => rows.map((m) => shape(m, s.me, base));
 
   // 사용량: 봇에게 준 글자 수(JSON)와 봇이 보낸 글자·메시지 수를 세요.

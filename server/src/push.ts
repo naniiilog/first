@@ -227,3 +227,38 @@ export async function sendTest(db: Db, room: RoomRow, origin: string) {
   }
   return { sent, failed };
 }
+
+/**
+ * 봇 연결 끊김 알림(몇 분마다 서버가 저절로 돌려요).
+ * 대화에 참가 중인 봇이 확인 간격 + 4분 넘게 방을 안 보면, 방장 휴대폰에 "연결이 끊겼어요"를 한 번 보내요.
+ * 누르면 그 방이 열리고 그 봇의 '다시 부르기' 창이 떠요. 다시 들어오면 다음 끊김 때 또 알려요.
+ * 매너타임·모두 쉬는 중·쉬었다 오기(일부러 나가는 방식)·알림 꺼 둔 방은 알리지 않아요.
+ */
+export async function notifyDisconnected(db: Db, origin: string) {
+  const now = Date.now();
+  const rows = await db.all<RoomRow & { m_id: string; m_name: string; m_seen: number; m_every: number | null }>(
+    `SELECT r.*, m.id AS m_id, m.name AS m_name, m.last_seen AS m_seen, m.check_interval_min AS m_every
+       FROM members m JOIN rooms r ON r.id = m.room_id
+      WHERE m.active = 1 AND m.exhausted = 0 AND m.disc_notified = 0 AND m.last_seen IS NOT NULL
+        AND m.last_seen > ? AND r.closed = 0 AND r.notify_mode <> 'off'`,
+    now - 6 * 3600_000,
+  );
+  let v: Vapid | null = null;
+  for (const r of rows) {
+    const every = r.m_every ?? r.check_interval_min ?? 0;
+    if (r.wait_mode === 'away' && every > 0) continue;
+    if (now - r.m_seen < (every + 4) * 60_000) continue;
+    if (quietNow(r, now)) continue;
+    // 서버가 두 개(dabot·예전 botroom) 돌아서, 먼저 표시한 쪽만 보내요
+    const mark = await db.run('UPDATE members SET disc_notified = 1 WHERE id = ? AND disc_notified = 0', r.m_id);
+    if (!mark.changes) continue;
+    const subs = await db.all<PushSub>('SELECT endpoint, room_id, p256dh, auth FROM push_subs WHERE room_id = ?', r.id);
+    if (!subs.length) continue;
+    v ??= await vapid(db);
+    const data = { title: r.name, body: `🔌 ${r.m_name} 연결이 끊겼어요. 눌러서 다시 부르기`, tag: `disc-${r.m_id}`, url: `/room/${r.id}?call=${r.m_id}`, silent: r.notify_silent === 1, sound: r.notify_sound || 'default' };
+    for (const sub of subs) {
+      const alive = await sendOne(v, sub, data, origin).catch(() => true);
+      if (!alive) await db.run('DELETE FROM push_subs WHERE endpoint = ? AND room_id = ?', sub.endpoint, sub.room_id);
+    }
+  }
+}

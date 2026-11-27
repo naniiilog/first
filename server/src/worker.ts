@@ -6,7 +6,8 @@
  *   npm run deploy   (웹 앱을 만든 뒤 함께 올려요)
  */
 import { handle, type Env } from './app.js';
-import { d1Db } from './db.js';
+import { d1Db, ensureSchema } from './db.js';
+import { notifyDisconnected } from './push.js';
 import WEB_ASSETS from './web-assets.gen.js';
 
 // 사진 같은 바이너리 파일은 처음 한 번만 풀어두고 재사용해요(무료 플랜 CPU 시간 절약).
@@ -42,6 +43,11 @@ function serveWeb(request: Request): Response {
 }
 
 export default {
+  /** 2분마다: 연결이 끊긴 봇을 찾아 방장에게 알려요 */
+  async scheduled(_event: unknown, env: Env & { DB: Parameters<typeof d1Db>[0] }, ctx: { waitUntil(p: Promise<unknown>): void }) {
+    const db = d1Db(env.DB);
+    ctx.waitUntil(ensureSchema(db).then(() => notifyDisconnected(db, 'https://dabot.botroom-yao.workers.dev')));
+  },
   fetch(request: Request, env: Env & { DB: Parameters<typeof d1Db>[0] }, ctx?: { waitUntil(p: Promise<unknown>): void }): Promise<Response> | Response {
     const { pathname } = new URL(request.url);
     const isApi = pathname.startsWith('/api/') || pathname.startsWith('/mcp/') || pathname === '/a' || pathname.startsWith('/a/') || pathname.startsWith('/img/') || pathname.startsWith('/g/') || pathname === '/health';

@@ -50,7 +50,7 @@ const nowMs = () => Date.now();
 const PAGE = 150;
 
 export default function RoomScreen() {
-  const { id, jump } = useLocalSearchParams<{ id: string; jump?: string }>();
+  const { id, jump, call } = useLocalSearchParams<{ id: string; jump?: string; call?: string }>();
   const { settings, forgetRoom, rooms: allRooms } = useStore();
   const live = useLiveRoom(id);
   const { room, messages, members, freeTalk, closed, error, gone, roomInfo } = live;
@@ -265,6 +265,15 @@ export default function RoomScreen() {
   /** 길게 누른 글(답장·북마크·복사 창), 북마크 목록 창 */
   const [actionMsg, setActionMsg] = useState<ChatMessage | null>(null);
   const [showMarks, setShowMarks] = useState(false);
+
+  // '연결이 끊겼어요' 알림을 누르고 오면 그 봇의 창(다시 부르기)을 바로 열어요.
+  const handledCall = useRef<string | null>(null);
+  useEffect(() => {
+    if (!call || handledCall.current === call || !members.some((m) => m.id === call)) return;
+    handledCall.current = call;
+    const timer = setTimeout(() => setChipMenu(call), 300);
+    return () => clearTimeout(timer);
+  }, [call, members]);
 
   // 다른 화면(앨범·타임라인)에서 '대화에서 보기'로 오면 그 글로 찾아가요.
   const handledJump = useRef<string | null>(null);

@@ -27,6 +27,9 @@ export interface Member {
   avatar: string | null;
   /** 초대 링크(방장에게만 와요) */
   inviteUrl?: string;
+  /** 연결 문구(주소)로 들어오는 봇인지, 새 연결 문구를 쓰는지(게시판 주소를 써 봤는지) */
+  viaHttp?: boolean;
+  httpBoards?: boolean;
 }
 
 export interface ChatMessage {
