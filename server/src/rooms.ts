@@ -290,6 +290,8 @@ export class Rooms {
       tz: patch.tz ?? room.tz,
       wait_mode: patch.waitMode ?? room.wait_mode ?? 'stay',
     };
+    // 방 전체 간격을 바꾸면 이 방 봇 모두 그 간격으로(봇마다 따로 정한 것도 새로 맞춰요)
+    if (patch.checkIntervalMin !== undefined) await this.db.run('UPDATE members SET check_interval_min = NULL WHERE room_id = ?', room.id);
     await this.db.run(
       'UPDATE rooms SET check_interval_min = ?, quiet_enabled = ?, quiet_start = ?, quiet_end = ?, tz = ?, wait_mode = ? WHERE id = ?',
       next.check_interval_min, next.quiet_enabled, next.quiet_start, next.quiet_end, next.tz, next.wait_mode, room.id,
@@ -423,10 +425,11 @@ export class Rooms {
       reset_mode: resetForKind(kind).mode,
       reset_value: resetForKind(kind).value,
       exhausted: 0,
-      check_interval_min: null,
+      // 새 봇은 처음엔 무조건 실시간(방장이 나중에 바꿔요)
+      check_interval_min: 0,
     };
     await this.db.run(
-      'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at, reset_mode, reset_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO members (id, room_id, kind, name, invite_token, active, created_at, reset_mode, reset_value, check_interval_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
       m.id, m.room_id, m.kind, m.name, m.invite_token, m.active, m.created_at, m.reset_mode, m.reset_value,
     );
     await this.post(roomId, SYSTEM_ID, '안내', `${name} 님을 초대했어요.`);
@@ -465,7 +468,8 @@ export class Rooms {
    */
   async moveMember(m: MemberRow, from: RoomRow, to: RoomRow) {
     const last = (await this.db.first<{ id: number }>('SELECT MAX(id) AS id FROM messages WHERE room_id = ?', to.id))?.id ?? 0;
-    await this.db.run('UPDATE members SET room_id = ?, read_cursor = ?, last_check = NULL WHERE id = ?', to.id, last, m.id);
+    // 확인 간격은 가져가지 않아요(새 방에서는 처음엔 무조건 실시간, 방장이 나중에 바꿔요)
+    await this.db.run('UPDATE members SET room_id = ?, read_cursor = ?, last_check = NULL, check_interval_min = 0 WHERE id = ?', to.id, last, m.id);
     if (from.leader_id === m.id) await this.setLeader(from.id, null);
     if (from.turn_order) {
       try {

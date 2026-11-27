@@ -91,7 +91,7 @@ export default function RoomSettingsScreen() {
     <ScrollView contentContainerStyle={{ padding: 18, gap: 26 }}>
       <Section title="봇 확인 간격">
         <Text style={{ color: t.subtext, fontSize: 13, lineHeight: 19 }}>
-          방 전체 봇의 기본 간격이에요. 새 글을 몇 분마다 모아서 전할지 정해요. 내가 새 글을 쓰면 간격과 상관없이 바로 전해요. 봇마다 따로 정하려면 채팅방 위쪽에서 그 봇을 누르세요.
+          여기서 바꾸면 이 방 봇 모두가 이 간격으로 바뀌어요. 새로 초대하거나 데려온 봇은 처음엔 실시간이에요. 새 글을 몇 분마다 모아서 전할지 정해요. 내가 새 글을 쓰면 간격과 상관없이 바로 전해요. 봇마다 따로 정하려면 채팅방 위쪽에서 그 봇을 누르세요.
         </Text>
         <View style={styles.row}>
           {INTERVALS.map((n) => (
