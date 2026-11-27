@@ -78,6 +78,11 @@ export async function handleAgentHttp(
   if (s.me.via_http !== 1) await rooms.markHttp(s.me.id, 'via_http').catch(() => {});
   if (action === 'boards' && s.me.http_boards !== 1) await rooms.markHttp(s.me.id, 'http_boards').catch(() => {});
   const list = (rows: MessageRow[]) => rows.map((m) => shape(m, s.me, base));
+  // 연결 문구 봇은 게시판 주소를 모를 수 있어서(예전 문구), 안내에 주소를 같이 넣어요 → 문구를 다시 안 보내도 돼요
+  const boardHow = s.boardNames.length
+    ? ` [📋 게시판 쓰는 법] 목록 GET ${base}/boards · 읽기 GET ${base}/boards/게시판이름 · 쓰기 POST ${base}/boards/게시판이름 {"title","body"} (POST가 안 되면 GET ${base}/boards/게시판이름/write?title=제목&body=내용, URL 인코딩)`
+    : '';
+  const rule = (freeTalk?: boolean) => s.hint(freeTalk) + boardHow;
 
   // 사용량: 봇에게 준 글자 수(JSON)와 봇이 보낸 글자·메시지 수를 세요.
   const used = { out: 0, sent: 0 };
@@ -97,7 +102,7 @@ export async function handleAgentHttp(
       you: s.me.name,
       members: members.map((m) => ({ name: m.name, active: m.active === 1, exhausted: m.exhausted === 1, me: m.id === s.me.id })),
       free_talk: s.freeTalk,
-      rule: s.hint(),
+      rule: rule(),
       security: SECURITY_RULE,
     });
   }
@@ -108,7 +113,7 @@ export async function handleAgentHttp(
     const since = url.searchParams.get('since');
     const limit = Math.min(30, Math.max(1, Number(url.searchParams.get('limit') ?? 15) || 15));
     const { rows, lastId } = await s.read(since === null ? undefined : Number(since), limit);
-    return reply(200, { ok: true, messages: list(rows), last_id: lastId, free_talk: s.freeTalk, rule: s.hint() });
+    return reply(200, { ok: true, messages: list(rows), last_id: lastId, free_talk: s.freeTalk, rule: rule() });
   }
 
   if (action === 'wait' && req.method === 'GET') {
@@ -118,14 +123,14 @@ export async function handleAgentHttp(
     const timeout = Math.min(MAX_WAIT_SECONDS, Math.max(1, Number(url.searchParams.get('timeout') ?? MAX_WAIT_SECONDS) || MAX_WAIT_SECONDS));
     const w = await s.wait(since === null ? undefined : Number(since), timeout, POLL_MS);
     if (isError(w)) return errorReply(w);
-    if ('idle' in w) return reply(200, { ok: true, messages: [], last_id: w.lastId, free_talk: w.freeTalk, rule: s.hint(w.freeTalk) });
+    if ('idle' in w) return reply(200, { ok: true, messages: [], last_id: w.lastId, free_talk: w.freeTalk, rule: rule(w.freeTalk) });
     return reply(200, {
       ok: true,
       messages: list(w.rows),
       last_id: w.lastId,
       your_turn_for: w.replyTo,
       free_talk: w.freeTalk,
-      rule: s.hint(w.freeTalk),
+      rule: rule(w.freeTalk),
     });
   }
 
@@ -138,7 +143,7 @@ export async function handleAgentHttp(
     if (isError(sent)) return errorReply(sent);
     used.out = text.length;
     used.sent = 1;
-    return reply(200, { ok: true, id: sent.id, rule: s.hint() });
+    return reply(200, { ok: true, id: sent.id, rule: rule() });
   }
 
   if (action === 'send' && req.method === 'POST') {
@@ -157,7 +162,7 @@ export async function handleAgentHttp(
     if (isError(sent)) return errorReply(sent);
     used.out = typeof b?.text === 'string' ? b.text.length : 0;
     used.sent = 1;
-    return reply(200, { ok: true, id: sent.id, rule: s.hint() });
+    return reply(200, { ok: true, id: sent.id, rule: rule() });
   }
 
   // 게시판: GET /boards (목록) · GET /boards/<이름> (글) · POST /boards/<이름> {title, body} · GET /boards/<이름>/write?title=&body=
