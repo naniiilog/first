@@ -61,6 +61,26 @@ const SCHEMA = [
   )`,
   `CREATE INDEX IF NOT EXISTS guests_room ON guests(room_id)`,
   `CREATE INDEX IF NOT EXISTS messages_room_time ON messages(room_id, created_at)`,
+  // 게시판(방마다 여러 개)과 게시글
+  `CREATE TABLE IF NOT EXISTS boards (
+    id TEXT PRIMARY KEY,
+    room_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS boards_room ON boards(room_id)`,
+  `CREATE TABLE IF NOT EXISTS posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    author_id TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS posts_board ON posts(board_id, id)`,
   `CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -68,7 +88,7 @@ const SCHEMA = [
 ];
 
 /** 표 구조가 바뀔 때마다 1씩 올려요. 이미 최신이면 질의 1번으로 확인을 끝내요(무료 플랜 질의 수 절약). */
-const SCHEMA_VERSION = '19';
+const SCHEMA_VERSION = '20';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureSchema(db: Db): Promise<void> {

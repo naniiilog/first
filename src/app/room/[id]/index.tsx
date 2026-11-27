@@ -16,7 +16,7 @@ import { TurnPanel, TurnSetup } from '../../../components/TurnPanel';
 import { LeaderPicker, NoticeBar, NoticeEditor } from '../../../components/RoomBoard';
 import { RoomMenu } from '../../../components/RoomMenu';
 import { Avatar } from '../../../components/ui';
-import { api, type Guest } from '../../../lib/api';
+import { api, type Board, type Guest } from '../../../lib/api';
 import { lookOf } from '../../../lib/avatar';
 import { pickPhoto } from '../../../lib/photo';
 import { useLiveRoom, useStore } from '../../../lib/store';
@@ -59,6 +59,8 @@ export default function RoomScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<Row>>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** 이 방의 게시판들(☰ 메뉴 아래에 하나씩) */
+  const [boardList, setBoardList] = useState<Board[]>([]);
   /** 답장할 메시지 */
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   /** 보낼 사진(미리보기) */
@@ -339,7 +341,11 @@ export default function RoomScreen() {
     router.back();
   };
 
-  const openMenu = () => setMenuOpen(true);
+  const openMenu = () => {
+    setMenuOpen(true);
+    // 메뉴를 열 때마다 게시판 목록을 새로 받아요(이름 바꾼 게 바로 보이게)
+    api.boards(settings, room).then((r) => setBoardList(r.boards)).catch(() => {});
+  };
 
   const hidden = Math.max(0, messages.length - showCount);
   const rows = toRows(hidden ? messages.slice(hidden) : messages);
@@ -701,6 +707,13 @@ export default function RoomScreen() {
             label: `봇 대장 정하기${roomInfo?.leaderId ? ` (지금: ${members.find((m) => m.id === roomInfo.leaderId)?.name ?? '?'})` : ''}`,
             onPress: () => setLeaderPick(true),
           },
+          { icon: 'clipboard-outline', label: '게시판 (추가 · 이름 바꾸기)', onPress: () => router.push({ pathname: '/room/[id]/boards', params: { id: room.id } }) },
+          ...boardList.map((b) => ({
+            icon: 'document-text-outline' as const,
+            label: `${b.name}${b.count ? ` (${b.count})` : ''}`,
+            sub: true,
+            onPress: () => router.push({ pathname: '/room/[id]/board/[bid]', params: { id: room.id, bid: b.id } }),
+          })),
           { icon: 'repeat-outline', label: roomInfo?.turnOrder ? '순서 바꾸기' : '순서 정해서 대화', onPress: () => setTurnEdit(true) },
           { icon: 'bookmark-outline', label: `북마크 (${bookmarks.length})`, onPress: () => setShowMarks(true) },
           { icon: 'images-outline', label: '사진 앨범', onPress: () => router.push({ pathname: '/room/[id]/album', params: { id: room.id } }) },

@@ -13,11 +13,12 @@
  *   GET  /a/send?text=URL인코딩&reply_to=번호   (POST를 못 쓰는 에이전트용)
  *   POST /a/image  (사진 바이트, Content-Type: image/png|jpeg|webp, 캡션은 X-Dabot-Text에 URL 인코딩)
  *   GET  /a/image/:글번호                  그 글의 사진
+ *   GET  /a/boards · GET /a/boards/<이름> · POST /a/boards/<이름> {"title","body"} · GET /a/boards/<이름>/write?title=&body=   게시판
  */
 import { AgentSession, imageFrom, isError, MAX_IMAGE_BYTES, SECURITY_RULE, type AgentError } from './agent.js';
 import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type Rooms } from './rooms.js';
 
-const ACTIONS = new Set(['info', 'messages', 'wait', 'send', 'image']);
+const ACTIONS = new Set(['info', 'messages', 'wait', 'send', 'image', 'boards']);
 const MAX_WAIT_SECONDS = 90;
 const POLL_MS = 6000;
 
@@ -154,6 +155,38 @@ export async function handleAgentHttp(
     used.out = typeof b?.text === 'string' ? b.text.length : 0;
     used.sent = 1;
     return reply(200, { ok: true, id: sent.id, rule: s.hint() });
+  }
+
+  // 게시판: GET /boards (목록) · GET /boards/<이름> (글) · POST /boards/<이름> {title, body} · GET /boards/<이름>/write?title=&body=
+  if (action === 'boards') {
+    const key = rest[0] ? decodeURIComponent(rest[0]) : '';
+    if (!key && req.method === 'GET') {
+      const list = await s.boardList();
+      return reply(200, { ok: true, boards: list.map((b) => ({ id: b.id, name: b.name, posts: b.count ?? 0 })) });
+    }
+    if (key && !rest[1] && req.method === 'GET') {
+      const r = await s.boardRead(key, 20);
+      if (isError(r)) return errorReply(r);
+      return reply(200, { ok: true, board: r.board.name, posts: r.posts.map((p) => ({ id: p.id, title: p.title, body: p.body, from: p.author_name, at: new Date(p.created_at).toISOString() })) });
+    }
+    if (key && (req.method === 'POST' || (req.method === 'GET' && rest[1] === 'write'))) {
+      let title = url.searchParams.get('title') ?? '';
+      let text = url.searchParams.get('body') ?? '';
+      if (req.method === 'POST') {
+        try {
+          const b = JSON.parse(await req.text());
+          title = typeof b?.title === 'string' ? b.title : '';
+          text = typeof b?.body === 'string' ? b.body : '';
+        } catch {
+          return reply(400, { ok: false, code: 'bad_request', error: '본문은 JSON {"title": "...", "body": "..."} 이어야 해요.' });
+        }
+      }
+      const r = await s.boardWrite(key, title, text);
+      if (isError(r)) return errorReply(r);
+      used.out = title.length + text.length;
+      used.sent = 1;
+      return reply(200, { ok: true, id: r.id, board: r.board });
+    }
   }
 
   if (action === 'image' && req.method === 'POST') {

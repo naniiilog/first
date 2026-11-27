@@ -66,6 +66,8 @@ function Root() {
       <Stack.Screen name="join/[token]" options={{ title: "다봇 초대" }} />
       <Stack.Screen name="room/[id]/album" options={{ title: '사진 앨범' }} />
       <Stack.Screen name="room/[id]/timeline" options={{ title: '타임라인' }} />
+      <Stack.Screen name="room/[id]/boards" options={{ title: '게시판 관리' }} />
+      <Stack.Screen name="room/[id]/board/[bid]" options={{ title: '게시판' }} />
       <Stack.Screen name="room/[id]/settings" options={{ title: '방 설정 · 알림', presentation: 'modal' }} />
     </Stack>
   );

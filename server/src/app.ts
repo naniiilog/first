@@ -5,7 +5,7 @@ import { handleAgentHttp } from './agentHttp.js';
 import { TALK_LEVELS, imageFrom, isError, quietState } from './agent.js';
 import { handleMcp } from './mcp.js';
 import { findSecret, secretMessage } from './safety.js';
-import { imageSig, imageUrl, MAX_TEXT, OWNER_ID, publicMember, publicMessage, Rooms, SYSTEM_ID, tzOffsetSec } from './rooms.js';
+import { imageSig, imageUrl, MAX_BOARD_NAME, MAX_POST_BODY, MAX_POST_TITLE, MAX_TEXT, OWNER_ID, publicMember, publicMessage, publicPost, Rooms, SYSTEM_ID, tzOffsetSec } from './rooms.js';
 import { cleanReset, windowEnd } from './usage.js';
 import { currentTurn, parseTurn } from './turn.js';
 import { NOTIFY_MODES, NOTIFY_SOUNDS, notifyBotMessage, sendTest, vapid } from './push.js';
@@ -514,6 +514,53 @@ export async function handle(req: Request, env: Env, db: Db, clientIp: string, w
       const to = Number(url.searchParams.get('to')) || from + 86_400_000;
       const rows = await rooms.messagesBetween(room.id, from, to, 2000);
       return json(200, { messages: await Promise.all(rows.map(async (m) => ({ ...publicMessage(m), image: m.image ? await imageUrl(room, m.id) : null }))) });
+    }
+
+    // 게시판: GET 목록 · POST {name} · PATCH/DELETE /boards/<id> · GET/POST /boards/<id>/posts · DELETE /boards/<id>/posts/<글번호>
+    if (sub === 'boards') {
+      const boardName = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, MAX_BOARD_NAME) : '');
+      if (!parts[4] && req.method === 'GET') {
+        const list = await rooms.boards(room.id);
+        return json(200, { boards: list.map((b) => ({ id: b.id, name: b.name, count: b.count ?? 0, lastAt: b.last_at ?? null })) });
+      }
+      if (!parts[4] && req.method === 'POST') {
+        const name = boardName((await body(req)).name);
+        if (!name) throw new HttpError(400, '게시판 이름을 써 주세요.');
+        const b = await rooms.addBoard(room.id, name);
+        await rooms.post(room.id, SYSTEM_ID, '안내', `📋 게시판 "${name}"을(를) 만들었어요. 봇들도 글을 볼 수 있고 쓸 수 있어요.`);
+        return json(200, { board: { id: b.id, name: b.name, count: 0, lastAt: null } });
+      }
+      const board = parts[4] ? await rooms.board(room.id, parts[4]) : null;
+      if (!board) throw new HttpError(404, '게시판을 찾을 수 없어요.');
+      if (!parts[5] && req.method === 'PATCH') {
+        const name = boardName((await body(req)).name);
+        if (!name) throw new HttpError(400, '게시판 이름을 써 주세요.');
+        await rooms.renameBoard(room.id, board.id, name);
+        await rooms.post(room.id, SYSTEM_ID, '안내', `📋 게시판 이름을 "${board.name}" → "${name}"(으)로 바꿨어요.`);
+        return json(200, { ok: true });
+      }
+      if (!parts[5] && req.method === 'DELETE') {
+        await rooms.deleteBoard(room.id, board.id);
+        await rooms.post(room.id, SYSTEM_ID, '안내', `📋 게시판 "${board.name}"을(를) 지웠어요.`);
+        return json(200, { ok: true });
+      }
+      if (parts[5] === 'posts' && !parts[6] && req.method === 'GET') {
+        const before = Number(url.searchParams.get('before')) || null;
+        return json(200, { posts: (await rooms.posts(board.id, before, 50)).map(publicPost) });
+      }
+      if (parts[5] === 'posts' && !parts[6] && req.method === 'POST') {
+        const b = await body(req);
+        const title = typeof b.title === 'string' ? b.title.trim().slice(0, MAX_POST_TITLE) : '';
+        const text = typeof b.body === 'string' ? b.body.trim().slice(0, MAX_POST_BODY) : '';
+        if (!title && !text) throw new HttpError(400, '제목이나 내용을 써 주세요.');
+        const id = await rooms.addPost(board, OWNER_ID, '방장', title || text.slice(0, 30), text);
+        return json(200, { id });
+      }
+      if (parts[5] === 'posts' && parts[6] && req.method === 'DELETE') {
+        await rooms.deletePost(room.id, board.id, Number(parts[6]));
+        return json(200, { ok: true });
+      }
+      throw new HttpError(404, 'Not found');
     }
 
     // 사람 초대(손님): GET 목록 · POST {name, canPost} · DELETE /guests/<id>

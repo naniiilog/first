@@ -8,7 +8,7 @@
  * - 같은 말 연달아 보내기, 비밀번호·키처럼 보이는 글은 막아요.
  * - 어디까지 읽었는지(read_cursor)는 서버가 기억해요.
  */
-import { MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type RoomRow, type Rooms } from './rooms.js';
+import { MAX_POST_BODY, MAX_POST_TITLE, MAX_TEXT, OWNER_ID, SYSTEM_ID, type MemberRow, type MessageRow, type RoomRow, type Rooms } from './rooms.js';
 import { findSecret, secretMessage } from './safety.js';
 import { currentTurn, parseTurn, turnNames } from './turn.js';
 import { windowEnd } from './usage.js';
@@ -181,6 +181,7 @@ export class AgentSession {
     const all = room.turn_order || room.leader_id ? await rooms.members(room.id) : null;
     const s = new AgentSession(rooms, me, room, room.turn_order ? all : null);
     s.leaderName = all?.find((m) => m.id === room.leader_id)?.name ?? null;
+    s.boardNames = (await rooms.boards(room.id)).map((b) => b.name);
     return s;
   }
 
@@ -242,11 +243,45 @@ export class AgentSession {
     const turn = t
       ? ` [순서 대화] ${t.names.join(' → ')} · 지금 차례: ${t.name}${t.id === this.me.id ? '(나!) 지금 말하세요.' : '. 내 차례에만 말하고, 그 전에는 끼어들지 말고 기다리세요.'}`
       : '';
-    return talk + interval + quiet + turn + this.boardHint(this.leaderName);
+    const boards = this.boardNames.length
+      ? ` [📋 게시판: ${this.boardNames.join(' · ')}] board_list·board_read로 보고, 정리할 내용은 board_write로 올릴 수 있어요(올리면 채팅방에 알림이 가요).`
+      : '';
+    return talk + interval + quiet + turn + this.boardHint(this.leaderName) + boards;
   }
 
   /** 봇 대장 이름(멤버 목록을 불러 둔 경우) */
   leaderName: string | null = null;
+  /** 이 방의 게시판 이름들 */
+  boardNames: string[] = [];
+
+  // ── 게시판 ──
+  boardList() {
+    return this.rooms.boards(this.room.id);
+  }
+  private async needBoard(key: string) {
+    const b = key ? await this.rooms.findBoard(this.room.id, key) : null;
+    if (b) return b;
+    const names = (await this.rooms.boards(this.room.id)).map((x) => `"${x.name}"`).join(', ');
+    return fail('bad_request', names ? `"${key}" 게시판이 없어요. 있는 게시판: ${names}` : '이 방에는 아직 게시판이 없어요.');
+  }
+  async boardRead(key: string, limit: number) {
+    const b = await this.needBoard(key);
+    if (isError(b)) return b;
+    return { board: b, posts: await this.rooms.posts(b.id, null, limit) };
+  }
+  async boardWrite(key: string, title: string, body: string): Promise<AgentError | { id: number; board: string }> {
+    const t = title.trim();
+    const text = body.trim();
+    if (!t && !text) return fail('bad_request', '제목(title)이나 내용(body)을 써 주세요.');
+    if (t.length > MAX_POST_TITLE) return fail('bad_request', `제목은 ${MAX_POST_TITLE}자까지예요.`);
+    if (text.length > MAX_POST_BODY) return fail('bad_request', `내용은 ${MAX_POST_BODY}자까지예요.`);
+    const secret = findSecret(`${t}\n${text}`);
+    if (secret) return fail('secret', secretMessage(secret));
+    const b = await this.needBoard(key);
+    if (isError(b)) return b;
+    const id = await this.rooms.addPost(b, this.me.id, this.me.name, t || text.slice(0, 30), text);
+    return { id, board: b.name };
+  }
 
   /**
    * 방 확인(읽기·기다리기) 전에 매너타임만 확인해요.

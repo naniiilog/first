@@ -108,6 +108,23 @@ export interface AlbumImage {
   /** /img/... 사진 주소(서버 기준 상대 주소) */
   url: string;
 }
+/** 게시판과 게시글 */
+export interface Board {
+  id: string;
+  name: string;
+  count: number;
+  lastAt: number | null;
+}
+export interface Post {
+  id: number;
+  boardId: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  body: string;
+  createdAt: number;
+}
+
 export interface Guest {
   id: string;
   name: string;
@@ -213,6 +230,18 @@ export const api = {
   setGuestDays: (s: Settings, r: LocalRoom, id: string, days: number) =>
     call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'PATCH', body: { days }, ownerToken: r.ownerToken }),
   removeGuest: (s: Settings, r: LocalRoom, id: string) => call(s, `/api/rooms/${r.id}/guests/${id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
+
+  // ── 게시판 ──
+  boards: (s: Settings, r: LocalRoom) => call<{ boards: Board[] }>(s, `/api/rooms/${r.id}/boards`, { ownerToken: r.ownerToken }),
+  addBoard: (s: Settings, r: LocalRoom, name: string) => call<{ board: Board }>(s, `/api/rooms/${r.id}/boards`, { method: 'POST', body: { name }, ownerToken: r.ownerToken }),
+  renameBoard: (s: Settings, r: LocalRoom, id: string, name: string) => call(s, `/api/rooms/${r.id}/boards/${id}`, { method: 'PATCH', body: { name }, ownerToken: r.ownerToken }),
+  deleteBoard: (s: Settings, r: LocalRoom, id: string) => call(s, `/api/rooms/${r.id}/boards/${id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
+  posts: (s: Settings, r: LocalRoom, boardId: string, before?: number) =>
+    call<{ posts: Post[] }>(s, `/api/rooms/${r.id}/boards/${boardId}/posts${before ? `?before=${before}` : ''}`, { ownerToken: r.ownerToken }),
+  addPost: (s: Settings, r: LocalRoom, boardId: string, title: string, body: string) =>
+    call<{ id: number }>(s, `/api/rooms/${r.id}/boards/${boardId}/posts`, { method: 'POST', body: { title, body }, ownerToken: r.ownerToken }),
+  deletePost: (s: Settings, r: LocalRoom, boardId: string, id: number) =>
+    call(s, `/api/rooms/${r.id}/boards/${boardId}/posts/${id}`, { method: 'DELETE', ownerToken: r.ownerToken }),
 
   /** 오래된 대화(before 글번호 앞의 100개) */
   olderMessages: (s: Settings, r: LocalRoom, before: number) =>

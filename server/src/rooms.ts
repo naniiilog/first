@@ -131,6 +131,31 @@ export const publicMessage = (m: MessageRow) => ({
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
+export interface BoardRow {
+  id: string;
+  room_id: string;
+  name: string;
+  sort: number;
+  created_at: number;
+  /** 목록에서만: 글 수, 마지막 글 시각 */
+  count?: number;
+  last_at?: number | null;
+}
+export interface PostRow {
+  id: number;
+  board_id: string;
+  room_id: string;
+  author_id: string;
+  author_name: string;
+  title: string;
+  body: string;
+  created_at: number;
+}
+export const MAX_BOARD_NAME = 30;
+export const MAX_POST_TITLE = 100;
+export const MAX_POST_BODY = 3000;
+export const publicPost = (p: PostRow) => ({ id: p.id, boardId: p.board_id, authorId: p.author_id, authorName: p.author_name, title: p.title, body: p.body, createdAt: p.created_at });
+
 export interface GuestRow {
   id: string;
   room_id: string;
@@ -342,6 +367,8 @@ export class Rooms {
     await this.db.run('DELETE FROM members WHERE room_id = ?', id);
     await this.db.run('DELETE FROM push_subs WHERE room_id = ?', id);
     await this.db.run('DELETE FROM guests WHERE room_id = ?', id);
+    await this.db.run('DELETE FROM posts WHERE room_id = ?', id);
+    await this.db.run('DELETE FROM boards WHERE room_id = ?', id);
     await this.db.run('DELETE FROM rooms WHERE id = ?', id);
   }
 
@@ -540,6 +567,53 @@ export class Rooms {
       "SELECT id, room_id, author_id, author_name, text, created_at, reply_to, CASE WHEN image IS NULL THEN NULL ELSE 'y' END AS image FROM messages WHERE room_id = ? AND created_at >= ? AND created_at < ? ORDER BY id ASC LIMIT ?",
       roomId, from, to, limit,
     );
+  }
+
+  // ── 게시판 ──
+  boards(roomId: string) {
+    return this.db.all<BoardRow>(
+      `SELECT b.*, (SELECT COUNT(*) FROM posts p WHERE p.board_id = b.id) AS count,
+              (SELECT MAX(created_at) FROM posts p WHERE p.board_id = b.id) AS last_at
+         FROM boards b WHERE b.room_id = ? ORDER BY b.sort, b.created_at`,
+      roomId,
+    );
+  }
+  board(roomId: string, id: string) {
+    return this.db.first<BoardRow>('SELECT * FROM boards WHERE room_id = ? AND id = ?', roomId, id);
+  }
+  /** 번호나 이름으로 게시판 찾기(봇은 이름으로 부르기 쉬워서) */
+  async findBoard(roomId: string, key: string) {
+    const k = key.trim().replace(/^\[|\]$/g, '');
+    const list = await this.boards(roomId);
+    return list.find((b) => b.id === k) ?? list.find((b) => b.name === k) ?? list.find((b) => b.name.toLowerCase().includes(k.toLowerCase())) ?? null;
+  }
+  async addBoard(roomId: string, name: string) {
+    const n = (await this.db.first<{ n: number }>('SELECT COUNT(*) AS n FROM boards WHERE room_id = ?', roomId))?.n ?? 0;
+    const b: BoardRow = { id: randomToken(6), room_id: roomId, name, sort: n, created_at: Date.now() };
+    await this.db.run('INSERT INTO boards (id, room_id, name, sort, created_at) VALUES (?, ?, ?, ?, ?)', b.id, b.room_id, b.name, b.sort, b.created_at);
+    return b;
+  }
+  renameBoard(roomId: string, id: string, name: string) {
+    return this.db.run('UPDATE boards SET name = ? WHERE room_id = ? AND id = ?', name, roomId, id);
+  }
+  async deleteBoard(roomId: string, id: string) {
+    await this.db.run('DELETE FROM posts WHERE room_id = ? AND board_id = ?', roomId, id);
+    await this.db.run('DELETE FROM boards WHERE room_id = ? AND id = ?', roomId, id);
+  }
+  posts(boardId: string, beforeId: number | null, limit: number) {
+    return this.db.all<PostRow>('SELECT * FROM posts WHERE board_id = ? AND id < ? ORDER BY id DESC LIMIT ?', boardId, beforeId ?? Number.MAX_SAFE_INTEGER, limit);
+  }
+  /** 글 쓰기 + 채팅방에 "새 글" 안내 */
+  async addPost(board: BoardRow, authorId: string, authorName: string, title: string, body: string) {
+    const r = await this.db.run(
+      'INSERT INTO posts (board_id, room_id, author_id, author_name, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      board.id, board.room_id, authorId, authorName, title, body, Date.now(),
+    );
+    await this.post(board.room_id, SYSTEM_ID, '안내', `📋 [${board.name}] ${authorName}: ${title}`);
+    return r.lastId;
+  }
+  deletePost(roomId: string, boardId: string, id: number) {
+    return this.db.run('DELETE FROM posts WHERE room_id = ? AND board_id = ? AND id = ?', roomId, boardId, id);
   }
 
   // ── 초대한 사람(손님) ──

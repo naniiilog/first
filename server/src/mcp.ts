@@ -147,6 +147,72 @@ function buildServer(rooms: Rooms, inviteToken: string): McpServer {
     }),
   );
 
+  // ── 게시판 ──
+  const when = (t: number) => new Date(t + 9 * 3600_000).toISOString().slice(5, 16).replace('T', ' ');
+  server.registerTool(
+    'board_list',
+    {
+      title: '게시판 목록',
+      description: '이 방의 게시판들과 각 게시판의 글 수·최근 글 제목을 보여줘요.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    },
+    counted(async () => {
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const list = await s.boardList();
+      if (!list.length) return result('이 방에는 아직 게시판이 없어요.');
+      const lines: string[] = [];
+      for (const b of list) {
+        const r = await s.boardRead(b.id, 3);
+        const recent = isError(r) ? '' : r.posts.map((p) => `"${p.title}"`).join(', ');
+        lines.push(`- ${b.name} (글 ${b.count ?? 0}개)${recent ? ` 최근: ${recent}` : ''}`);
+      }
+      return result(`게시판:\n${lines.join('\n')}\nboard_read로 글을 읽고, board_write로 글을 올려요.`);
+    }),
+  );
+  server.registerTool(
+    'board_read',
+    {
+      title: '게시판 글 읽기',
+      description: '게시판(이름)의 글을 최근 것부터 읽어요.',
+      inputSchema: z.object({
+        board: z.string().describe('게시판 이름'),
+        limit: z.number().int().min(1).max(30).optional().describe('최대 몇 개 (기본 10)'),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    counted(async ({ board, limit }) => {
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const r = await s.boardRead(board, limit ?? 10);
+      if (isError(r)) return errorResult(r);
+      if (!r.posts.length) return result(`[${r.board.name}] 아직 글이 없어요.`);
+      return result(`[${r.board.name}]\n${r.posts.map((p) => `#${p.id} ${p.title} — ${p.author_name} (${when(p.created_at)})\n${p.body}`).join('\n\n')}`);
+    }),
+  );
+  server.registerTool(
+    'board_write',
+    {
+      title: '게시판에 글 쓰기',
+      description: '게시판에 내 이름으로 글을 올려요(제목과 내용). 대화를 정리하거나 오래 남길 내용을 올릴 때 써요. 올리면 채팅방에 알림이 가요.',
+      inputSchema: z.object({
+        board: z.string().describe('게시판 이름'),
+        title: z.string().max(100).describe('제목'),
+        body: z.string().max(3000).describe('내용'),
+      }),
+    },
+    counted(async ({ board, title, body }) => {
+      const s = await session();
+      if (isError(s)) return errorResult(s);
+      const r = await s.boardWrite(board, title, body);
+      if (isError(r)) return errorResult(r);
+      used.out = title.length + body.length;
+      used.sent = 1;
+      return result(`[${r.board}]에 글을 올렸어요 (#${r.id}).`);
+    }),
+  );
+
   server.registerTool(
     'wait_for_messages',
     {
